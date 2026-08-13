@@ -70,7 +70,7 @@ Secure Vault는 처음부터 유료화하지 않는다. 보안 신뢰와 복구 
 
 서버가 직접 측정하는 값은 활성 레코드 슬롯 수, 현재 revision 암호문 byte, 이력 암호문 byte, 요청 body의 실제 byte, 기기 수와 이력 보관기간이다. 클라이언트가 보고한 사용량을 신뢰하지 않는다. 일반 변경은 DB transaction의 원자적 조건부 갱신으로 `usage + delta <= limit`를 강제하고, 아래의 `safety swap`만 별도 무증가 조건으로 허용한다. 슬롯 수와 byte 한도는 동시에 적용한다.
 
-- 레코드당 암호문 최대 64 KiB이며 1/4/16/64 KiB 패딩 버킷을 사용한다. 버킷 값은 암호 프로토콜 검토에서 변경할 수 있다.
+- 레코드당 1/4/16/60 KiB encrypted-body padding bucket을 사용하며 full encoded envelope maximum은 64 KiB다.
 - `(user_id, opaque_record_id)`는 활성 슬롯에서 고유하고 `(user_id, opaque_event_id)`는 전체 이벤트에서 고유하다. 재전송으로 슬롯이나 byte가 중복 증가하지 않는다.
 - 모든 변경은 새 서명 revision을 append한다. 기존 revision의 hash와 checkpoint commitment는 보존하고, 허용된 보관기간이 지난 암호문 body만 검증된 checkpoint 뒤에 GC한다.
 - 오프라인에서 만든 초과 항목은 삭제하지 않고 “로컬 전용·동기화 안 됨”으로 표시한다.
