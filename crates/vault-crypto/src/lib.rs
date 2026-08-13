@@ -4,8 +4,16 @@
 
 #![forbid(unsafe_code)]
 
+#[allow(dead_code)]
+#[path = "v0alpha1/entropy.rs"]
+mod entropy;
 mod error;
+mod secret;
 mod v0alpha1;
 
 pub use error::{CryptoError, CryptoErrorCode};
+pub use secret::{
+    KeyEpoch, MasterPassword, OpaqueRecordId, PaddingBucketV0Alpha1, RecordContextV0Alpha1,
+    RevisionId, SecretBytes, VaultCommitment, VaultSession,
+};
 pub use v0alpha1::codec::{inspect_password_envelope_v0alpha1, inspect_record_envelope_v0alpha1};

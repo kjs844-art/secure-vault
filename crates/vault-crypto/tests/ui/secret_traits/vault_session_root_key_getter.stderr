@@ -1,0 +1,5 @@
+error[E0599]: no method named `root_key_bytes` found for reference `&VaultSession` in the current scope
+ --> tests/ui/secret_traits/vault_session_root_key_getter.rs:4:21
+  |
+4 |     let _ = session.root_key_bytes();
+  |                     ^^^^^^^^^^^^^^ method not found in `&VaultSession`
