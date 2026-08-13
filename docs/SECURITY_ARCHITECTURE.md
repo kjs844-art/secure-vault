@@ -2,7 +2,7 @@
 
 ## 정직한 보안 약속
 
-서버는 사이트명, URL, 아이디, 비밀번호, API 제공자, Secret 원문, 태그, 메모처럼 의미 있는 금고 내용을 평문으로 알 수 없어야 합니다. 다만 계정 인증 정보, IP, User-Agent, 요청 시각, 암호문 크기, 저장량, 동기화 빈도 같은 운영 메타데이터는 볼 수 있습니다.
+서버는 사이트명, URL, 아이디, 비밀번호, API 제공자, Secret 원문, 태그, 메모처럼 의미 있는 금고 내용을 평문으로 알 수 없어야 합니다. 다만 계정 인증 정보, IP, User-Agent, 요청 시각, 암호문 크기, 저장량, 활성 암호화 레코드 슬롯 수, 같은 불투명 슬롯의 revision 빈도와 삭제 시각 같은 운영 메타데이터는 볼 수 있습니다.
 
 ## 계정과 금고의 분리
 
@@ -28,7 +28,12 @@
 
 ## 동기화
 
-서버는 패딩된 불투명 이벤트와 암호화·서명 체크포인트를 보관하는 append-only 저장소로 동작합니다. 상태 계산과 충돌 해결은 잠금 해제된 클라이언트가 수행합니다.
+서버는 패딩된 불투명 이벤트와 암호화·서명 체크포인트를 보관하는 append-only 저장소로 동작합니다. 각 논리 항목은 클라이언트가 만든 무작위 `opaque_record_id`를 사용합니다. 서버는 그 의미를 모르지만 한도 계산과 revision 연결을 위해 동일 슬롯의 이벤트임은 알 수 있습니다. 상태 계산과 충돌 해결은 잠금 해제된 클라이언트가 수행합니다.
+
+- 모든 변경은 서명 revision으로 append합니다. 보관기간이 지난 암호문 body는 검증된 checkpoint 뒤에 GC할 수 있지만 revision hash와 tombstone commitment는 남깁니다.
+- 한도는 활성 슬롯 수와 서버가 직접 받은 billable 현재·이력 byte로 계산하고, bounded history safety reserve와 conflict reserve는 별도로 측정합니다. 암호문 속 실제 Secret 개수는 알 수 없고 보안 경계로 주장하지 않습니다.
+- 다운그레이드 초과 상태의 보안상 필수 교체는 같은 슬롯·`expected_head_hash`·같은 패딩 버킷의 compare-and-append `safety swap`으로 처리합니다. 이전 body는 즉시 GC하지 않고 슬롯당 한 개의 history safety reserve에 수락 당시 보관기간만큼 유지합니다. reserve가 찬 추가 swap은 로컬 안전본으로 남기고 미동기화 상태를 표시합니다.
+- 같은 head에서 갈라진 competing revision 한 개는 슬롯별 conflict reserve에 받아 최대 두 head까지만 서버에 보존합니다. 충돌 중인 body는 사용자 해결 전 GC하지 않습니다. 그 밖의 stale writer는 거부하되 암호화 값을 기기의 로컬 충돌 복구함에 보존하고 미동기화 상태를 표시합니다.
 
 - 비밀번호, API 키, Secret, TOTP seed, 복구 코드는 절대 LWW나 문자열 병합하지 않습니다.
 - 동시 변경은 두 값을 모두 보존하고 사용자가 명시적으로 해결합니다.

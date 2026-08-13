@@ -35,7 +35,7 @@ Google OIDC와 passkey는 계정 인증에만 사용하고, 금고 잠금 해제
 
 사용자 모델은 서비스 → 계정 → 조직/워크스페이스/프로젝트 → 환경 → Secret/MCP의 계층을 사용하며 서비스 템플릿과 사용자 정의 필드를 지원한다. 검색용 설명 필드도 암호화하고, 잠금 해제한 기기에서만 로컬 인덱스를 만든다. Secret 원문은 기본 검색 대상이 아니다.
 
-서버 동기화는 패딩된 append-only opaque event log와 암호화·서명 checkpoint를 사용한다. password, API key, secret, recovery code 충돌은 multi-value로 보존하고 사용자가 해결한다. 삭제 충돌 수정본은 암호화 복구함에 남기며 자동 부활시키지 않는다.
+서버 동기화는 패딩된 append-only opaque event log와 암호화·서명 checkpoint를 사용한다. 한도 계산과 revision 연결을 위해 논리 항목별 무작위 `opaque_record_id`는 서버에 보이며, 서버는 활성 슬롯 수와 동일 슬롯의 수정·삭제 시각을 알 수 있지만 그 의미와 평문은 알 수 없다. password, API key, secret, recovery code 충돌은 multi-value로 보존하고 사용자가 해결한다. 삭제 충돌 수정본은 암호화 복구함에 남기며 자동 부활시키지 않는다.
 
 ## 6. 오류와 안전 동작
 
