@@ -4,6 +4,8 @@ use minicbor::{Decoder, Encoder, encode::Write};
 
 use crate::CryptoError;
 
+use super::kdf::{CANDIDATE_LANES, CANDIDATE_MEMORY_KIB, CANDIDATE_TIME_COST};
+
 const MAX_ENVELOPE_BYTES: usize = 65_536;
 const WIRE_VERSION: u64 = 0;
 const SUITE_ID: u64 = 0xA101;
@@ -21,9 +23,8 @@ const NONCE_BYTES: usize = 24;
 const WRAPPED_KEY_BYTES: usize = 48;
 const AUTH_TAG_BYTES: usize = 16;
 
-const CANDIDATE_MEMORY_KIB: u64 = 65_536;
-const CANDIDATE_TIME_COST: u64 = 3;
-const CANDIDATE_LANES: u64 = 4;
+const PASSWORD_ROOT_DOMAIN: &[u8] = b"secure-vault/v0alpha1/password-root-wrap";
+const PASSWORD_AAD_FIELD_COUNT: u64 = 9;
 
 struct CanonicalComparator<'a> {
     expected: &'a [u8],
@@ -64,17 +65,17 @@ impl Write for CanonicalComparator<'_> {
 }
 
 #[derive(Clone, Copy)]
-struct PasswordEnvelopeFields<'a> {
-    wire_version: u64,
-    suite_id: u64,
-    object_kind: u64,
-    salt: &'a [u8],
-    memory_kib: u64,
-    time_cost: u64,
-    lanes: u64,
-    vault_commitment: &'a [u8],
-    root_nonce: &'a [u8],
-    wrapped_root_key: &'a [u8],
+pub(crate) struct PasswordEnvelopeFields<'a> {
+    pub(crate) wire_version: u64,
+    pub(crate) suite_id: u64,
+    pub(crate) object_kind: u64,
+    pub(crate) salt: &'a [u8],
+    pub(crate) memory_kib: u64,
+    pub(crate) time_cost: u64,
+    pub(crate) lanes: u64,
+    pub(crate) vault_commitment: &'a [u8],
+    pub(crate) root_nonce: &'a [u8],
+    pub(crate) wrapped_root_key: &'a [u8],
 }
 
 #[derive(Clone, Copy)]
@@ -103,7 +104,9 @@ pub fn inspect_record_envelope_v0alpha1(input: &[u8]) -> Result<(), CryptoError>
     decode_record_envelope(input).map(|_| ())
 }
 
-fn decode_password_envelope(input: &[u8]) -> Result<PasswordEnvelopeFields<'_>, CryptoError> {
+pub(crate) fn decode_password_envelope(
+    input: &[u8],
+) -> Result<PasswordEnvelopeFields<'_>, CryptoError> {
     reject_if_over_64_kib(input)?;
     let fields = parse_fixed_password_array(input)?;
     ensure_password_envelope_is_canonical(input, &fields)?;
@@ -116,6 +119,66 @@ fn decode_password_envelope(input: &[u8]) -> Result<PasswordEnvelopeFields<'_>, 
     validate_password_field_lengths(&fields)?;
     validate_exact_candidate_kdf(&fields)?;
     Ok(fields)
+}
+
+pub(crate) fn encode_password_envelope(
+    salt: &[u8; SALT_BYTES],
+    vault_commitment: &[u8; VAULT_COMMITMENT_BYTES],
+    root_nonce: &[u8; NONCE_BYTES],
+    wrapped_root_key: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    if wrapped_root_key.len() != WRAPPED_KEY_BYTES {
+        return Err(CryptoError::InvalidLength);
+    }
+
+    let mut encoder = Encoder::new(Vec::with_capacity(192));
+    encoder.array(PASSWORD_FIELD_COUNT).map_err(encode_error)?;
+    encoder.u64(WIRE_VERSION).map_err(encode_error)?;
+    encoder.u64(SUITE_ID).map_err(encode_error)?;
+    encoder.u64(PASSWORD_OBJECT_KIND).map_err(encode_error)?;
+    encoder.bytes(salt).map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_MEMORY_KIB))
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_TIME_COST))
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_LANES))
+        .map_err(encode_error)?;
+    encoder.bytes(vault_commitment).map_err(encode_error)?;
+    encoder.bytes(root_nonce).map_err(encode_error)?;
+    encoder.bytes(wrapped_root_key).map_err(encode_error)?;
+
+    let encoded = encoder.into_writer();
+    reject_if_over_64_kib(&encoded)?;
+    Ok(encoded)
+}
+
+pub(crate) fn password_root_aad(
+    salt: &[u8; SALT_BYTES],
+    vault_commitment: &[u8; VAULT_COMMITMENT_BYTES],
+) -> Result<Vec<u8>, CryptoError> {
+    let mut encoder = Encoder::new(Vec::with_capacity(128));
+    encoder
+        .array(PASSWORD_AAD_FIELD_COUNT)
+        .map_err(encode_error)?;
+    encoder.bytes(PASSWORD_ROOT_DOMAIN).map_err(encode_error)?;
+    encoder.u64(WIRE_VERSION).map_err(encode_error)?;
+    encoder.u64(SUITE_ID).map_err(encode_error)?;
+    encoder.u64(PASSWORD_OBJECT_KIND).map_err(encode_error)?;
+    encoder.bytes(salt).map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_MEMORY_KIB))
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_TIME_COST))
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(CANDIDATE_LANES))
+        .map_err(encode_error)?;
+    encoder.bytes(vault_commitment).map_err(encode_error)?;
+    Ok(encoder.into_writer())
 }
 
 fn decode_record_envelope(input: &[u8]) -> Result<RecordEnvelopeFields<'_>, CryptoError> {
@@ -224,9 +287,9 @@ fn validate_password_field_lengths(fields: &PasswordEnvelopeFields<'_>) -> Resul
 }
 
 fn validate_exact_candidate_kdf(fields: &PasswordEnvelopeFields<'_>) -> Result<(), CryptoError> {
-    if fields.memory_kib != CANDIDATE_MEMORY_KIB
-        || fields.time_cost != CANDIDATE_TIME_COST
-        || fields.lanes != CANDIDATE_LANES
+    if fields.memory_kib != u64::from(CANDIDATE_MEMORY_KIB)
+        || fields.time_cost != u64::from(CANDIDATE_TIME_COST)
+        || fields.lanes != u64::from(CANDIDATE_LANES)
     {
         return Err(CryptoError::KdfParamsRejected);
     }
@@ -335,4 +398,23 @@ fn decode_error(_: minicbor::decode::Error) -> CryptoError {
 
 fn encode_error(_: minicbor::encode::Error<Infallible>) -> CryptoError {
     CryptoError::NonCanonicalEncoding
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_root_aad_matches_the_hand_derived_contract_bytes() {
+        let salt = [0x11; 16];
+        let commitment = [0x22; 32];
+        let mut expected = vec![0x89, 0x58, 0x28];
+        expected.extend_from_slice(b"secure-vault/v0alpha1/password-root-wrap");
+        expected.extend_from_slice(&[0x00, 0x19, 0xa1, 0x01, 0x01, 0x50]);
+        expected.extend_from_slice(&salt);
+        expected.extend_from_slice(&[0x1a, 0x00, 0x01, 0x00, 0x00, 0x03, 0x04, 0x58, 0x20]);
+        expected.extend_from_slice(&commitment);
+
+        assert_eq!(password_root_aad(&salt, &commitment).unwrap(), expected);
+    }
 }
