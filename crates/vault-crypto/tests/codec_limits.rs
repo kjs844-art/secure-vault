@@ -186,6 +186,60 @@ fn rejects_alternate_array_and_byte_length_encodings() {
 }
 
 #[test]
+fn noncanonical_encoding_precedes_unsupported_password_header_errors() {
+    let canonical = valid_password_envelope();
+
+    let mut unsupported_version = Vec::with_capacity(canonical.len() + 1);
+    unsupported_version.push(canonical[0]);
+    unsupported_version.extend_from_slice(&[0x18, 0x01]);
+    unsupported_version.extend_from_slice(&canonical[2..]);
+    let error = inspect_password_envelope_v0alpha1(&unsupported_version).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+
+    let mut unsupported_suite = Vec::with_capacity(canonical.len() + 2);
+    unsupported_suite.extend_from_slice(&canonical[..2]);
+    unsupported_suite.push(0x1a);
+    unsupported_suite.extend_from_slice(&((SUITE_ID + 1) as u32).to_be_bytes());
+    unsupported_suite.extend_from_slice(&canonical[5..]);
+    let error = inspect_password_envelope_v0alpha1(&unsupported_suite).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+}
+
+#[test]
+fn noncanonical_encoding_precedes_password_semantic_field_errors() {
+    let invalid_kdf = password_envelope(0, SUITE_ID, 1, 16, 65_535, 3, 4);
+    let mut alternate_array = Vec::with_capacity(invalid_kdf.len() + 1);
+    alternate_array.extend_from_slice(&[0x98, 0x0a]);
+    alternate_array.extend_from_slice(&invalid_kdf[1..]);
+
+    let error = inspect_password_envelope_v0alpha1(&alternate_array).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+}
+
+#[test]
+fn rejects_noncanonical_record_integer_array_and_trailing_bytes() {
+    let canonical = valid_record_envelope();
+
+    let mut non_minimal_integer = Vec::with_capacity(canonical.len() + 1);
+    non_minimal_integer.push(canonical[0]);
+    non_minimal_integer.extend_from_slice(&[0x18, 0x00]);
+    non_minimal_integer.extend_from_slice(&canonical[2..]);
+    let error = inspect_record_envelope_v0alpha1(&non_minimal_integer).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+
+    let mut alternate_array = Vec::with_capacity(canonical.len() + 1);
+    alternate_array.extend_from_slice(&[0x98, 0x0c]);
+    alternate_array.extend_from_slice(&canonical[1..]);
+    let error = inspect_record_envelope_v0alpha1(&alternate_array).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+
+    let mut trailing = canonical;
+    trailing.push(0);
+    let error = inspect_record_envelope_v0alpha1(&trailing).unwrap_err();
+    assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
+}
+
+#[test]
 fn rejects_trailing_bytes() {
     let mut input = valid_password_envelope();
     input.push(0);

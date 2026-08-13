@@ -1,6 +1,6 @@
 use core::convert::Infallible;
 
-use minicbor::{Decoder, Encoder};
+use minicbor::{Decoder, Encoder, encode::Write};
 
 use crate::CryptoError;
 
@@ -24,6 +24,44 @@ const AUTH_TAG_BYTES: usize = 16;
 const CANDIDATE_MEMORY_KIB: u64 = 65_536;
 const CANDIDATE_TIME_COST: u64 = 3;
 const CANDIDATE_LANES: u64 = 4;
+
+struct CanonicalComparator<'a> {
+    expected: &'a [u8],
+    position: usize,
+    matches: bool,
+}
+
+impl<'a> CanonicalComparator<'a> {
+    const fn new(expected: &'a [u8]) -> Self {
+        Self {
+            expected,
+            position: 0,
+            matches: true,
+        }
+    }
+
+    fn is_exact_match(&self) -> bool {
+        self.matches && self.position == self.expected.len()
+    }
+}
+
+impl Write for CanonicalComparator<'_> {
+    type Error = Infallible;
+
+    fn write_all(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        let Some(end) = self.position.checked_add(bytes.len()) else {
+            self.matches = false;
+            self.position = usize::MAX;
+            return Ok(());
+        };
+
+        if self.expected.get(self.position..end) != Some(bytes) {
+            self.matches = false;
+        }
+        self.position = end;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy)]
 struct PasswordEnvelopeFields<'a> {
@@ -68,6 +106,7 @@ pub fn inspect_record_envelope_v0alpha1(input: &[u8]) -> Result<(), CryptoError>
 fn decode_password_envelope(input: &[u8]) -> Result<PasswordEnvelopeFields<'_>, CryptoError> {
     reject_if_over_64_kib(input)?;
     let fields = parse_fixed_password_array(input)?;
+    ensure_password_envelope_is_canonical(input, &fields)?;
     validate_header(
         fields.wire_version,
         fields.suite_id,
@@ -76,15 +115,13 @@ fn decode_password_envelope(input: &[u8]) -> Result<PasswordEnvelopeFields<'_>, 
     )?;
     validate_password_field_lengths(&fields)?;
     validate_exact_candidate_kdf(&fields)?;
-    if encode_password_envelope(&fields)? != input {
-        return Err(CryptoError::NonCanonicalEncoding);
-    }
     Ok(fields)
 }
 
 fn decode_record_envelope(input: &[u8]) -> Result<RecordEnvelopeFields<'_>, CryptoError> {
     reject_if_over_64_kib(input)?;
     let fields = parse_fixed_record_array(input)?;
+    ensure_record_envelope_is_canonical(input, &fields)?;
     validate_header(
         fields.wire_version,
         fields.suite_id,
@@ -95,9 +132,6 @@ fn decode_record_envelope(input: &[u8]) -> Result<RecordEnvelopeFields<'_>, Cryp
     validate_record_epoch(fields.key_epoch)?;
     let bucket = validate_padding_bucket(fields.padding_bucket)?;
     validate_encrypted_body_length(fields.encrypted_body, bucket)?;
-    if encode_record_envelope(&fields)? != input {
-        return Err(CryptoError::NonCanonicalEncoding);
-    }
     Ok(fields)
 }
 
@@ -239,8 +273,11 @@ fn validate_encrypted_body_length(
     Ok(())
 }
 
-fn encode_password_envelope(fields: &PasswordEnvelopeFields<'_>) -> Result<Vec<u8>, CryptoError> {
-    let mut encoder = Encoder::new(Vec::new());
+fn ensure_password_envelope_is_canonical(
+    input: &[u8],
+    fields: &PasswordEnvelopeFields<'_>,
+) -> Result<(), CryptoError> {
+    let mut encoder = Encoder::new(CanonicalComparator::new(input));
     encoder.array(PASSWORD_FIELD_COUNT).map_err(encode_error)?;
     encoder.u64(fields.wire_version).map_err(encode_error)?;
     encoder.u64(fields.suite_id).map_err(encode_error)?;
@@ -256,11 +293,17 @@ fn encode_password_envelope(fields: &PasswordEnvelopeFields<'_>) -> Result<Vec<u
     encoder
         .bytes(fields.wrapped_root_key)
         .map_err(encode_error)?;
-    Ok(encoder.into_writer())
+    if !encoder.into_writer().is_exact_match() {
+        return Err(CryptoError::NonCanonicalEncoding);
+    }
+    Ok(())
 }
 
-fn encode_record_envelope(fields: &RecordEnvelopeFields<'_>) -> Result<Vec<u8>, CryptoError> {
-    let mut encoder = Encoder::new(Vec::new());
+fn ensure_record_envelope_is_canonical(
+    input: &[u8],
+    fields: &RecordEnvelopeFields<'_>,
+) -> Result<(), CryptoError> {
+    let mut encoder = Encoder::new(CanonicalComparator::new(input));
     encoder.array(RECORD_FIELD_COUNT).map_err(encode_error)?;
     encoder.u64(fields.wire_version).map_err(encode_error)?;
     encoder.u64(fields.suite_id).map_err(encode_error)?;
@@ -280,7 +323,10 @@ fn encode_record_envelope(fields: &RecordEnvelopeFields<'_>) -> Result<Vec<u8>, 
         .map_err(encode_error)?;
     encoder.bytes(fields.body_nonce).map_err(encode_error)?;
     encoder.bytes(fields.encrypted_body).map_err(encode_error)?;
-    Ok(encoder.into_writer())
+    if !encoder.into_writer().is_exact_match() {
+        return Err(CryptoError::NonCanonicalEncoding);
+    }
+    Ok(())
 }
 
 fn decode_error(_: minicbor::decode::Error) -> CryptoError {
