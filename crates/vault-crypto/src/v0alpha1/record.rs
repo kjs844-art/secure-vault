@@ -330,8 +330,10 @@ mod tests {
     fn authenticated_malformed_bodies_are_rejected_and_sensitive_buffers_cleaned() {
         let (session, context) = fixed_session_and_context();
 
+        let declared_length = u32::MAX;
+        assert!(declared_length as usize > context.padding_bucket_bytes());
         let mut length_overflow = vec![0_u8; 1_024];
-        length_overflow[..4].copy_from_slice(&1_021_u32.to_be_bytes());
+        length_overflow[..4].copy_from_slice(&declared_length.to_be_bytes());
         assert_authenticated_body_rejected_and_cleaned(&session, &context, length_overflow, 0x51);
 
         let mut nonzero_padding = vec![0_u8; 1_024];
