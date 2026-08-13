@@ -1,0 +1,71 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+secrets/
+private/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+local.properties
+google-services.json
+*service-account*.json
+application-local.*
+application-*-local.*
+application-prod-private.*
+
+# Vault data, exports, and backups
+vault-data/
+exports/
+backups/
+*.vault
+*.vault-backup
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Logs, dumps, and captures
+*.log
+*.dump
+*.dmp
+*.hprof
+*.har
+crash-reports/
+
+# Java / Gradle / Android
+.gradle/
+**/build/
+**/out/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# JavaScript / TypeScript
+node_modules/
+**/dist/
+**/coverage/
+.vite/
+.next/
+
+# Rust
+**/target/
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# IDE and operating system
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
