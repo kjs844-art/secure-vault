@@ -8,6 +8,66 @@ use crate::CryptoError;
 
 const MAX_MASTER_PASSWORD_BYTES: usize = 1_024;
 const MAX_SECRET_BYTES: usize = 61_436;
+const SECRET_KEY_BYTES: usize = 32;
+
+/// Crate-private, heap-stable ownership for a root key or Item DEK.
+///
+/// The allocation is created before sensitive bytes are copied into it. Moving this owner only
+/// moves the `Box` pointer; the key bytes remain inside the same zeroizing heap allocation.
+pub(crate) struct HeapSecretKey {
+    bytes: Box<Zeroizing<[u8; SECRET_KEY_BYTES]>>,
+}
+
+impl HeapSecretKey {
+    pub(crate) fn copy_from_zeroizing_block<const N: usize>(
+        source: &Zeroizing<[u8; N]>,
+        range: std::ops::Range<usize>,
+    ) -> Result<Self, CryptoError> {
+        let source = source.get(range).ok_or(CryptoError::InvalidLength)?;
+        Self::copy_from_validated_slice(source)
+    }
+
+    pub(crate) fn copy_from_zeroizing_vec(
+        source: &Zeroizing<Vec<u8>>,
+    ) -> Result<Self, CryptoError> {
+        Self::copy_from_validated_slice(source.as_slice())
+    }
+
+    fn copy_from_validated_slice(source: &[u8]) -> Result<Self, CryptoError> {
+        if source.len() != SECRET_KEY_BYTES {
+            return Err(CryptoError::InvalidLength);
+        }
+
+        let mut bytes = Box::new(Zeroizing::new([0_u8; SECRET_KEY_BYTES]));
+        bytes.copy_from_slice(source);
+        Ok(Self { bytes })
+    }
+
+    pub(crate) fn with_bytes<R>(&self, operation: impl for<'a> FnOnce(&'a [u8]) -> R) -> R {
+        operation(self.bytes.as_slice())
+    }
+
+    pub(crate) fn zeroize(&mut self) {
+        zeroize::Zeroize::zeroize(self.bytes.as_mut());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn synthetic_filled(byte: u8) -> Self {
+        let mut bytes = Box::new(Zeroizing::new([0_u8; SECRET_KEY_BYTES]));
+        bytes.fill(byte);
+        Self { bytes }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn matches_bytes(&self, expected: &[u8]) -> bool {
+        self.bytes.as_slice() == expected
+    }
+
+    #[cfg(test)]
+    pub(crate) fn allocation_address(&self) -> usize {
+        self.bytes.as_slice().as_ptr() as usize
+    }
+}
 
 /// Master-password bytes owned by a zeroizing allocation.
 ///
@@ -180,13 +240,13 @@ impl RecordContextV0Alpha1 {
 /// exposes no root-key getter.
 pub struct VaultSession {
     #[allow(dead_code)]
-    root_key: Zeroizing<[u8; 32]>,
+    root_key: HeapSecretKey,
     commitment: VaultCommitment,
 }
 
 impl VaultSession {
     #[allow(dead_code)]
-    pub(crate) fn new(root_key: Zeroizing<[u8; 32]>, commitment: VaultCommitment) -> Self {
+    pub(crate) fn new(root_key: HeapSecretKey, commitment: VaultCommitment) -> Self {
         Self {
             root_key,
             commitment,
@@ -205,30 +265,37 @@ impl VaultSession {
     pub(crate) fn wrap_item_dek(
         &self,
         nonce: &[u8; 24],
-        item_dek: &[u8; 32],
+        item_dek: &HeapSecretKey,
         aad: &[u8],
     ) -> Result<Vec<u8>, CryptoError> {
-        let cipher = XChaCha20Poly1305::new_from_slice(self.root_key.as_slice())
+        let cipher = self
+            .root_key
+            .with_bytes(XChaCha20Poly1305::new_from_slice)
             .map_err(|_| CryptoError::InvalidLength)?;
         let nonce: &XNonce = nonce.into();
-        cipher
-            .encrypt(nonce, Payload { msg: item_dek, aad })
-            .map_err(|_| CryptoError::AuthenticationFailed)
+        item_dek.with_bytes(|item_dek| {
+            cipher
+                .encrypt(nonce, Payload { msg: item_dek, aad })
+                .map_err(|_| CryptoError::AuthenticationFailed)
+        })
     }
 
     /// Unwrap an Item DEK without ever exposing or returning the Vault Root Key.
     ///
-    /// The returned Item DEK is moved directly into a zeroizing owner by the record module.
+    /// The returned Item DEK is already owned by a zeroizing allocation before crossing the
+    /// module boundary.
     pub(crate) fn unwrap_item_dek(
         &self,
         nonce: &[u8; 24],
         wrapped_item_dek: &[u8],
         aad: &[u8],
-    ) -> Result<Vec<u8>, CryptoError> {
-        let cipher = XChaCha20Poly1305::new_from_slice(self.root_key.as_slice())
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+        let cipher = self
+            .root_key
+            .with_bytes(XChaCha20Poly1305::new_from_slice)
             .map_err(|_| CryptoError::InvalidLength)?;
         let nonce: &XNonce = nonce.into();
-        cipher
+        let decrypted = cipher
             .decrypt(
                 nonce,
                 Payload {
@@ -236,7 +303,8 @@ impl VaultSession {
                     aad,
                 },
             )
-            .map_err(|_| CryptoError::AuthenticationFailed)
+            .map_err(|_| CryptoError::AuthenticationFailed)?;
+        Ok(Zeroizing::new(decrypted))
     }
 }
 
@@ -298,7 +366,7 @@ mod tests {
     #[test]
     fn session_exposes_only_its_public_commitment_value() {
         let commitment = VaultCommitment::from_bytes([0x21; 32]);
-        let session = VaultSession::new(Zeroizing::new([0x42; 32]), commitment.clone());
+        let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x42), commitment.clone());
         assert!(session.commitment() == commitment);
     }
 }

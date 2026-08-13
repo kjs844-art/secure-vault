@@ -68,3 +68,30 @@ tamper_rejected=true
 - 실제 Secret을 허용하기 전 침투 테스트와 복구 훈련
 
 Private GitHub 브랜치는 소스 코드 백업과 검토 표면이며 사용자 금고 데이터의 백업이 아닙니다.
+
+## 최종 리뷰 수정 검증 추가 기록
+
+이 절은 위의 03:24:25 검증 기록을 수정하거나 소급해서 바꾸지 않습니다. 최종 리뷰에서 발견된 키 소유권 및 assurance test 결함을 `98113e7b6df9e1ff09ca39b5fefc8434f35d83ae` 이후에 고친 뒤, 2026-08-14 04:10:04 +09:00부터 별도로 새 검증을 실행한 추가 기록입니다.
+
+### 수정된 보증 경계
+
+- Vault Root Key와 Item DEK의 장기 소유자는 `Box<Zeroizing<[u8; 32]>>` 기반 crate-private owner입니다. 민감 바이트는 이미 zeroizing인 entropy block에서 미리 할당한 heap owner로 직접 복사되며 이후 owner 이동은 key bytes를 다시 복사하지 않고 포인터 소유권만 이동합니다.
+- AEAD에는 crate-private closure 안에서만 key slice를 빌려주며 raw key getter를 추가하지 않았습니다. 복호화로 반환되는 Item DEK `Vec`도 모듈 경계를 넘기 전에 `Zeroizing` owner가 됩니다.
+- record `key_epoch` 계약은 구현의 기존 `u32` 경계와 일치하도록 `1..=4,294,967,295`로 명시했습니다. 정확히 `u32::MAX`는 수락하고 `u32::MAX + 1`은 `InvalidLength`로 거부합니다.
+- well-formed indefinite CBOR byte string은 `NonCanonicalEncoding`으로 거부하며, Item-DEK nonce와 body nonce의 1-byte mutation은 모두 외부에 `AuthenticationFailed`만 반환합니다.
+
+### RED/GREEN 및 전체 검증
+
+- RED: `cargo test -p vault-crypto entropy::tests::root_and_item_keys_keep_heap_storage_across_owner_moves --locked -- --exact --nocapture --test-threads=1`은 수정 전 root-key owner 크기가 32 bytes이고 요구한 pointer size가 8 bytes라서 1개 테스트가 예상대로 실패했습니다.
+- GREEN: 같은 테스트는 수정 후 1 passed, 0 failed였습니다. 이어 entropy focused suite 5/5, authenticated malformed-body cleanup 1/1, codec limit suite 22/22, tamper suite 1/1, committed vector public-open test 1/1이 통과했습니다.
+- `cargo fmt --all --check`: exit 0.
+- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`: exit 0.
+- `cargo test --workspace --all-features --locked -- --test-threads=1`: exit 0. 최상위 test function 50개와 trybuild compile-fail case 16개가 통과했습니다.
+- `cargo run -p vault-crypto --example synthetic_local_alpha --locked`: exit 0이며 stdout은 기존과 동일한 정확한 3줄(`SYNTHETIC_ALPHA_OK`, `items=1`, `tamper_rejected=true`)이었습니다.
+- `cargo test -p vault-crypto --test vectors committed_vector_unlocks_and_opens_through_public_api --locked -- --exact --test-threads=1`: 1 passed, 0 failed.
+- `tests/fixtures/synthetic/v0alpha1-vectors.json` SHA-256은 수정 전후 모두 `305D55C738AF9C8BF08961891362892A29565ED4AB06C3989E98884C28E4D1BD`로 wire fixture가 변하지 않았습니다.
+- 제한적 `rg --hidden --pcre2` secret-pattern 검사는 `.git`, `target`, `.superpowers/sdd`를 제외하고 재실행해 일치 항목이 없었습니다. 첫 호출은 `-----BEGIN`으로 시작하는 pattern이 옵션으로 해석되어 exit 2였고, `--` option terminator를 추가한 교정 명령은 exit 1(no matches), 검증 wrapper 전체는 exit 0이었습니다.
+- 이전 plain-array key owner/copy path 패턴 검사는 일치 항목이 없었습니다.
+- `git diff --check 98113e7b6df9e1ff09ca39b5fefc8434f35d83ae`: commit 전 변경 delta에서 exit 0. 아래 최종 커밋 해시가 확정된 뒤 같은 base부터 커밋을 포함한 delta를 다시 검사합니다.
+
+`gitleaks`는 이번 최종 리뷰 환경에서도 사용할 수 없었습니다. 위의 제한적 pattern 검사는 동등한 대체 검사가 아니며, 실제 Secret 금지와 독립 보안 검토 게이트는 그대로 유지됩니다.

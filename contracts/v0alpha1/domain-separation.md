@@ -30,6 +30,6 @@ Item-DEK wrapping uses `secure-vault/v0alpha1/item-dek-wrap`. Item-body encrypti
  opaque_record_id, revision_id, key_epoch, padding_bucket]
 ```
 
-For v0alpha1, `wire_version` is `0`, `suite_id` is `41217`, and `object_kind` is `2`. Byte-string lengths, positive `key_epoch`, and allowed `padding_bucket` values are defined by `envelope.cddl`.
+For v0alpha1, `wire_version` is `0`, `suite_id` is `41217`, and `object_kind` is `2`. Byte-string lengths, the inclusive `key_epoch` range `1..=4294967295`, and allowed `padding_bucket` values are defined by `envelope.cddl`.
 
 No field may be omitted, reordered, converted between CBOR byte and text strings, or encoded non-canonically. An AAD encoding change requires a new suite ID or wire version; it must not silently reuse `0xA101`.

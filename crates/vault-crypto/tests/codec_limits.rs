@@ -149,8 +149,14 @@ fn rejects_indefinite_array_and_byte_strings() {
     let error = inspect_password_envelope_v0alpha1(&[0x9f, 0xff]).unwrap_err();
     assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
 
-    let mut input = valid_password_envelope();
-    input[6] = 0x5f;
+    let canonical = valid_password_envelope();
+    let mut input = Vec::with_capacity(canonical.len() + 2);
+    input.extend_from_slice(&canonical[..6]);
+    input.push(0x5f);
+    input.push(0x50);
+    input.extend_from_slice(&canonical[7..23]);
+    input.push(0xff);
+    input.extend_from_slice(&canonical[23..]);
     let error = inspect_password_envelope_v0alpha1(&input).unwrap_err();
     assert_eq!(error.code(), CryptoErrorCode::NonCanonicalEncoding);
 }
@@ -299,6 +305,12 @@ fn rejects_zero_or_out_of_range_record_epoch() {
         let error = inspect_record_envelope_v0alpha1(&input).unwrap_err();
         assert_eq!(error.code(), CryptoErrorCode::InvalidLength);
     }
+}
+
+#[test]
+fn accepts_maximum_u32_record_epoch() {
+    let input = record_envelope(0, SUITE_ID, 2, 32, u64::from(u32::MAX), 1_024, 1_040);
+    assert!(inspect_record_envelope_v0alpha1(&input).is_ok());
 }
 
 #[test]

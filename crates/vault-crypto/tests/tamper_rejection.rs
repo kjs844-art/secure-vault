@@ -187,6 +187,22 @@ fn rejects_context_swaps_tampering_malformed_envelopes_and_invalid_sizes() {
             &mutated.encode(),
         ));
     }
+    let mut mutated_item_key_nonce = RecordWire::decode(&envelope);
+    mutated_item_key_nonce.item_key_nonce[0] ^= 0x01;
+    assert_authentication_failed(open_record_v0alpha1(
+        &created.session,
+        &original_context,
+        &mutated_item_key_nonce.encode(),
+    ));
+
+    let mut mutated_body_nonce = RecordWire::decode(&envelope);
+    mutated_body_nonce.body_nonce[0] ^= 0x01;
+    assert_authentication_failed(open_record_v0alpha1(
+        &created.session,
+        &original_context,
+        &mutated_body_nonce.encode(),
+    ));
+
     for index in [
         0,
         parsed.encrypted_body.len() / 2,

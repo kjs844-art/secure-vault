@@ -5,7 +5,7 @@ use chacha20poly1305::{
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::entropy::{EntropySource, OsEntropy, VaultCreationEntropy, with_vault_creation_entropy};
-use crate::{CryptoError, MasterPassword, VaultCommitment, VaultSession};
+use crate::{CryptoError, MasterPassword, VaultCommitment, VaultSession, secret::HeapSecretKey};
 
 use super::codec::{decode_password_envelope, encode_password_envelope, password_root_aad};
 use super::kdf::with_candidate_password_kek;
@@ -77,15 +77,17 @@ fn create_vault_with_dependencies(
             let cipher = XChaCha20Poly1305::new_from_slice(password_kek)
                 .map_err(|_| CryptoError::InvalidLength)?;
             let nonce: &XNonce = (&root_nonce).into();
-            cipher
-                .encrypt(
-                    nonce,
-                    Payload {
-                        msg: root_key.as_slice(),
-                        aad: &aad,
-                    },
-                )
-                .map_err(|_| CryptoError::AuthenticationFailed)
+            root_key.with_bytes(|root_key| {
+                cipher
+                    .encrypt(
+                        nonce,
+                        Payload {
+                            msg: root_key,
+                            aad: &aad,
+                        },
+                    )
+                    .map_err(|_| CryptoError::AuthenticationFailed)
+            })
         })?;
         let password_envelope =
             encode_password_envelope(&salt, &commitment, &root_nonce, &wrapped_root)?;
@@ -131,8 +133,8 @@ fn unlock_vault_with_kdf(
             return Err(CryptoError::AuthenticationFailed);
         }
 
-        let mut root_key = Zeroizing::new([0_u8; ROOT_KEY_BYTES]);
-        root_key.copy_from_slice(&decrypted_root);
+        let root_key = HeapSecretKey::copy_from_zeroizing_vec(&decrypted_root)
+            .map_err(|_| CryptoError::AuthenticationFailed)?;
         decrypted_root.zeroize();
 
         Ok(VaultSession::new(

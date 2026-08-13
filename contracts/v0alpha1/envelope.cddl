@@ -21,7 +21,7 @@ record-envelope-v0alpha1 = [
   vault-commitment: bytes .size 32,
   opaque-record-id: bytes .size 16,
   revision-id: bytes .size 32,
-  key-epoch: uint .gt 0,
+  key-epoch: 1..4294967295,
   padding-bucket: 1024 / 4096 / 16384 / 61440,
   item-key-nonce: bytes .size 24,
   wrapped-item-key: bytes .size 48,

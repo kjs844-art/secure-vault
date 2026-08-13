@@ -10,6 +10,7 @@ use crate::entropy::{
     EntropySource, RecordSealingEntropy, VaultCreationEntropy, with_record_sealing_entropy,
     with_vault_creation_entropy,
 };
+use crate::secret::HeapSecretKey;
 use crate::{
     CryptoError, KeyEpoch, MasterPassword, OpaqueRecordId, PaddingBucketV0Alpha1,
     RecordContextV0Alpha1, RevisionId, SecretBytes, VaultCommitment, VaultSession,
@@ -96,15 +97,17 @@ fn create_vault_with_test_entropy(
                 let cipher = XChaCha20Poly1305::new_from_slice(password_kek)
                     .map_err(|_| CryptoError::InvalidLength)?;
                 let nonce: &XNonce = (&root_nonce).into();
-                cipher
-                    .encrypt(
-                        nonce,
-                        Payload {
-                            msg: root_key.as_slice(),
-                            aad: &aad,
-                        },
-                    )
-                    .map_err(|_| CryptoError::AuthenticationFailed)
+                root_key.with_bytes(|root_key| {
+                    cipher
+                        .encrypt(
+                            nonce,
+                            Payload {
+                                msg: root_key,
+                                aad: &aad,
+                            },
+                        )
+                        .map_err(|_| CryptoError::AuthenticationFailed)
+                })
             })?;
         let password_envelope =
             encode_password_envelope(&salt, &commitment, &root_nonce, &wrapped_root)?;
@@ -147,7 +150,8 @@ fn seal_record_with_test_entropy(
         let dek_aad = item_dek_aad(context)?;
         let body_aad = item_body_aad(context)?;
         let wrapped_item_key = session.wrap_item_dek(item_key_nonce, item_dek, &dek_aad)?;
-        let cipher = XChaCha20Poly1305::new_from_slice(item_dek.as_slice())
+        let cipher = item_dek
+            .with_bytes(XChaCha20Poly1305::new_from_slice)
             .map_err(|_| CryptoError::InvalidLength)?;
         let nonce: &XNonce = (&*body_nonce).into();
         let encrypted_body = cipher
@@ -174,7 +178,7 @@ fn seal_record_with_test_entropy(
 
 fn fixed_test_session_and_context() -> (VaultSession, RecordContextV0Alpha1) {
     let commitment = VaultCommitment::from_bytes([0x10; 32]);
-    let session = VaultSession::new(Zeroizing::new([0x20; 32]), commitment.clone());
+    let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x20), commitment.clone());
     let context = RecordContextV0Alpha1::new(
         commitment,
         OpaqueRecordId::from_bytes([VECTOR_RECORD_ID_BYTE; 16]),

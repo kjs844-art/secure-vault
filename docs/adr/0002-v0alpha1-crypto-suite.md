@@ -68,7 +68,7 @@ Record envelope kind `2`는 CDDL에 정의된 다음 필드를 이 순서대로 
 4. 32-byte vault commitment
 5. 16-byte opaque record ID
 6. 32-byte revision ID
-7. 0보다 큰 key epoch
+7. `1..=4,294,967,295` 범위의 key epoch
 8. encrypted-body padding bucket
 9. 24-byte item-key nonce
 10. 48-byte wrapped item key (`32-byte ciphertext || 16-byte tag`)

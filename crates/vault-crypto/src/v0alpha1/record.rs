@@ -5,7 +5,7 @@ use chacha20poly1305::{
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::entropy::{EntropySource, OsEntropy, RecordSealingEntropy, with_record_sealing_entropy};
-use crate::{CryptoError, RecordContextV0Alpha1, SecretBytes, VaultSession};
+use crate::{CryptoError, RecordContextV0Alpha1, SecretBytes, VaultSession, secret::HeapSecretKey};
 
 use super::codec::{
     RecordEnvelopeFields, decode_record_envelope, encode_record_envelope, item_body_aad,
@@ -29,11 +29,8 @@ struct SensitiveBuffer {
 }
 
 impl SensitiveBuffer {
-    fn new(bytes: Vec<u8>, kind: SensitiveBufferKind) -> Self {
-        Self {
-            bytes: Zeroizing::new(bytes),
-            kind,
-        }
+    fn new(bytes: Zeroizing<Vec<u8>>, kind: SensitiveBufferKind) -> Self {
+        Self { bytes, kind }
     }
 
     fn as_slice(&self) -> &[u8] {
@@ -42,6 +39,10 @@ impl SensitiveBuffer {
 
     fn len(&self) -> usize {
         self.bytes.len()
+    }
+
+    fn as_zeroizing(&self) -> &Zeroizing<Vec<u8>> {
+        &self.bytes
     }
 
     fn zeroize(&mut self) {
@@ -118,29 +119,35 @@ pub fn open_record_v0alpha1(
     let dek_aad = item_dek_aad(expected_context)?;
     let body_aad = item_body_aad(expected_context)?;
 
-    let mut item_dek = SensitiveBuffer::new(
+    let mut decrypted_item_dek = SensitiveBuffer::new(
         session.unwrap_item_dek(&item_key_nonce, fields.wrapped_item_key, &dek_aad)?,
         SensitiveBufferKind::ItemDek,
     );
-    if item_dek.len() != ITEM_DEK_BYTES {
-        item_dek.zeroize();
+    if decrypted_item_dek.len() != ITEM_DEK_BYTES {
+        decrypted_item_dek.zeroize();
         return Err(CryptoError::AuthenticationFailed);
     }
 
-    let body_cipher = XChaCha20Poly1305::new_from_slice(item_dek.as_slice())
+    let mut item_dek = HeapSecretKey::copy_from_zeroizing_vec(decrypted_item_dek.as_zeroizing())
+        .map_err(|_| CryptoError::AuthenticationFailed)?;
+    decrypted_item_dek.zeroize();
+    let body_cipher = item_dek
+        .with_bytes(XChaCha20Poly1305::new_from_slice)
         .map_err(|_| CryptoError::AuthenticationFailed)?;
     item_dek.zeroize();
     let nonce: &XNonce = (&body_nonce).into();
     let mut padded_body = SensitiveBuffer::new(
-        body_cipher
-            .decrypt(
-                nonce,
-                Payload {
-                    msg: fields.encrypted_body,
-                    aad: &body_aad,
-                },
-            )
-            .map_err(|_| CryptoError::AuthenticationFailed)?,
+        Zeroizing::new(
+            body_cipher
+                .decrypt(
+                    nonce,
+                    Payload {
+                        msg: fields.encrypted_body,
+                        aad: &body_aad,
+                    },
+                )
+                .map_err(|_| CryptoError::AuthenticationFailed)?,
+        ),
         SensitiveBufferKind::DecryptedBody,
     );
 
@@ -186,7 +193,9 @@ fn seal_prepared_body(
     let wrapped_item_key =
         session.wrap_item_dek(&entropy.item_key_nonce, &entropy.item_dek, &dek_aad)?;
 
-    let body_cipher = XChaCha20Poly1305::new_from_slice(entropy.item_dek.as_slice())
+    let body_cipher = entropy
+        .item_dek
+        .with_bytes(XChaCha20Poly1305::new_from_slice)
         .map_err(|_| CryptoError::AuthenticationFailed)?;
     let body_nonce: &XNonce = (&entropy.body_nonce).into();
     let encrypted_body = body_cipher
@@ -283,7 +292,7 @@ mod tests {
 
     fn fixed_session_and_context() -> (VaultSession, RecordContextV0Alpha1) {
         let commitment = VaultCommitment::from_bytes([0x21; 32]);
-        let session = VaultSession::new(Zeroizing::new([0x42; 32]), commitment.clone());
+        let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x42), commitment.clone());
         let context = RecordContextV0Alpha1::new(
             commitment,
             OpaqueRecordId::from_bytes([0x11; 16]),
@@ -296,7 +305,7 @@ mod tests {
 
     fn fixed_record_entropy(seed: u8) -> RecordSealingEntropy {
         RecordSealingEntropy {
-            item_dek: Zeroizing::new([seed; 32]),
+            item_dek: HeapSecretKey::synthetic_filled(seed),
             item_key_nonce: [seed.wrapping_add(1); 24],
             body_nonce: [seed.wrapping_add(2); 24],
         }
