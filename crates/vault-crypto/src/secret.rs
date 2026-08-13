@@ -1,3 +1,7 @@
+use chacha20poly1305::{
+    XChaCha20Poly1305, XNonce,
+    aead::{Aead, KeyInit, Payload},
+};
 use zeroize::Zeroizing;
 
 use crate::CryptoError;
@@ -56,6 +60,10 @@ impl VaultCommitment {
     pub const fn from_bytes(value: [u8; 32]) -> Self {
         Self(value)
     }
+
+    pub(crate) const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -65,6 +73,10 @@ impl OpaqueRecordId {
     pub const fn from_bytes(value: [u8; 16]) -> Self {
         Self(value)
     }
+
+    pub(crate) const fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -73,6 +85,10 @@ pub struct RevisionId([u8; 32]);
 impl RevisionId {
     pub const fn from_bytes(value: [u8; 32]) -> Self {
         Self(value)
+    }
+
+    pub(crate) const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
     }
 }
 
@@ -86,6 +102,10 @@ impl KeyEpoch {
         }
         Ok(Self(value))
     }
+
+    pub(crate) const fn value(&self) -> u32 {
+        self.0
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -94,6 +114,17 @@ pub enum PaddingBucketV0Alpha1 {
     Bytes4096,
     Bytes16384,
     Bytes61440,
+}
+
+impl PaddingBucketV0Alpha1 {
+    pub(crate) const fn byte_len(&self) -> usize {
+        match self {
+            Self::Bytes1024 => 1_024,
+            Self::Bytes4096 => 4_096,
+            Self::Bytes16384 => 16_384,
+            Self::Bytes61440 => 61_440,
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -121,6 +152,26 @@ impl RecordContextV0Alpha1 {
             padding_bucket,
         }
     }
+
+    pub(crate) const fn commitment_bytes(&self) -> &[u8; 32] {
+        self.commitment.as_bytes()
+    }
+
+    pub(crate) const fn record_id_bytes(&self) -> &[u8; 16] {
+        self.record_id.as_bytes()
+    }
+
+    pub(crate) const fn revision_id_bytes(&self) -> &[u8; 32] {
+        self.revision_id.as_bytes()
+    }
+
+    pub(crate) const fn key_epoch_value(&self) -> u32 {
+        self.key_epoch.value()
+    }
+
+    pub(crate) const fn padding_bucket_bytes(&self) -> usize {
+        self.padding_bucket.byte_len()
+    }
 }
 
 /// An unlocked root key held only in zeroizing memory.
@@ -144,6 +195,48 @@ impl VaultSession {
 
     pub fn commitment(&self) -> VaultCommitment {
         self.commitment.clone()
+    }
+
+    pub(crate) const fn commitment_bytes(&self) -> &[u8; 32] {
+        self.commitment.as_bytes()
+    }
+
+    /// Wrap an Item DEK without ever exposing or returning the Vault Root Key.
+    pub(crate) fn wrap_item_dek(
+        &self,
+        nonce: &[u8; 24],
+        item_dek: &[u8; 32],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, CryptoError> {
+        let cipher = XChaCha20Poly1305::new_from_slice(self.root_key.as_slice())
+            .map_err(|_| CryptoError::InvalidLength)?;
+        let nonce: &XNonce = nonce.into();
+        cipher
+            .encrypt(nonce, Payload { msg: item_dek, aad })
+            .map_err(|_| CryptoError::AuthenticationFailed)
+    }
+
+    /// Unwrap an Item DEK without ever exposing or returning the Vault Root Key.
+    ///
+    /// The returned Item DEK is moved directly into a zeroizing owner by the record module.
+    pub(crate) fn unwrap_item_dek(
+        &self,
+        nonce: &[u8; 24],
+        wrapped_item_dek: &[u8],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, CryptoError> {
+        let cipher = XChaCha20Poly1305::new_from_slice(self.root_key.as_slice())
+            .map_err(|_| CryptoError::InvalidLength)?;
+        let nonce: &XNonce = nonce.into();
+        cipher
+            .decrypt(
+                nonce,
+                Payload {
+                    msg: wrapped_item_dek,
+                    aad,
+                },
+            )
+            .map_err(|_| CryptoError::AuthenticationFailed)
     }
 }
 

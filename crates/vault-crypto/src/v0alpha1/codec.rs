@@ -2,7 +2,7 @@ use core::convert::Infallible;
 
 use minicbor::{Decoder, Encoder, encode::Write};
 
-use crate::CryptoError;
+use crate::{CryptoError, RecordContextV0Alpha1};
 
 use super::kdf::{CANDIDATE_LANES, CANDIDATE_MEMORY_KIB, CANDIDATE_TIME_COST};
 
@@ -24,7 +24,10 @@ const WRAPPED_KEY_BYTES: usize = 48;
 const AUTH_TAG_BYTES: usize = 16;
 
 const PASSWORD_ROOT_DOMAIN: &[u8] = b"secure-vault/v0alpha1/password-root-wrap";
+const ITEM_DEK_DOMAIN: &[u8] = b"secure-vault/v0alpha1/item-dek-wrap";
+const ITEM_BODY_DOMAIN: &[u8] = b"secure-vault/v0alpha1/item-body";
 const PASSWORD_AAD_FIELD_COUNT: u64 = 9;
+const RECORD_AAD_FIELD_COUNT: u64 = 9;
 
 struct CanonicalComparator<'a> {
     expected: &'a [u8],
@@ -79,19 +82,19 @@ pub(crate) struct PasswordEnvelopeFields<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct RecordEnvelopeFields<'a> {
-    wire_version: u64,
-    suite_id: u64,
-    object_kind: u64,
-    vault_commitment: &'a [u8],
-    opaque_record_id: &'a [u8],
-    revision_id: &'a [u8],
-    key_epoch: u64,
-    padding_bucket: u64,
-    item_key_nonce: &'a [u8],
-    wrapped_item_key: &'a [u8],
-    body_nonce: &'a [u8],
-    encrypted_body: &'a [u8],
+pub(crate) struct RecordEnvelopeFields<'a> {
+    pub(crate) wire_version: u64,
+    pub(crate) suite_id: u64,
+    pub(crate) object_kind: u64,
+    pub(crate) vault_commitment: &'a [u8],
+    pub(crate) opaque_record_id: &'a [u8],
+    pub(crate) revision_id: &'a [u8],
+    pub(crate) key_epoch: u64,
+    pub(crate) padding_bucket: u64,
+    pub(crate) item_key_nonce: &'a [u8],
+    pub(crate) wrapped_item_key: &'a [u8],
+    pub(crate) body_nonce: &'a [u8],
+    pub(crate) encrypted_body: &'a [u8],
 }
 
 /// Validate a password envelope without exposing parsed or mutable fields.
@@ -181,7 +184,88 @@ pub(crate) fn password_root_aad(
     Ok(encoder.into_writer())
 }
 
-fn decode_record_envelope(input: &[u8]) -> Result<RecordEnvelopeFields<'_>, CryptoError> {
+pub(crate) fn encode_record_envelope(
+    context: &RecordContextV0Alpha1,
+    item_key_nonce: &[u8; NONCE_BYTES],
+    wrapped_item_key: &[u8],
+    body_nonce: &[u8; NONCE_BYTES],
+    encrypted_body: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    if wrapped_item_key.len() != WRAPPED_KEY_BYTES {
+        return Err(CryptoError::InvalidLength);
+    }
+    validate_encrypted_body_length(encrypted_body, context.padding_bucket_bytes())?;
+
+    let mut encoder = Encoder::new(Vec::with_capacity(
+        context.padding_bucket_bytes().saturating_add(256),
+    ));
+    encoder.array(RECORD_FIELD_COUNT).map_err(encode_error)?;
+    encoder.u64(WIRE_VERSION).map_err(encode_error)?;
+    encoder.u64(SUITE_ID).map_err(encode_error)?;
+    encoder.u64(RECORD_OBJECT_KIND).map_err(encode_error)?;
+    encoder
+        .bytes(context.commitment_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .bytes(context.record_id_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .bytes(context.revision_id_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(context.key_epoch_value()))
+        .map_err(encode_error)?;
+    encoder
+        .u64(context.padding_bucket_bytes() as u64)
+        .map_err(encode_error)?;
+    encoder.bytes(item_key_nonce).map_err(encode_error)?;
+    encoder.bytes(wrapped_item_key).map_err(encode_error)?;
+    encoder.bytes(body_nonce).map_err(encode_error)?;
+    encoder.bytes(encrypted_body).map_err(encode_error)?;
+
+    let encoded = encoder.into_writer();
+    reject_if_over_64_kib(&encoded)?;
+    Ok(encoded)
+}
+
+pub(crate) fn item_dek_aad(context: &RecordContextV0Alpha1) -> Result<Vec<u8>, CryptoError> {
+    record_aad(ITEM_DEK_DOMAIN, context)
+}
+
+pub(crate) fn item_body_aad(context: &RecordContextV0Alpha1) -> Result<Vec<u8>, CryptoError> {
+    record_aad(ITEM_BODY_DOMAIN, context)
+}
+
+fn record_aad(domain: &[u8], context: &RecordContextV0Alpha1) -> Result<Vec<u8>, CryptoError> {
+    let mut encoder = Encoder::new(Vec::with_capacity(160));
+    encoder
+        .array(RECORD_AAD_FIELD_COUNT)
+        .map_err(encode_error)?;
+    encoder.bytes(domain).map_err(encode_error)?;
+    encoder.u64(WIRE_VERSION).map_err(encode_error)?;
+    encoder.u64(SUITE_ID).map_err(encode_error)?;
+    encoder.u64(RECORD_OBJECT_KIND).map_err(encode_error)?;
+    encoder
+        .bytes(context.commitment_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .bytes(context.record_id_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .bytes(context.revision_id_bytes())
+        .map_err(encode_error)?;
+    encoder
+        .u64(u64::from(context.key_epoch_value()))
+        .map_err(encode_error)?;
+    encoder
+        .u64(context.padding_bucket_bytes() as u64)
+        .map_err(encode_error)?;
+    Ok(encoder.into_writer())
+}
+
+pub(crate) fn decode_record_envelope(
+    input: &[u8],
+) -> Result<RecordEnvelopeFields<'_>, CryptoError> {
     reject_if_over_64_kib(input)?;
     let fields = parse_fixed_record_array(input)?;
     ensure_record_envelope_is_canonical(input, &fields)?;
@@ -403,6 +487,10 @@ fn encode_error(_: minicbor::encode::Error<Infallible>) -> CryptoError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        KeyEpoch, OpaqueRecordId, PaddingBucketV0Alpha1, RecordContextV0Alpha1, RevisionId,
+        VaultCommitment,
+    };
 
     #[test]
     fn password_root_aad_matches_the_hand_derived_contract_bytes() {
@@ -416,5 +504,35 @@ mod tests {
         expected.extend_from_slice(&commitment);
 
         assert_eq!(password_root_aad(&salt, &commitment).unwrap(), expected);
+    }
+
+    #[test]
+    fn item_aad_uses_two_hand_derived_domain_separated_encodings() {
+        let context = RecordContextV0Alpha1::new(
+            VaultCommitment::from_bytes([0x11; 32]),
+            OpaqueRecordId::from_bytes([0x22; 16]),
+            RevisionId::from_bytes([0x33; 32]),
+            KeyEpoch::new(1).unwrap(),
+            PaddingBucketV0Alpha1::Bytes1024,
+        );
+        let mut common_suffix = vec![0x00, 0x19, 0xa1, 0x01, 0x02, 0x58, 0x20];
+        common_suffix.extend_from_slice(&[0x11; 32]);
+        common_suffix.push(0x50);
+        common_suffix.extend_from_slice(&[0x22; 16]);
+        common_suffix.extend_from_slice(&[0x58, 0x20]);
+        common_suffix.extend_from_slice(&[0x33; 32]);
+        common_suffix.extend_from_slice(&[0x01, 0x19, 0x04, 0x00]);
+
+        let mut expected_dek = vec![0x89, 0x58, 0x23];
+        expected_dek.extend_from_slice(b"secure-vault/v0alpha1/item-dek-wrap");
+        expected_dek.extend_from_slice(&common_suffix);
+
+        let mut expected_body = vec![0x89, 0x58, 0x1f];
+        expected_body.extend_from_slice(b"secure-vault/v0alpha1/item-body");
+        expected_body.extend_from_slice(&common_suffix);
+
+        assert_eq!(item_dek_aad(&context).unwrap(), expected_dek);
+        assert_eq!(item_body_aad(&context).unwrap(), expected_body);
+        assert_ne!(expected_dek, expected_body);
     }
 }
