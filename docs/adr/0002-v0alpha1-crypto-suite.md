@@ -81,6 +81,9 @@ Record envelope kind `2`는 CDDL에 정의된 다음 필드를 이 순서대로 
 
 - 이 스위트는 합성 데이터로 인코딩·디코딩·호환성 테스트를 수행할 수 있지만 실제 Secret 저장에는 승인되지 않았다.
 - 여기서 생성하는 protocol vector는 독립 구현으로 재현되기 전까지 correctness 증명이 아니라 regression vector다.
+- `tests/fixtures/synthetic/v0alpha1-vectors.json`의 바이트는 crate-private 결정적 test entropy로
+  생성하고 공개 API로 다시 읽는 호환성 회귀 자료다. 이 fixture는 독립 구현으로 검증되지
+  않았으며 primitive 또는 application crypto의 정확성을 독립적으로 증명하지 않는다.
 - root-key rotation, device revocation rotation, recovery wrapping과 복구 후 epoch 전환 의미가 아직 해결되지 않았다.
 - 위 rotation/recovery 의미가 설계되고 독립 보안 검토를 통과하기 전에는 실제 Secret beta를 시작할 수 없다.
 
