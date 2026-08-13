@@ -92,6 +92,9 @@ Private GitHub 브랜치는 소스 코드 백업과 검토 표면이며 사용�
 - `tests/fixtures/synthetic/v0alpha1-vectors.json` SHA-256은 수정 전후 모두 `305D55C738AF9C8BF08961891362892A29565ED4AB06C3989E98884C28E4D1BD`로 wire fixture가 변하지 않았습니다.
 - 제한적 `rg --hidden --pcre2` secret-pattern 검사는 `.git`, `target`, `.superpowers/sdd`를 제외하고 재실행해 일치 항목이 없었습니다. 첫 호출은 `-----BEGIN`으로 시작하는 pattern이 옵션으로 해석되어 exit 2였고, `--` option terminator를 추가한 교정 명령은 exit 1(no matches), 검증 wrapper 전체는 exit 0이었습니다.
 - 이전 plain-array key owner/copy path 패턴 검사는 일치 항목이 없었습니다.
-- `git diff --check 98113e7b6df9e1ff09ca39b5fefc8434f35d83ae`: commit 전 변경 delta에서 exit 0. 아래 최종 커밋 해시가 확정된 뒤 같은 base부터 커밋을 포함한 delta를 다시 검사합니다.
+- 보안 수정 커밋은 `c1a5dea60d7177425f01056ade363b5448c868d2` (`fix: harden v0alpha1 key ownership assurances`)입니다.
+- commit 전 `git diff --check 98113e7b6df9e1ff09ca39b5fefc8434f35d83ae`: exit 0.
+- commit 후 `git diff --check 9c2dee8f9635c68549e36850c6eeb42a85fa7259..c1a5dea60d7177425f01056ade363b5448c868d2`: exit 0.
+- commit 후 `git diff --check 98113e7b6df9e1ff09ca39b5fefc8434f35d83ae..c1a5dea60d7177425f01056ade363b5448c868d2`: exit 0.
 
 `gitleaks`는 이번 최종 리뷰 환경에서도 사용할 수 없었습니다. 위의 제한적 pattern 검사는 동등한 대체 검사가 아니며, 실제 Secret 금지와 독립 보안 검토 게이트는 그대로 유지됩니다.
