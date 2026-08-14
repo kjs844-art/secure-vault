@@ -5,5 +5,9 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod ids;
+mod model;
+mod secret;
 
 pub use error::{LocalVaultError, LocalVaultErrorCode};
+pub use ids::{RecordIdV1, RevisionIdV1};
