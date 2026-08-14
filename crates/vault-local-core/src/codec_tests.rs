@@ -1,6 +1,7 @@
 use super::{
     SyntheticCodecMutation, reject_synthetic_codec_mutation_v1,
-    synthetic_codec_roundtrip_with_note_length,
+    synthetic_codec_roundtrip_with_note_length, synthetic_fully_populated_codec_roundtrip_v1,
+    synthetic_well_formed_future_version_v1,
 };
 use crate::LocalVaultErrorCode;
 use proptest::prelude::*;
@@ -10,6 +11,10 @@ fn current_schema_rejects_alternative_or_malformed_encodings() {
     for (mutation, expected) in [
         (
             SyntheticCodecMutation::WrongTopLevelArrayLength,
+            LocalVaultErrorCode::NonCanonicalEncoding,
+        ),
+        (
+            SyntheticCodecMutation::EmptyTopLevelArrayWithExternalFutureVersion,
             LocalVaultErrorCode::NonCanonicalEncoding,
         ),
         (
@@ -70,6 +75,16 @@ fn current_schema_rejects_alternative_or_malformed_encodings() {
             .code();
         assert_eq!(code, expected);
     }
+}
+
+#[test]
+fn fully_populated_synthetic_item_roundtrips() {
+    assert!(synthetic_fully_populated_codec_roundtrip_v1().is_ok());
+}
+
+#[test]
+fn well_formed_future_version_requests_upgrade() {
+    assert_eq!(synthetic_well_formed_future_version_v1().unwrap(), 2);
 }
 
 proptest! {

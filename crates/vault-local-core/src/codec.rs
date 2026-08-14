@@ -70,6 +70,9 @@ pub(crate) fn decode_item(
         .array()
         .map_err(decode_error)?
         .ok_or(LocalVaultError::NonCanonicalEncoding)?;
+    if field_count == 0 {
+        return Err(LocalVaultError::NonCanonicalEncoding);
+    }
     let version = decoder.u64().map_err(decode_error)?;
 
     if version == 0 {
@@ -775,6 +778,7 @@ impl Write for CanonicalComparator<'_> {
 #[cfg(test)]
 pub(super) enum SyntheticCodecMutation {
     WrongTopLevelArrayLength,
+    EmptyTopLevelArrayWithExternalFutureVersion,
     WrongNestedArrayLength,
     IndefiniteTopLevelArray,
     IndefiniteText,
@@ -848,6 +852,58 @@ pub(super) fn synthetic_codec_roundtrip_with_note_length(
 }
 
 #[cfg(test)]
+pub(super) fn synthetic_fully_populated_codec_roundtrip_v1() -> Result<(), LocalVaultError> {
+    let current_revision = synthetic_current_revision();
+    let encoded = encode_current_item(&synthetic_fully_populated_item()?, current_revision)?;
+    let DecodedItem::Current(decoded) = decode_item(&encoded, current_revision)? else {
+        return Err(LocalVaultError::InvalidItem);
+    };
+
+    let mcp_connection = decoded
+        .connections
+        .iter()
+        .find(|connection| connection.consumer_type == ConsumerTypeV1::McpServer)
+        .ok_or(LocalVaultError::InvalidItem)?;
+    let integration = mcp_connection
+        .mcp_integration
+        .as_ref()
+        .ok_or(LocalVaultError::InvalidItem)?;
+    let rotation = decoded
+        .rotation_state
+        .as_ref()
+        .ok_or(LocalVaultError::InvalidItem)?;
+
+    if decoded.parent_revision_id.is_none()
+        || decoded.provider_template_id.is_none()
+        || decoded.console_url.is_none()
+        || decoded.issuer_account_ref.is_none()
+        || decoded.issuer_project_ref.is_none()
+        || decoded.secret_fields.len() != 2
+        || decoded.connections.len() != 2
+        || integration.argument_template.len() != 2
+        || integration.credential_field_bindings.len() != 2
+        || rotation.required_connection_ids.len() != 1
+        || rotation.completed_connection_ids.len() != 1
+    {
+        return Err(LocalVaultError::InvalidItem);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn synthetic_well_formed_future_version_v1() -> Result<u64, LocalVaultError> {
+    let mut encoder = Encoder::new(Vec::with_capacity(2));
+    encoder.array(1).map_err(encode_error)?;
+    encoder.u64(2).map_err(encode_error)?;
+    let plaintext =
+        vault_crypto::SecretBytes::new(encoder.into_writer()).map_err(map_secret_bytes_error)?;
+    match decode_item(&plaintext, synthetic_current_revision())? {
+        DecodedItem::UpgradeRequired { version } => Ok(version),
+        DecodedItem::Current(_) => Err(LocalVaultError::InvalidItem),
+    }
+}
+
+#[cfg(test)]
 fn apply_synthetic_mutation(
     bytes: &mut Vec<u8>,
     mutation: SyntheticCodecMutation,
@@ -856,6 +912,10 @@ fn apply_synthetic_mutation(
         SyntheticCodecMutation::WrongTopLevelArrayLength => {
             require_test_prefix(bytes, &[0x98, ITEM_FIELD_COUNT as u8])?;
             bytes[1] = (ITEM_FIELD_COUNT - 1) as u8;
+        }
+        SyntheticCodecMutation::EmptyTopLevelArrayWithExternalFutureVersion => {
+            bytes.clear();
+            bytes.extend_from_slice(&[0x80, 0x02]);
         }
         SyntheticCodecMutation::WrongNestedArrayLength => {
             let pattern = synthetic_secret_prefix(1, 1);
@@ -950,6 +1010,104 @@ fn synthetic_valid_item() -> Result<CredentialItemV1, LocalVaultError> {
         created_at: synthetic_timestamp()?,
         updated_at: synthetic_timestamp()?,
     })
+}
+
+#[cfg(test)]
+fn synthetic_fully_populated_item() -> Result<CredentialItemV1, LocalVaultError> {
+    let mut item = synthetic_valid_item()?;
+    let parent_revision = RevisionIdV1::from_bytes([0x20; 32]);
+
+    item.parent_revision_id = Some(parent_revision);
+    item.provider_template_id = Some("DEMO_VALUE_ONLY_provider_template".to_owned());
+    item.console_url = Some("https://example.invalid/DEMO_VALUE_ONLY_console".to_owned());
+    item.issuer_account_ref = Some(EntityIdV1::from_bytes(synthetic_entity_bytes(5)));
+    item.issuer_project_ref = Some(EntityIdV1::from_bytes(synthetic_entity_bytes(6)));
+    item.issuer_account_identifier = Some("DEMO_VALUE_ONLY_user@example.invalid".to_owned());
+    item.issuer_organization_or_workspace = Some("DEMO_VALUE_ONLY_workspace".to_owned());
+    item.issuer_project = Some("DEMO_VALUE_ONLY_project".to_owned());
+    item.issuer_environment = Some("DEMO_VALUE_ONLY_test".to_owned());
+    item.credential_type = CredentialTypeV1::OauthClient;
+    let mut second_field = synthetic_secret_field(2)?;
+    second_field.label = "DEMO_VALUE_ONLY_refresh_token".to_owned();
+    second_field.field_role = FieldRoleV1::Token;
+    second_field.sensitivity = SensitivityV1::PrivateMetadata;
+    second_field.reveal_policy = RevealPolicyV1::Masked;
+    second_field.copy_policy = CopyPolicyV1::Never;
+    item.secret_fields.push(second_field);
+    item.display_hint = Some("DEMO_VALUE_ONLY_tail".to_owned());
+    item.scopes_or_permissions = vec![
+        "DEMO_VALUE_ONLY_models.read".to_owned(),
+        "DEMO_VALUE_ONLY_models.write".to_owned(),
+    ];
+    item.issued_at = Some(synthetic_timestamp()?);
+    item.expires_at = Some(synthetic_timestamp()?);
+    item.rotate_at = Some(synthetic_timestamp()?);
+    item.timestamp_provenance = TimestampProvenanceV1::ProviderVerified;
+    item.status = CredentialStatusV1::Rotating;
+    item.external_revocation_status = ExternalRevocationStatusV1::UserConfirmed;
+    item.external_revocation_attestation = ExternalRevocationAttestationV1::User;
+    item.revoked_at = Some(synthetic_timestamp()?);
+
+    let mut required_connection = synthetic_connection(3);
+    populate_synthetic_connection(&mut required_connection)?;
+    required_connection.required_for_cutover = true;
+    required_connection.status = ConnectionStatusV1::Verified;
+    required_connection.verification_source = VerificationSourceV1::ProviderConnector;
+
+    let mut mcp_connection = synthetic_connection(4);
+    populate_synthetic_connection(&mut mcp_connection)?;
+    mcp_connection.consumer_type = ConsumerTypeV1::McpServer;
+    mcp_connection.status = ConnectionStatusV1::UpdateRequired;
+    mcp_connection.mcp_integration = Some(McpIntegrationV1 {
+        transport: McpTransportV1::StreamableHttp,
+        server_identifier: "DEMO_VALUE_ONLY_mcp_server".to_owned(),
+        package_or_executable_reference: Some("DEMO_VALUE_ONLY_package".to_owned()),
+        argument_template: vec![
+            "DEMO_VALUE_ONLY_argument_one".to_owned(),
+            "DEMO_VALUE_ONLY_argument_two".to_owned(),
+        ],
+        endpoint_url: Some("https://example.invalid/DEMO_VALUE_ONLY_mcp".to_owned()),
+        credential_field_bindings: vec![
+            CredentialFieldBindingV1 {
+                configuration_key_name: "DEMO_VALUE_ONLY_API_KEY".to_owned(),
+                field_id: EntityIdV1::from_bytes(synthetic_entity_bytes(1)),
+            },
+            CredentialFieldBindingV1 {
+                configuration_key_name: "DEMO_VALUE_ONLY_REFRESH_TOKEN".to_owned(),
+                field_id: EntityIdV1::from_bytes(synthetic_entity_bytes(2)),
+            },
+        ],
+        configuration_location: Some("DEMO_VALUE_ONLY_config_file".to_owned()),
+        execution_policy: McpExecutionPolicyV1::RecordOnly,
+    });
+    item.connections = vec![required_connection, mcp_connection];
+    item.rotation_state = Some(RotationStateV1 {
+        supersedes_revision_id: parent_revision,
+        required_connection_ids: vec![EntityIdV1::from_bytes(synthetic_entity_bytes(3))],
+        completed_connection_ids: vec![EntityIdV1::from_bytes(synthetic_entity_bytes(3))],
+        superseded_external_revocation_status: ExternalRevocationStatusV1::ProviderVerified,
+        superseded_external_revocation_attestation:
+            ExternalRevocationAttestationV1::ProviderConnector,
+        superseded_revoked_at: Some(synthetic_timestamp()?),
+    });
+    item.tags = vec![
+        "DEMO_VALUE_ONLY_ai".to_owned(),
+        "DEMO_VALUE_ONLY_rotation".to_owned(),
+    ];
+    item.notes = Some("DEMO_VALUE_ONLY_fully_populated_fixture".to_owned());
+    Ok(item)
+}
+
+#[cfg(test)]
+fn populate_synthetic_connection(connection: &mut ConnectionV1) -> Result<(), LocalVaultError> {
+    connection.consumer_project = Some("DEMO_VALUE_ONLY_consumer_project".to_owned());
+    connection.consumer_environment = Some("DEMO_VALUE_ONLY_consumer_test".to_owned());
+    connection.purpose = Some("DEMO_VALUE_ONLY_rotation_validation".to_owned());
+    connection.configuration_reference = Some("DEMO_VALUE_ONLY_settings_page".to_owned());
+    connection.credential_alias_or_env_name = Some("DEMO_VALUE_ONLY_API_KEY".to_owned());
+    connection.last_verified_at = Some(synthetic_timestamp()?);
+    connection.notes = Some("DEMO_VALUE_ONLY_connection_note".to_owned());
+    Ok(())
 }
 
 #[cfg(test)]
