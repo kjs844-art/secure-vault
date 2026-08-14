@@ -223,7 +223,9 @@ fn validate_session_context(
     session: &VaultSession,
     context: &RecordContextV0Alpha1,
 ) -> Result<(), CryptoError> {
-    if session.commitment_bytes() != context.commitment_bytes() {
+    if session.commitment_bytes() != context.commitment_bytes()
+        || session.key_epoch_value() != context.key_epoch_value()
+    {
         return Err(CryptoError::AuthenticationFailed);
     }
     Ok(())
@@ -292,7 +294,11 @@ mod tests {
 
     fn fixed_session_and_context() -> (VaultSession, RecordContextV0Alpha1) {
         let commitment = VaultCommitment::from_bytes([0x21; 32]);
-        let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x42), commitment.clone());
+        let session = VaultSession::new(
+            HeapSecretKey::synthetic_filled(0x42),
+            commitment.clone(),
+            KeyEpoch::initial(),
+        );
         let context = RecordContextV0Alpha1::new(
             commitment,
             OpaqueRecordId::from_bytes([0x11; 16]),

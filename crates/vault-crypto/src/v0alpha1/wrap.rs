@@ -5,7 +5,9 @@ use chacha20poly1305::{
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::entropy::{EntropySource, OsEntropy, VaultCreationEntropy, with_vault_creation_entropy};
-use crate::{CryptoError, MasterPassword, VaultCommitment, VaultSession, secret::HeapSecretKey};
+use crate::{
+    CryptoError, KeyEpoch, MasterPassword, VaultCommitment, VaultSession, secret::HeapSecretKey,
+};
 
 use super::codec::{decode_password_envelope, encode_password_envelope, password_root_aad};
 use super::kdf::with_candidate_password_kek;
@@ -91,7 +93,11 @@ fn create_vault_with_dependencies(
         })?;
         let password_envelope =
             encode_password_envelope(&salt, &commitment, &root_nonce, &wrapped_root)?;
-        let session = VaultSession::new(root_key, VaultCommitment::from_bytes(commitment));
+        let session = VaultSession::new(
+            root_key,
+            VaultCommitment::from_bytes(commitment),
+            KeyEpoch::initial(),
+        );
 
         Ok(CreatedVaultV0Alpha1 {
             password_envelope,
@@ -140,6 +146,7 @@ fn unlock_vault_with_kdf(
         Ok(VaultSession::new(
             root_key,
             VaultCommitment::from_bytes(commitment),
+            KeyEpoch::initial(),
         ))
     })
 }

@@ -111,7 +111,11 @@ fn create_vault_with_test_entropy(
             })?;
         let password_envelope =
             encode_password_envelope(&salt, &commitment, &root_nonce, &wrapped_root)?;
-        let session = VaultSession::new(root_key, VaultCommitment::from_bytes(commitment));
+        let session = VaultSession::new(
+            root_key,
+            VaultCommitment::from_bytes(commitment),
+            KeyEpoch::initial(),
+        );
 
         Ok(DeterministicCreatedVault {
             password_envelope,
@@ -178,7 +182,11 @@ fn seal_record_with_test_entropy(
 
 fn fixed_test_session_and_context() -> (VaultSession, RecordContextV0Alpha1) {
     let commitment = VaultCommitment::from_bytes([0x10; 32]);
-    let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x20), commitment.clone());
+    let session = VaultSession::new(
+        HeapSecretKey::synthetic_filled(0x20),
+        commitment.clone(),
+        KeyEpoch::initial(),
+    );
     let context = RecordContextV0Alpha1::new(
         commitment,
         OpaqueRecordId::from_bytes([VECTOR_RECORD_ID_BYTE; 16]),

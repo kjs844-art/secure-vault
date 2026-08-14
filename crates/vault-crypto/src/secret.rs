@@ -156,6 +156,10 @@ impl RevisionId {
 pub struct KeyEpoch(u32);
 
 impl KeyEpoch {
+    pub const fn initial() -> Self {
+        Self(1)
+    }
+
     pub const fn new(value: u32) -> Result<Self, CryptoError> {
         if value == 0 {
             return Err(CryptoError::InvalidLength);
@@ -163,8 +167,15 @@ impl KeyEpoch {
         Ok(Self(value))
     }
 
-    pub(crate) const fn value(&self) -> u32 {
+    pub const fn get(&self) -> u32 {
         self.0
+    }
+
+    pub const fn checked_next(&self) -> Result<Self, CryptoError> {
+        match self.0.checked_add(1) {
+            Some(next) => Ok(Self(next)),
+            None => Err(CryptoError::LimitsExceeded),
+        }
     }
 }
 
@@ -226,7 +237,7 @@ impl RecordContextV0Alpha1 {
     }
 
     pub(crate) const fn key_epoch_value(&self) -> u32 {
-        self.key_epoch.value()
+        self.key_epoch.get()
     }
 
     pub(crate) const fn padding_bucket_bytes(&self) -> usize {
@@ -242,15 +253,25 @@ pub struct VaultSession {
     #[allow(dead_code)]
     root_key: HeapSecretKey,
     commitment: VaultCommitment,
+    key_epoch: KeyEpoch,
 }
 
 impl VaultSession {
     #[allow(dead_code)]
-    pub(crate) fn new(root_key: HeapSecretKey, commitment: VaultCommitment) -> Self {
+    pub(crate) fn new(
+        root_key: HeapSecretKey,
+        commitment: VaultCommitment,
+        key_epoch: KeyEpoch,
+    ) -> Self {
         Self {
             root_key,
             commitment,
+            key_epoch,
         }
+    }
+
+    pub fn key_epoch(&self) -> KeyEpoch {
+        self.key_epoch.clone()
     }
 
     pub fn commitment(&self) -> VaultCommitment {
@@ -259,6 +280,10 @@ impl VaultSession {
 
     pub(crate) const fn commitment_bytes(&self) -> &[u8; 32] {
         self.commitment.as_bytes()
+    }
+
+    pub(crate) const fn key_epoch_value(&self) -> u32 {
+        self.key_epoch.get()
     }
 
     /// Wrap an Item DEK without ever exposing or returning the Vault Root Key.
@@ -366,7 +391,11 @@ mod tests {
     #[test]
     fn session_exposes_only_its_public_commitment_value() {
         let commitment = VaultCommitment::from_bytes([0x21; 32]);
-        let session = VaultSession::new(HeapSecretKey::synthetic_filled(0x42), commitment.clone());
+        let session = VaultSession::new(
+            HeapSecretKey::synthetic_filled(0x42),
+            commitment.clone(),
+            KeyEpoch::initial(),
+        );
         assert!(session.commitment() == commitment);
     }
 }
