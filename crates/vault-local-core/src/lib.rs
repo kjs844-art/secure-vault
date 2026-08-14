@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+mod codec;
 mod error;
 mod ids;
 mod model;
