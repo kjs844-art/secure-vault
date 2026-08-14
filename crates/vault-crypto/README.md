@@ -12,4 +12,4 @@ Rust 기반 공유 암호화 코어 후보입니다. 장기적으로 키 파생�
 - direct `poly1305` dependency는 `poly1305/zeroize` feature unification 전용입니다. application code는 high-level XChaCha20-Poly1305 AEAD API만 사용합니다.
 - 프로토콜 벡터는 독립 구현으로 재현되기 전까지 regression vector입니다.
 
-다음 게이트는 독립 암호 설계·구현 검토와 별도의 복구/기기 키 ADR입니다. 프로덕션 알고리즘과 파라미터는 이 게이트 전에는 확정되거나 실제 Secret 저장에 승인된 것으로 간주하지 않습니다.
+복구 제품 정책 ADR 0003은 승인됐지만 정확한 recovery wire 계약, Android 기기 키 ADR, 합성 구현과 독립 암호 설계·구현 검토는 아직 남아 있습니다. 프로덕션 알고리즘과 파라미터는 이 게이트 전에는 확정되거나 실제 Secret 저장에 승인된 것으로 간주하지 않습니다.
