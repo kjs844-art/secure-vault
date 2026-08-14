@@ -8,7 +8,15 @@ mod codec;
 mod error;
 mod ids;
 mod model;
+mod record;
 mod secret;
+mod synthetic;
 
 pub use error::{LocalVaultError, LocalVaultErrorCode};
 pub use ids::{RecordIdV1, RevisionIdV1};
+pub use record::{
+    OpenCredentialOutcome, OpenedCredentialV1, RecordLocatorV0Alpha1,
+    SealedCredentialRecordV0Alpha1, StoredPaddingBucketV0Alpha1, open_credential_record_v1,
+    seal_synthetic_fixture_v1,
+};
+pub use synthetic::SyntheticCredentialFixtureId;
