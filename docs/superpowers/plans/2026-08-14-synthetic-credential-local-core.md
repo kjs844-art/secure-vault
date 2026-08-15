@@ -587,7 +587,7 @@ fn utc_timestamps_accept_only_exact_valid_calendar_values() {
 - [ ] **Step 2: Run the tests and verify RED**
 
 ```powershell
-cargo test -p vault-local-core model_tests --lib
+cargo test -p vault-local-core model::tests --lib
 ```
 
 Expected: compile failure because the model and synthetic invalid fixture API do not exist.
@@ -830,7 +830,7 @@ pub use ids::{RecordIdV1, RevisionIdV1};
 Run:
 
 ```powershell
-cargo test -p vault-local-core model_tests --lib
+cargo test -p vault-local-core model::tests --lib
 cargo fmt --all -- --check
 cargo clippy -p vault-local-core --all-targets -- -D warnings
 ```
@@ -905,7 +905,7 @@ proptest! {
 - [ ] **Step 2: Run focused RED**
 
 ```powershell
-cargo test -p vault-local-core codec_tests --lib
+cargo test -p vault-local-core codec::tests --lib
 ```
 
 Expected: compile failure because the codec test API does not exist.
@@ -995,7 +995,7 @@ Define `SyntheticCodecMutation`, `fn reject_synthetic_codec_mutation_v1(mutation
 - [ ] **Step 5: Run focused and full GREEN**
 
 ```powershell
-cargo test -p vault-local-core codec_tests --lib
+cargo test -p vault-local-core codec::tests --lib
 cargo test -p vault-local-core
 cargo fmt --all -- --check
 cargo clippy -p vault-local-core --all-targets -- -D warnings
@@ -1255,7 +1255,7 @@ Do not add a secret getter, reveal, copy, search or arbitrary create/update API.
 
 ```powershell
 cargo test -p vault-local-core --test synthetic_record_roundtrip -- --test-threads=1
-cargo test -p vault-local-core record_tests --lib -- --test-threads=1
+cargo test -p vault-local-core record::tests --lib -- --test-threads=1
 cargo test -p vault-local-core -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
