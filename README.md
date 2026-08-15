@@ -8,14 +8,16 @@
 
 ## 현재 검증된 범위
 
-구현되고 자동 검증된 것은 다음 네 가지뿐입니다.
+구현되고 자동 검증된 범위는 다음과 같습니다.
 
 - 합성 마스터 비밀번호로 로컬 Vault Root Key 생성·래핑·잠금 해제
-- 합성 레코드의 로컬 seal/open과 버킷 패딩
-- canonical CBOR만 허용하는 엄격한 `v0alpha1` 코덱
-- 비밀번호 오류, 문맥 교체, 암호문 변조와 비정상 인코딩 거부 테스트
+- 타입이 고정된 `CredentialItemV1`과 세 가지 합성 관계 fixture
+- 합성 레코드의 로컬 seal/open, 버킷 패딩과 authenticated restore
+- 세션을 버리고 동일한 합성 비밀번호로 다시 잠금 해제한 뒤 관계를 복구하는 흐름
+- canonical CBOR만 허용하는 엄격한 payload 및 `v0alpha1` 코덱
+- 비밀번호 오류, epoch·문맥 교체, 암호문 변조, 미래 버전과 비정상 인코딩 처리 테스트
 
-다음 기능은 **아직 구현되지 않았습니다**: 실제 Secret 지원, 복구, 기기 폐기·철회, 영속 저장, 동기화, Web/Android UI, 결제, 앱스토어 출시, OpenAI plugin.
+다음 기능은 **아직 구현되지 않았습니다**: 디스크 DB·파일 영속 저장, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 앱스토어 출시, plugin/MCP 실행과 실제 Secret 지원.
 
 실제 자격 증명을 다루기 위한 다음 게이트는 **독립 암호 설계·구현 검토**와 승인된 **복구/기기 키 ADR의 구현·훈련**입니다. 두 게이트가 끝나기 전에는 실제 비밀번호나 API 키를 이 알파에 입력하면 안 됩니다.
 
@@ -47,7 +49,7 @@ tests/fixtures/synthetic/ 합성 테스트 데이터 전용
 - 개인 금고 원본이나 암호화 백업본
 - 운영 DB 덤프, 로그, HAR, 실제 계정 스크린샷
 
-GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 데이터의 백업 장소가 아닙니다.
+GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 데이터의 백업 장소가 아닙니다. 현재 합성 전용 코어에도 실제 자격 증명을 입력하면 안 됩니다.
 
 ## 문서
 
@@ -58,6 +60,7 @@ GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 �
 - [복구·보호 수단 설계](docs/superpowers/specs/2026-08-14-recovery-protection-design.md)
 - [AI 자격 증명·MCP 연결 지도 설계](docs/superpowers/specs/2026-08-14-ai-credential-relationship-design.md)
 - [`v0alpha1` 합성 하네스 검증 기록](docs/verification/v0alpha1-synthetic-crypto-harness.md)
+- [합성 자격 증명 로컬 코어 검증 기록](docs/verification/synthetic-credential-local-core.md)
 
 ## 개발 상태
 
