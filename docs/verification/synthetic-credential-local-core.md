@@ -26,7 +26,27 @@ Every command below ran from the repository root against `tested_commit`.
 | `cargo tree --workspace --all-features` | 0 | The complete dependency tree resolved; no product-runtime database, network-client, UI, clipboard or browser integration dependency is present. The dev-only `trybuild` dependency compiles the negative API-boundary tests. |
 | `git diff --check codex/firstvibe-recovery-credential-design..HEAD` | 0 | No whitespace errors were found in the implementation-branch diff. |
 | `git rev-parse HEAD` | 0 | Printed `aedcff4e27eda16d8af96aee15724be30a875961`. |
-| `rg -n --hidden --glob '!target/**' --glob '!.git/**' -- "(sk-[A-Za-z0-9_-]{20,}\|gh[pousr]_[A-Za-z0-9]{20,}\|AKIA[0-9A-Z]{16}\|-----BEGIN (RSA \|EC \|OPENSSH )?PRIVATE KEY-----\|AIza[0-9A-Za-z_-]{30,})" .` | 1 | Expected no-match exit: no bounded credential pattern was found and stdout was empty. |
+
+### Bounded credential-pattern scan
+
+The original table rendering escaped each alternation pipe as `\|`. In the
+Rust regex syntax used by ripgrep, `\|` matches a literal pipe and is not
+equivalent to alternation. This was demonstrated without credential-shaped data:
+
+```powershell
+"alpha" | rg --quiet -- 'alpha\|beta' # exit 1
+"alpha" | rg --quiet -- 'alpha|beta'  # exit 0
+```
+
+The authoritative repository scan was therefore re-run with the required
+unescaped alternation operators exactly as follows:
+
+```powershell
+rg -n --hidden --glob '!target/**' --glob '!.git/**' -- "(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AIza[0-9A-Za-z_-]{30,})" .
+```
+
+The corrected scan exited `1`, printed empty stdout, and found no matches. That
+is the expected ripgrep no-match result.
 
 Exact example stdout:
 
