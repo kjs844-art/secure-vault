@@ -4,6 +4,8 @@ use vault_crypto::{
 };
 
 use crate::LocalVaultError;
+#[cfg(test)]
+use crate::codec::encode_synthetic_future_item_v2;
 use crate::codec::{DecodedItem, decode_item, encode_current_item};
 use crate::ids::{RecordIdV1, RevisionIdV1, generate_record_identity};
 use crate::model::{ConsumerTypeV1, CredentialItemV1};
@@ -172,6 +174,92 @@ impl StoredPaddingBucketV0Alpha1 {
             Self::Bytes61440 => PaddingBucketV0Alpha1::Bytes61440,
         }
     }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum SyntheticFutureVersion {
+    InnerSchema2,
+    OuterWire1,
+}
+
+#[cfg(test)]
+pub(crate) fn open_synthetic_future_version_v1(
+    session: &VaultSession,
+    version: SyntheticFutureVersion,
+) -> Result<(Vec<u8>, OpenCredentialOutcome, Vec<u8>), LocalVaultError> {
+    let record = match version {
+        SyntheticFutureVersion::InnerSchema2 => seal_synthetic_future_inner_v2(session)?,
+        SyntheticFutureVersion::OuterWire1 => {
+            let mut record = seal_synthetic_fixture_v1(
+                session,
+                SyntheticCredentialFixtureId::UnconnectedApiKey,
+            )?;
+            replace_outer_wire_version_with_one(&mut record.envelope)?;
+            record
+        }
+    };
+
+    let before = record.envelope.clone();
+    let outcome = open_credential_record_v1(session, &record)?;
+    let after = record.envelope.clone();
+    Ok((before, outcome, after))
+}
+
+#[cfg(test)]
+fn seal_synthetic_future_inner_v2(
+    session: &VaultSession,
+) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
+    let identity = generate_record_identity()?;
+    let plaintext = encode_synthetic_future_item_v2()?;
+    let padding_bucket = select_bucket(plaintext.expose_secret().len())?;
+    let context = record_context(
+        session,
+        identity.record_id,
+        identity.revision_id,
+        session.key_epoch().get(),
+        padding_bucket,
+    )?;
+    let envelope = seal_record_v0alpha1(session, &context, &plaintext).map_err(map_crypto_error)?;
+
+    Ok(SealedCredentialRecordV0Alpha1 {
+        locator: RecordLocatorV0Alpha1 {
+            record_id: identity.record_id,
+            revision_id: identity.revision_id,
+            key_epoch: session.key_epoch().get(),
+            padding_bucket,
+        },
+        envelope,
+    })
+}
+
+#[cfg(test)]
+fn replace_outer_wire_version_with_one(envelope: &mut [u8]) -> Result<(), LocalVaultError> {
+    const RECORD_FIELD_COUNT: u64 = 12;
+
+    let (version_start, version_end) = {
+        let mut decoder = minicbor::Decoder::new(envelope);
+        if decoder
+            .array()
+            .map_err(|_| LocalVaultError::CryptoFailure)?
+            != Some(RECORD_FIELD_COUNT)
+        {
+            return Err(LocalVaultError::CryptoFailure);
+        }
+        let version_start = decoder.position();
+        if decoder.u64().map_err(|_| LocalVaultError::CryptoFailure)? != 0 {
+            return Err(LocalVaultError::CryptoFailure);
+        }
+        (version_start, decoder.position())
+    };
+
+    if version_end != version_start + 1 {
+        return Err(LocalVaultError::CryptoFailure);
+    }
+    *envelope
+        .get_mut(version_start)
+        .ok_or(LocalVaultError::CryptoFailure)? = 1;
+    Ok(())
 }
 
 #[cfg(test)]

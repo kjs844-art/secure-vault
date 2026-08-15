@@ -20,3 +20,10 @@ pub use record::{
     seal_synthetic_fixture_v1,
 };
 pub use synthetic::SyntheticCredentialFixtureId;
+
+#[cfg(test)]
+pub(crate) use record::{SyntheticFutureVersion, open_synthetic_future_version_v1};
+
+#[cfg(test)]
+#[path = "future_version_tests.rs"]
+mod future_version_tests;

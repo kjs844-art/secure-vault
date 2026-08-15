@@ -99,6 +99,17 @@ pub(crate) fn decode_item(
     Ok(DecodedItem::Current(item))
 }
 
+#[cfg(test)]
+pub(crate) fn encode_synthetic_future_item_v2() -> Result<vault_crypto::SecretBytes, LocalVaultError>
+{
+    // Preserve only the authenticated, versioned prefix. Future fields are intentionally not
+    // invented by this v1 implementation.
+    let mut encoder = Encoder::new(Vec::with_capacity(2));
+    encoder.array(1).map_err(encode_error)?;
+    encoder.u64(ITEM_SCHEMA_VERSION + 1).map_err(encode_error)?;
+    vault_crypto::SecretBytes::new(encoder.into_writer()).map_err(map_secret_bytes_error)
+}
+
 fn encode_item_into<W: Write>(writer: W, item: &CredentialItemV1) -> Result<W, LocalVaultError> {
     let mut encoder = Encoder::new(writer);
     encoder.array(ITEM_FIELD_COUNT).map_err(encode_error)?;
