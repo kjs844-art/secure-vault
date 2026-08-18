@@ -1,0 +1,17 @@
+[package]
+name = "vault-local-store-sqlite"
+version = "0.0.1-alpha.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+blake3.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+vault-crypto = { path = "../vault-crypto" }
+vault-local-core = { path = "../vault-local-core" }
+
+[dev-dependencies]
+tempfile.workspace = true
