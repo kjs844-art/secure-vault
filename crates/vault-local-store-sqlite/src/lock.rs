@@ -29,7 +29,7 @@ impl StoreLocationPolicyV1 {
         if !canonical.is_absolute()
             || path_is_network_like(&canonical)
             || path_is_disallowed(&canonical)
-            || is_inside_repository_like_root(&canonical)
+            || has_repository_marker(&canonical)
         {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
         }
@@ -63,6 +63,7 @@ impl StoreLocationPolicyV1 {
         if !canonical_parent.starts_with(&self.app_root)
             || path_is_disallowed(&canonical_parent)
             || path_is_network_like(&canonical_parent)
+            || has_repository_marker_between(&canonical_parent, &self.app_root)
         {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
         }
@@ -80,20 +81,17 @@ impl StoreLocationPolicyV1 {
     }
 }
 
-fn is_inside_repository_like_root(path: &Path) -> bool {
-    for (depth, ancestor) in path.ancestors().enumerate() {
-        if ancestor.join(".git").exists() {
-            return true;
-        }
-        if ancestor
-            .file_name()
-            .is_some_and(|name| name.eq_ignore_ascii_case("AppData"))
-            || depth >= 3
-        {
-            break;
-        }
-    }
-    false
+fn has_repository_marker(path: &Path) -> bool {
+    [".git", ".hg", ".svn"]
+        .iter()
+        .any(|marker| path.join(marker).exists())
+}
+
+fn has_repository_marker_between(target_parent: &Path, trusted_root: &Path) -> bool {
+    target_parent
+        .ancestors()
+        .take_while(|ancestor| ancestor.starts_with(trusted_root))
+        .any(has_repository_marker)
 }
 
 impl StoreLocationV1 {
@@ -159,20 +157,28 @@ fn platform_path_is_network_like(_path: &Path) -> bool {
 }
 
 fn path_is_disallowed(path: &Path) -> bool {
-    const DISALLOWED: &[&str] = &[
-        ".git",
-        "onedrive",
-        "dropbox",
-        "google drive",
-        "googledrive",
-        "icloud",
-        "icloud drive",
-    ];
     path.components().any(|component| {
         let Component::Normal(value) = component else {
             return false;
         };
         let lower = value.to_string_lossy().to_ascii_lowercase();
-        DISALLOWED.contains(&lower.as_str())
+        matches!(lower.as_str(), ".git" | ".hg" | ".svn") || is_cloud_component(&lower)
+    })
+}
+
+fn is_cloud_component(component: &str) -> bool {
+    const PROVIDERS: &[&str] = &[
+        "onedrive",
+        "dropbox",
+        "google drive",
+        "googledrive",
+        "icloud drive",
+        "icloud",
+    ];
+    PROVIDERS.iter().any(|provider| {
+        component == *provider
+            || component
+                .strip_prefix(provider)
+                .is_some_and(|suffix| suffix.starts_with(" - "))
     })
 }

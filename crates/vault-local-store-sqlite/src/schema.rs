@@ -61,6 +61,8 @@ struct InitObserver {
     failpoint: InitFailPoint,
     hardening_step: usize,
     ddl_statement: usize,
+    post_close_hook: Option<fn(&Path)>,
+    allow_path_replacement: bool,
 }
 
 impl InitObserver {
@@ -69,6 +71,8 @@ impl InitObserver {
             failpoint: InitFailPoint::Never,
             hardening_step: 0,
             ddl_statement: 0,
+            post_close_hook: None,
+            allow_path_replacement: false,
         }
     }
 
@@ -119,7 +123,8 @@ fn initialize_with_observer(
 ) -> Result<InitializeStoreOutcomeV1, StorageError> {
     validate_bootstrap(&bootstrap)?;
     let lock = StoreLockV1::try_acquire(location)?;
-    let (initial_state, ownership) = acquire_target_ownership(location.database_path())?;
+    let (initial_state, ownership) =
+        acquire_target_ownership(location.database_path(), observer.allow_path_replacement)?;
     match initial_state {
         InitialFileState::NonEmpty => {
             drop(ownership);
@@ -153,11 +158,14 @@ fn initialize_existing(
 ) -> Result<InitializeStoreOutcomeV1, StorageError> {
     let connection = open_read_only(location.database_path())?;
     let application_id = pragma_i64(&connection, "application_id")?;
+    if application_id != APPLICATION_ID {
+        return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+    }
     let user_version = pragma_i64(&connection, "user_version")?;
     if user_version > STORAGE_SCHEMA_VERSION {
         return Err(StorageError::new(StorageErrorCode::SchemaUpgradeRequired));
     }
-    if application_id != APPLICATION_ID || user_version != STORAGE_SCHEMA_VERSION {
+    if user_version != STORAGE_SCHEMA_VERSION {
         return Err(StorageError::new(StorageErrorCode::CorruptStorage));
     }
     verify_schema_fingerprint(&connection)?;
@@ -179,7 +187,7 @@ fn initialize_zero_byte(
     bootstrap: PasswordEnvelopeBootstrapProjectionV1<'_>,
     lock: StoreLockV1,
     initial_state: InitialFileState,
-    mut ownership: TargetOwnershipGuard,
+    ownership: TargetOwnershipGuard,
     observer: &mut InitObserver,
 ) -> Result<InitializeStoreOutcomeV1, StorageError> {
     let flags = COMMON_FLAGS | OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
@@ -235,16 +243,19 @@ fn initialize_zero_byte(
     })();
 
     if let Err(initialization_error) = initialization {
-        let owned_sidecars = capture_owned_sidecars(location.database_path())?;
-        if connection.close().is_err()
-            || restore_pre_call_state(
-                location.database_path(),
-                initial_state,
-                owned_main_identity,
-                &owned_sidecars,
-                &mut ownership,
-            )
-            .is_err()
+        if connection.close().is_err() {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        }
+        if let Some(hook) = observer.post_close_hook {
+            hook(location.database_path());
+        }
+        if restore_pre_call_state(
+            location.database_path(),
+            initial_state,
+            owned_main_identity,
+            &ownership,
+        )
+        .is_err()
         {
             return Err(StorageError::new(StorageErrorCode::CorruptStorage));
         }
@@ -610,6 +621,7 @@ fn feed_bytes(hasher: &mut Hasher, domain: &str, value: &[u8]) {
 
 fn acquire_target_ownership(
     path: &Path,
+    allow_path_replacement: bool,
 ) -> Result<(InitialFileState, Option<TargetOwnershipGuard>), StorageError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
@@ -617,7 +629,7 @@ fn acquire_target_ownership(
         }
         Ok(metadata) if metadata.len() > 0 => Ok((InitialFileState::NonEmpty, None)),
         Ok(_) => {
-            let file = open_ownership_file(path, false)?;
+            let file = open_ownership_file(path, false, allow_path_replacement)?;
             let metadata = file
                 .metadata()
                 .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
@@ -634,7 +646,7 @@ fn acquire_target_ownership(
             ))
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let file = open_ownership_file(path, true)?;
+            let file = open_ownership_file(path, true, allow_path_replacement)?;
             let metadata = file
                 .metadata()
                 .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
@@ -652,22 +664,38 @@ fn acquire_target_ownership(
 }
 
 #[cfg(windows)]
-fn open_ownership_file(path: &Path, create_new: bool) -> Result<File, StorageError> {
+fn open_ownership_file(
+    path: &Path,
+    create_new: bool,
+    allow_path_replacement: bool,
+) -> Result<File, StorageError> {
     use std::os::windows::fs::OpenOptionsExt;
 
     const FILE_SHARE_READ: u32 = 0x0000_0001;
     const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+    const FILE_SHARE_DELETE: u32 = 0x0000_0004;
+    let share_mode = FILE_SHARE_READ
+        | FILE_SHARE_WRITE
+        | if allow_path_replacement {
+            FILE_SHARE_DELETE
+        } else {
+            0
+        };
     OpenOptions::new()
         .read(true)
         .write(true)
         .create_new(create_new)
-        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .share_mode(share_mode)
         .open(path)
         .map_err(|_| StorageError::new(StorageErrorCode::Io))
 }
 
 #[cfg(not(windows))]
-fn open_ownership_file(path: &Path, create_new: bool) -> Result<File, StorageError> {
+fn open_ownership_file(
+    path: &Path,
+    create_new: bool,
+    _allow_path_replacement: bool,
+) -> Result<File, StorageError> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -689,11 +717,13 @@ fn sidecar_paths(database_path: &Path) -> [PathBuf; 3] {
 }
 
 fn ensure_initialization_sidecars_absent(database_path: &Path) -> Result<(), StorageError> {
-    if sidecar_paths(database_path)
-        .iter()
-        .any(|path| path.exists())
-    {
-        return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+    for path in sidecar_paths(database_path) {
+        if path
+            .try_exists()
+            .map_err(|_| StorageError::new(StorageErrorCode::Io))?
+        {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        }
     }
     Ok(())
 }
@@ -701,110 +731,69 @@ fn ensure_initialization_sidecars_absent(database_path: &Path) -> Result<(), Sto
 fn restore_unopened_target(
     database_path: &Path,
     initial_state: InitialFileState,
-    mut ownership: TargetOwnershipGuard,
+    ownership: TargetOwnershipGuard,
 ) -> Result<(), StorageError> {
-    if !database_path.exists() || file_identity(database_path)? != ownership.identity {
+    ensure_initialization_sidecars_absent(database_path)?;
+    if file_identity(database_path)? != ownership.identity {
         return Err(StorageError::new(StorageErrorCode::CorruptStorage));
     }
     match initial_state {
-        InitialFileState::Absent => {
-            ownership
-                .file
-                .take()
-                .ok_or_else(|| StorageError::new(StorageErrorCode::CorruptStorage))?;
-            fs::remove_file(database_path).map_err(|_| StorageError::new(StorageErrorCode::Io))?;
-        }
+        InitialFileState::Absent => {}
         InitialFileState::Zero(original_identity) if original_identity == ownership.identity => {}
         InitialFileState::Zero(_) | InitialFileState::NonEmpty => {
             return Err(StorageError::new(StorageErrorCode::CorruptStorage));
         }
     }
+    truncate_and_recheck_owned_target(database_path, ownership.identity, &ownership)?;
     Ok(())
-}
-
-fn capture_owned_sidecars(
-    database_path: &Path,
-) -> Result<Vec<(PathBuf, FileIdentity)>, StorageError> {
-    sidecar_paths(database_path)
-        .into_iter()
-        .filter(|path| path.exists())
-        .map(|path| file_identity(&path).map(|identity| (path, identity)))
-        .collect()
 }
 
 fn restore_pre_call_state(
     database_path: &Path,
     initial_state: InitialFileState,
     owned_main_identity: FileIdentity,
-    owned_sidecars: &[(PathBuf, FileIdentity)],
-    ownership: &mut TargetOwnershipGuard,
+    ownership: &TargetOwnershipGuard,
 ) -> Result<(), StorageError> {
-    for path in sidecar_paths(database_path) {
-        let Some((_, expected_identity)) = owned_sidecars.iter().find(|(owned, _)| *owned == path)
-        else {
-            if path.exists() {
-                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
-            }
-            continue;
-        };
-        if path.exists() {
-            if file_identity(&path)? != *expected_identity {
-                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
-            }
-            fs::remove_file(&path).map_err(|_| StorageError::new(StorageErrorCode::Io))?;
-        }
-    }
-
+    ensure_initialization_sidecars_absent(database_path)?;
     if ownership.identity != owned_main_identity
-        || !database_path.exists()
         || file_identity(database_path)? != owned_main_identity
     {
         return Err(StorageError::new(StorageErrorCode::CorruptStorage));
     }
-    ownership
-        .file
-        .as_mut()
-        .ok_or_else(|| StorageError::new(StorageErrorCode::CorruptStorage))?
-        .set_len(0)
-        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
     match initial_state {
-        InitialFileState::Absent => {
-            let replacement_check = ownership.identity;
-            let placeholder = OpenOptions::new()
-                .read(true)
-                .open(database_path)
-                .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
-            if identity_from_metadata(
-                &placeholder
-                    .metadata()
-                    .map_err(|_| StorageError::new(StorageErrorCode::Io))?,
-            )? != replacement_check
-            {
-                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
-            }
-            drop(placeholder);
-            ownership
-                .file
-                .as_ref()
-                .ok_or_else(|| StorageError::new(StorageErrorCode::CorruptStorage))?
-                .sync_all()
-                .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
-            drop(ownership.file.take());
-            fs::remove_file(database_path).map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+        InitialFileState::Absent => {}
+        InitialFileState::Zero(original_identity) if original_identity == owned_main_identity => {}
+        InitialFileState::Zero(_) | InitialFileState::NonEmpty => {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
         }
-        InitialFileState::Zero(original_identity) => {
-            if original_identity != owned_main_identity {
-                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
-            }
-            let metadata =
-                fs::metadata(database_path).map_err(|_| StorageError::new(StorageErrorCode::Io))?;
-            if metadata.len() != 0 || identity_from_metadata(&metadata)? != original_identity {
-                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
-            }
-        }
-        InitialFileState::NonEmpty => {
-            return Err(StorageError::new(StorageErrorCode::InvariantViolation));
-        }
+    }
+    truncate_and_recheck_owned_target(database_path, owned_main_identity, ownership)?;
+    Ok(())
+}
+
+fn truncate_and_recheck_owned_target(
+    database_path: &Path,
+    expected_identity: FileIdentity,
+    ownership: &TargetOwnershipGuard,
+) -> Result<(), StorageError> {
+    let file = ownership
+        .file
+        .as_ref()
+        .ok_or_else(|| StorageError::new(StorageErrorCode::CorruptStorage))?;
+    file.set_len(0)
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+    file.sync_all()
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+
+    let retained_metadata = file
+        .metadata()
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+    ensure_initialization_sidecars_absent(database_path)?;
+    if retained_metadata.len() != 0
+        || identity_from_metadata(&retained_metadata)? != expected_identity
+        || file_identity(database_path)? != expected_identity
+    {
+        return Err(StorageError::new(StorageErrorCode::CorruptStorage));
     }
     Ok(())
 }
@@ -898,14 +887,19 @@ mod tests {
                     failpoint,
                     hardening_step: 0,
                     ddl_statement: 0,
+                    post_close_hook: None,
+                    allow_path_replacement: false,
                 },
             );
             assert!(result.is_err());
         });
-        if precreate_zero {
-            assert_eq!(fs::metadata(location.database_path()).unwrap().len(), 0);
-        } else {
-            assert!(!location.database_path().exists());
+        assert_eq!(fs::metadata(location.database_path()).unwrap().len(), 0);
+        for sidecar in sidecar_paths(location.database_path()) {
+            assert!(
+                !sidecar.exists(),
+                "lingering sidecar: {}",
+                sidecar.display()
+            );
         }
         with_bootstrap(bytes, |bootstrap| {
             assert!(matches!(
@@ -944,5 +938,99 @@ mod tests {
                 precreate_zero,
             );
         }
+    }
+
+    fn replace_main_after_identity_check(database_path: &Path) {
+        let detached = database_path.with_extension("call-owned-zero");
+        fs::rename(database_path, detached).unwrap();
+        #[cfg(windows)]
+        {
+            use std::io::Write;
+            use std::os::windows::fs::OpenOptionsExt;
+
+            const FILE_ATTRIBUTE_HIDDEN: u32 = 0x0000_0002;
+            let mut replacement = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .attributes(FILE_ATTRIBUTE_HIDDEN)
+                .open(database_path)
+                .unwrap();
+            replacement
+                .write_all(b"replacement-bytes-must-survive")
+                .unwrap();
+        }
+        #[cfg(not(windows))]
+        fs::write(database_path, b"replacement-bytes-must-survive").unwrap();
+    }
+
+    #[test]
+    fn cleanup_never_deletes_or_truncates_a_replacement_path() {
+        let bytes = bootstrap_bytes();
+        let directory = tempdir().unwrap();
+        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let location = policy.location("vault.sqlite3").unwrap();
+
+        with_bootstrap(&bytes, |bootstrap| {
+            let error = match initialize_with_observer(
+                &location,
+                bootstrap,
+                InitObserver {
+                    failpoint: InitFailPoint::AfterReadback,
+                    hardening_step: 0,
+                    ddl_statement: 0,
+                    post_close_hook: Some(replace_main_after_identity_check),
+                    allow_path_replacement: true,
+                },
+            ) {
+                Ok(_) => panic!("replacement path was accepted during cleanup"),
+                Err(error) => error,
+            };
+            assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+        });
+
+        assert_eq!(
+            fs::read(location.database_path()).unwrap(),
+            b"replacement-bytes-must-survive"
+        );
+    }
+
+    fn inject_lingering_wal(database_path: &Path) {
+        let wal_path = PathBuf::from(format!("{}-wal", database_path.to_string_lossy()));
+        fs::write(wal_path, b"lingering-sidecar-must-survive").unwrap();
+    }
+
+    #[test]
+    fn cleanup_preserves_an_injected_lingering_sidecar_exactly() {
+        let bytes = bootstrap_bytes();
+        let directory = tempdir().unwrap();
+        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let location = policy.location("vault.sqlite3").unwrap();
+
+        with_bootstrap(&bytes, |bootstrap| {
+            let error = match initialize_with_observer(
+                &location,
+                bootstrap,
+                InitObserver {
+                    failpoint: InitFailPoint::AfterReadback,
+                    hardening_step: 0,
+                    ddl_statement: 0,
+                    post_close_hook: Some(inject_lingering_wal),
+                    allow_path_replacement: false,
+                },
+            ) {
+                Ok(_) => panic!("lingering sidecar was not preserved as an error"),
+                Err(error) => error,
+            };
+            assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+        });
+
+        let wal_path = PathBuf::from(format!(
+            "{}-wal",
+            location.database_path().to_string_lossy()
+        ));
+        assert_eq!(
+            fs::read(wal_path).unwrap(),
+            b"lingering-sidecar-must-survive"
+        );
     }
 }

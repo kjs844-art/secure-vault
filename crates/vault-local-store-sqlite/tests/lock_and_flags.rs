@@ -56,6 +56,50 @@ fn policy_rejects_relative_parent_repository_cloud_and_uri_locations() {
 }
 
 #[test]
+fn policy_rejects_deep_repository_ancestors_and_provider_prefixed_cloud_roots() {
+    let trusted_root = tempdir().unwrap();
+    let marker_parent = trusted_root.path().join("a/b");
+    fs::create_dir_all(marker_parent.join(".git")).unwrap();
+    fs::create_dir_all(marker_parent.join("c/d/e")).unwrap();
+    let policy = StoreLocationPolicyV1::new(trusted_root.path()).unwrap();
+    let repository_error = match policy.location("a/b/c/d/e/vault.sqlite3") {
+        Ok(_) => panic!("deep repository descendant was accepted"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        repository_error.code(),
+        StorageErrorCode::UnsupportedPlatform
+    );
+
+    for provider_root in [
+        "OneDrive - Personal",
+        "Dropbox - Company",
+        "Google Drive - Company",
+        "iCloud Drive - Personal",
+    ] {
+        let cloud_parent = trusted_root.path().join(provider_root).join("SecureVault");
+        fs::create_dir_all(&cloud_parent).unwrap();
+        let cloud_error =
+            match policy.location(format!("{provider_root}/SecureVault/vault.sqlite3")) {
+                Ok(_) => panic!("provider-prefixed cloud descendant was accepted"),
+                Err(error) => error,
+            };
+        assert_eq!(
+            cloud_error.code(),
+            StorageErrorCode::UnsupportedPlatform,
+            "{provider_root}"
+        );
+    }
+
+    let repository_above_root = tempdir().unwrap();
+    fs::create_dir(repository_above_root.path().join(".git")).unwrap();
+    let trusted_app_data = repository_above_root.path().join("trusted-app-data");
+    fs::create_dir(&trusted_app_data).unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_app_data).unwrap();
+    policy.location("vault.sqlite3").unwrap();
+}
+
+#[test]
 fn failed_zero_byte_initialization_restores_pre_call_state_and_can_retry() {
     let directory = tempdir().unwrap();
     let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();

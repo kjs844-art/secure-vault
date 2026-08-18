@@ -297,3 +297,44 @@ fn initialize_is_atomic_idempotent_and_rejects_schema_drift() {
     assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
     drop(created);
 }
+
+#[test]
+fn application_id_is_classified_before_future_user_version() {
+    let directory = tempdir().unwrap();
+    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let foreign_location = policy.location("foreign.sqlite3").unwrap();
+    let secure_vault_location = policy.location("secure-vault.sqlite3").unwrap();
+    let (_created, password_bytes) = bootstrap();
+
+    for (location, application_id, expected) in [
+        (
+            &foreign_location,
+            0x1122_3344_i64,
+            StorageErrorCode::CorruptStorage,
+        ),
+        (
+            &secure_vault_location,
+            APPLICATION_ID,
+            StorageErrorCode::SchemaUpgradeRequired,
+        ),
+    ] {
+        let connection = Connection::open(location.database_path()).unwrap();
+        connection
+            .pragma_update(None, "application_id", application_id)
+            .unwrap();
+        connection
+            .pragma_update(None, "user_version", 2_i64)
+            .unwrap();
+        drop(connection);
+
+        let disposition = inspect_password_envelope_for_storage_v1(&password_bytes).unwrap();
+        let PasswordEnvelopeStorageDispositionV1::Current(inspection) = disposition else {
+            panic!("synthetic current envelope was not current");
+        };
+        let error = match initialize_v1(location, inspection.bootstrap_projection()) {
+            Ok(_) => panic!("future or foreign database was initialized"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), expected);
+    }
+}
