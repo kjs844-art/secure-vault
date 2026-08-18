@@ -264,7 +264,7 @@ fn initialize_zero_byte(
 
     drop(ownership);
     Ok(InitializeStoreOutcomeV1::Created(
-        SyntheticWritableStoreV1 { connection, lock },
+        SyntheticWritableStoreV1::from_initialized(connection, lock),
     ))
 }
 

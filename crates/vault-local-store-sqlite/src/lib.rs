@@ -4,20 +4,14 @@
 
 #![forbid(unsafe_code)]
 
+mod commit;
 mod error;
 mod lock;
 mod schema;
+mod store;
 
-use rusqlite::Connection;
-
+pub use commit::CommitOutcomeV1;
 pub use error::{StorageError, StorageErrorCode};
 pub use lock::{StoreLocationPolicyV1, StoreLocationV1, StoreLockV1};
 pub use schema::{InitializeStoreOutcomeV1, SCHEMA_V1_SQL, initialize_v1};
-
-/// A newly initialized, locked SQLite store. Candidate commits are added in Task 4.
-pub struct SyntheticWritableStoreV1 {
-    #[allow(dead_code)]
-    pub(crate) connection: Connection,
-    #[allow(dead_code)]
-    pub(crate) lock: StoreLockV1,
-}
+pub use store::SyntheticWritableStoreV1;
