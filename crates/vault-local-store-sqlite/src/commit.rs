@@ -148,7 +148,7 @@ fn commit_in_transaction(
     insert_revision(transaction, candidate)?;
     match (candidate.expected_revision_id.as_ref(), observed_head) {
         (None, None) => {
-            transaction
+            let changed = transaction
                 .execute(
                     "INSERT INTO heads(record_id,revision_id) VALUES(?1,?2)",
                     params![
@@ -157,13 +157,14 @@ fn commit_in_transaction(
                     ],
                 )
                 .map_err(|_| CommitFailureV1::Invariant)?;
+            require_exactly_one(changed)?;
             Ok(CommitOutcomeV1::Committed)
         }
         (None, Some(observed)) => {
             insert_conflict(transaction, candidate, None, &observed)?;
             Ok(CommitOutcomeV1::ConflictPreserved)
         }
-        (Some(expected), Some(observed)) if expected == &observed => {
+        (Some(expected), Some(_)) => {
             let changed = transaction
                 .execute(
                     "UPDATE heads SET revision_id=?1 WHERE record_id=?2 AND revision_id=?3",
@@ -174,14 +175,16 @@ fn commit_in_transaction(
                     ],
                 )
                 .map_err(|_| CommitFailureV1::Invariant)?;
-            if changed != 1 {
-                return Err(CommitFailureV1::Invariant);
+            match changed {
+                1 => Ok(CommitOutcomeV1::Committed),
+                0 => {
+                    let observed = read_head(transaction, &candidate.record_id)?
+                        .ok_or(CommitFailureV1::Invariant)?;
+                    insert_conflict(transaction, candidate, Some(expected), &observed)?;
+                    Ok(CommitOutcomeV1::ConflictPreserved)
+                }
+                _ => Err(CommitFailureV1::Invariant),
             }
-            Ok(CommitOutcomeV1::Committed)
-        }
-        (Some(expected), Some(observed)) => {
-            insert_conflict(transaction, candidate, Some(expected), &observed)?;
-            Ok(CommitOutcomeV1::ConflictPreserved)
         }
         (Some(_), None) => unreachable!("head presence was checked before insert"),
     }
@@ -325,7 +328,7 @@ fn insert_revision(
     transaction: &Transaction<'_>,
     candidate: &PreparedCandidateV1,
 ) -> Result<(), CommitFailureV1> {
-    transaction
+    let changed = transaction
         .execute(
             "INSERT INTO revisions(\
                 record_id,revision_id,wire_version,suite_id,key_epoch,padding_bucket,envelope\
@@ -341,7 +344,7 @@ fn insert_revision(
             ],
         )
         .map_err(|_| CommitFailureV1::Invariant)?;
-    Ok(())
+    require_exactly_one(changed)
 }
 
 fn insert_conflict(
@@ -350,7 +353,7 @@ fn insert_conflict(
     expected: Option<&[u8; 32]>,
     observed: &[u8; 32],
 ) -> Result<(), CommitFailureV1> {
-    transaction
+    let changed = transaction
         .execute(
             "INSERT INTO conflicts(\
                 record_id,candidate_revision_id,expected_head_revision_id,observed_head_revision_id\
@@ -363,7 +366,15 @@ fn insert_conflict(
             ],
         )
         .map_err(|_| CommitFailureV1::Invariant)?;
-    Ok(())
+    require_exactly_one(changed)
+}
+
+fn require_exactly_one(changed: usize) -> Result<(), CommitFailureV1> {
+    if changed == 1 {
+        Ok(())
+    } else {
+        Err(CommitFailureV1::Invariant)
+    }
 }
 
 const fn padding_bucket_bytes(bucket: StoredPaddingBucketV0Alpha1) -> i64 {
@@ -537,6 +548,25 @@ impl TestDbFixtureV1 {
                 ],
             )
             .unwrap();
+    }
+
+    fn install_ignore_insert_trigger_for_test(&self, table: &str) {
+        let statement = match table {
+            "revisions" => {
+                "CREATE TRIGGER test_ignore_revision_insert \
+                 BEFORE INSERT ON revisions BEGIN SELECT RAISE(IGNORE); END;"
+            }
+            "heads" => {
+                "CREATE TRIGGER test_ignore_head_insert \
+                 BEFORE INSERT ON heads BEGIN SELECT RAISE(IGNORE); END;"
+            }
+            "conflicts" => {
+                "CREATE TRIGGER test_ignore_conflict_insert \
+                 BEFORE INSERT ON conflicts BEGIN SELECT RAISE(IGNORE); END;"
+            }
+            _ => panic!("unsupported private trigger fixture"),
+        };
+        self.store.connection.execute_batch(statement).unwrap();
     }
 
     fn logical_snapshot(&self) -> LogicalSnapshotV1 {
@@ -720,6 +750,65 @@ mod tests {
         ));
         assert_eq!(fixture.head_for(&initial), original_head);
         assert_eq!(fixture.conflict_expected(&second), None);
+    }
+
+    #[test]
+    fn ignored_revision_insert_rolls_back_latches_and_blocks_later_sql() {
+        let mut fixture = TestDbFixtureV1::new();
+        fixture.install_ignore_insert_trigger_for_test("revisions");
+        fixture.install_ignore_insert_trigger_for_test("heads");
+        let candidate = fixture.initial_candidate();
+        let before = fixture.logical_snapshot();
+
+        let error = fixture.commit_prepared(&candidate).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.logical_snapshot(), before);
+        let sql_before_retry = fixture.sql_access_count();
+        let known_good = fixture.known_good_candidate();
+        let error = fixture.commit_prepared(&known_good).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.sql_access_count(), sql_before_retry);
+        assert_eq!(fixture.logical_snapshot(), before);
+    }
+
+    #[test]
+    fn ignored_initial_head_insert_rolls_back_latches_and_blocks_later_sql() {
+        let mut fixture = TestDbFixtureV1::new();
+        fixture.install_ignore_insert_trigger_for_test("heads");
+        let candidate = fixture.initial_candidate();
+        let before = fixture.logical_snapshot();
+
+        let error = fixture.commit_prepared(&candidate).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.logical_snapshot(), before);
+        let sql_before_retry = fixture.sql_access_count();
+        let known_good = fixture.known_good_candidate();
+        let error = fixture.commit_prepared(&known_good).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.sql_access_count(), sql_before_retry);
+        assert_eq!(fixture.logical_snapshot(), before);
+    }
+
+    #[test]
+    fn ignored_conflict_insert_rolls_back_latches_and_blocks_later_sql() {
+        let mut fixture = TestDbFixtureV1::new();
+        let initial = fixture.initial_candidate();
+        fixture.commit_prepared(&initial).unwrap();
+        let winner = fixture.successor_candidate(&initial);
+        fixture.commit_prepared(&winner).unwrap();
+        let stale = fixture.successor_candidate(&initial);
+        fixture.install_ignore_insert_trigger_for_test("conflicts");
+        let before = fixture.logical_snapshot();
+
+        let error = fixture.commit_prepared(&stale).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.logical_snapshot(), before);
+        let sql_before_retry = fixture.sql_access_count();
+        let known_good = fixture.known_good_candidate();
+        let error = fixture.commit_prepared(&known_good).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::InvariantViolation);
+        assert_eq!(fixture.sql_access_count(), sql_before_retry);
+        assert_eq!(fixture.logical_snapshot(), before);
     }
 
     fn _private_type_is_never_public(_: PreparedCandidateV1) {}
