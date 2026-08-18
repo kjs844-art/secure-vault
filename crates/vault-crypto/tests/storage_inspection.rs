@@ -1,6 +1,6 @@
 use vault_crypto::{
     CryptoErrorCode, KeyEpoch, MasterPassword, OpaqueRecordId, PaddingBucketV0Alpha1,
-    RecordContextV0Alpha1, RevisionId, create_vault_v0alpha1,
+    RecordContextV0Alpha1, RevisionId, VaultCommitment, create_vault_v0alpha1,
     inspect_password_envelope_for_storage_v1, inspect_record_envelope_for_storage_v1,
     seal_record_v0alpha1,
 };
@@ -17,6 +17,7 @@ fn current_password_and_record_metadata_are_derived_from_canonical_envelopes() {
     let password =
         MasterPassword::from_utf8("synthetic storage inspection password".to_owned()).unwrap();
     let created = create_vault_v0alpha1(&password).unwrap();
+    let expected_commitment = created.session.commitment();
     let record_id = OpaqueRecordId::from_bytes([0x31; 16]);
     let revision_id = RevisionId::from_bytes([0x42; 32]);
     let context = RecordContextV0Alpha1::new(
@@ -51,6 +52,12 @@ fn current_password_and_record_metadata_are_derived_from_canonical_envelopes() {
     assert_eq!(
         password_inspection.vault_commitment(),
         record_inspection.vault_commitment()
+    );
+    assert!(
+        VaultCommitment::from_bytes(*password_inspection.vault_commitment()) == expected_commitment
+    );
+    assert!(
+        VaultCommitment::from_bytes(*record_inspection.vault_commitment()) == expected_commitment
     );
     assert_eq!(record_inspection.record_id(), &[0x31; 16]);
     assert_eq!(record_inspection.revision_id(), &[0x42; 32]);
