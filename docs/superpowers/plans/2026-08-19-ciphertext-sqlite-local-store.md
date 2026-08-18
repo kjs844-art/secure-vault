@@ -309,7 +309,7 @@ git commit -m "feat: add credential persistence boundary"
 
 **Interfaces:**
 - Consumes: Task 1 password inspection, Task 2 projection types. Store code may import only session-free inspection/projection types, never `MasterPassword`, `VaultSession`, seal/open/create/unlock functions or plaintext models.
-- Produces: `initialize_v1(location, PasswordEnvelopeBootstrapProjectionV1<'_>)`, `StoreLockV1`, `StorageError`, `StorageErrorCode`, exact `SCHEMA_V1_SQL` and hardened connection helpers.
+- Produces: `initialize_v1(location, PasswordEnvelopeBootstrapProjectionV1<'_>) -> InitializeStoreOutcomeV1`, where only a genuinely new zero-byte store returns `Created(SyntheticWritableStoreV1)` and an exact existing store returns non-writable `AlreadyInitialized`; also `StoreLockV1`, `StorageError`, `StorageErrorCode`, exact `SCHEMA_V1_SQL` and hardened connection helpers.
 
 - [ ] **Step 1: Pin dependencies and write RED schema tests**
 
@@ -352,7 +352,7 @@ Define stable public codes: `Busy`, `Io`, `UnsupportedPlatform`, `SchemaUpgradeR
 
 `initialize_v1(location, bootstrap)` acquires the OS lock first and permits `CREATE` only when the target does not exist or is exactly zero bytes. In one `BEGIN IMMEDIATE` transaction it applies the golden DDL and inserts singleton `1` from the private-field bootstrap projection after rechecking its current inspection. Commit only after application ID, user version, schema fingerprint and singleton readback all match. Any nonempty file, partial schema, missing singleton or version-zero file enters read-only preservation and is never completed/reset.
 
-An already valid v1 store passed to initialization is opened through no-create preflight: byte-identical password wire/suite/envelope returns the existing writable handle idempotently; any difference returns `InvariantViolation` without overwrite. Add tests for failure at each initialization statement using a crate-private test executor seam and assert no half schema/singleton remains.
+An already valid v1 store passed to initialization is opened only far enough to compare the bootstrap projection: byte-identical password wire/suite/envelope returns non-writable `AlreadyInitialized`; any difference returns `InvariantViolation` without overwrite. `AlreadyInitialized` owns no connection and the caller must use the normal Task 5–6 preflight/unlock/authentication flow before writing. Add tests for failure at each initialization statement using a crate-private test executor seam and assert no half schema/singleton remains.
 
 - [ ] **Step 6: Verify dependency features and commit**
 
