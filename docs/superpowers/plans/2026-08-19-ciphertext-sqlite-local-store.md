@@ -317,13 +317,13 @@ Add exact workspace dependencies:
 
 ```toml
 blake3 = { version = "=1.8.5", default-features = false, features = ["pure"] }
-rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "load_extension"] }
 tempfile = "=3.27.0"
 ```
 
-Add the new member and a crate manifest depending on `blake3`, `rusqlite`, `thiserror`, `vault-crypto`, `vault-local-core`; use `tempfile` only as a dev-dependency. Do not enable rusqlite `load_extension`, `functions`, `backup`, `serialize` or `bundled-sqlcipher` features. Assert `rusqlite::version() == "3.53.2"` in the dependency-boundary test so a lockfile/source drift fails visibly.
+Add the new member and a crate manifest depending on `blake3`, `rusqlite`, `thiserror`, `vault-crypto`, `vault-local-core`; use `tempfile` only as a dev-dependency. Enable rusqlite `load_extension` solely so the safe `load_extension_disable()` hardening call is available; the store crate must declare `#![forbid(unsafe_code)]`, so the unsafe enable/load APIs cannot be called. Do not enable `functions`, `backup`, `serialize` or `bundled-sqlcipher`. Assert the feature tree is exactly the allowed set, source-scan the store crate for `load_extension_enable`/`load_extension(`, and assert `rusqlite::version() == "3.53.2"` so lockfile/source drift fails visibly.
 
-Write tests asserting application ID `0x53564C54`, user version `1`, four exact application tables, two exact immutable triggers, foreign keys, column declared types/constraints and rejection of revision UPDATE/DELETE. Add a second test opening the same lock path twice; the second `try_lock` returns stable `Busy`, and dropping the first guard allows a new guard.
+Write tests asserting application ID `0x53564C54`, user version `1`, four exact application tables, four exact immutable triggers, foreign keys, column declared types/constraints and rejection of revision/conflict UPDATE/DELETE/`INSERT OR REPLACE`. Every numeric metadata column must have final stored `typeof(...)='integer'` and reject values that remain REAL/TEXT after SQLite affinity as well as out-of-range integers; the contract does not claim to distinguish a losslessly coerced SQL literal from an integer after affinity. Production inserts bind Rust integer parameters. Add a second test opening the same lock path twice; the second `try_lock` returns stable `Busy`, and dropping the first guard allows a new guard.
 
 - [ ] **Step 2: Run RED**
 
@@ -336,7 +336,7 @@ Expected: compile failure because the crate/API does not exist.
 
 - [ ] **Step 3: Check in the exact golden DDL**
 
-Copy the complete SQL block from approved spec section 5, unchanged, into `contracts/storage-v1/schema-v1.sql`: both pragmas, `vault_state`, `revisions`, `heads`, `conflicts`, `revisions_no_update`, and `revisions_no_delete`. `schema.rs` must use `include_str!("../../../contracts/storage-v1/schema-v1.sql")`; do not keep a second DDL string.
+Copy the complete SQL block from approved spec section 5, unchanged, into `contracts/storage-v1/schema-v1.sql`: both pragmas, `vault_state`, `revisions`, `heads`, `conflicts`, and the four immutable revision/conflict triggers. `schema.rs` must use `include_str!("../../../contracts/storage-v1/schema-v1.sql")`; do not keep a second DDL string.
 
 The fingerprint validator compares in fixed order: application-owned object names/types, `table_xinfo`, PK positions, `foreign_key_list`, `index_list`, and whitespace-normalized trigger SQL. Unknown application table/index/trigger or any mismatch returns `CorruptStorage`; it never executes migration.
 
@@ -350,9 +350,9 @@ Define stable public codes: `Busy`, `Io`, `UnsupportedPlatform`, `SchemaUpgradeR
 
 - [ ] **Step 5: Implement atomic zero-byte initialization**
 
-`initialize_v1(location, bootstrap)` acquires the OS lock first and permits `CREATE` only when the target does not exist or is exactly zero bytes. In one `BEGIN IMMEDIATE` transaction it applies the golden DDL and inserts singleton `1` from the private-field bootstrap projection after rechecking its current inspection. Commit only after application ID, user version, schema fingerprint and singleton readback all match. Any nonempty file, partial schema, missing singleton or version-zero file enters read-only preservation and is never completed/reset.
+`initialize_v1(location, bootstrap)` acquires the OS lock first and permits `CREATE` only when the target does not exist or is exactly zero bytes. Record which of those two byte states existed before opening. In one `BEGIN IMMEDIATE` transaction it applies the golden DDL and inserts singleton `1` from the private-field bootstrap projection after rechecking its current inspection. Commit only after application ID, user version, schema fingerprint and singleton readback all match. Any nonempty file, partial schema, missing singleton or version-zero file enters read-only preservation and is never completed/reset.
 
-An already valid v1 store passed to initialization is opened only far enough to compare the bootstrap projection: byte-identical password wire/suite/envelope returns non-writable `AlreadyInitialized`; any difference returns `InvariantViolation` without overwrite. `AlreadyInitialized` owns no connection and the caller must use the normal Task 5–6 preflight/unlock/authentication flow before writing. Add tests for failure at each initialization statement using a crate-private test executor seam and assert no half schema/singleton remains.
+An already valid v1 store passed to initialization is opened only far enough to compare the bootstrap projection: byte-identical password wire/suite/envelope returns non-writable `AlreadyInitialized`; any difference returns `InvariantViolation` without overwrite. `AlreadyInitialized` owns no connection and the caller must use the normal Task 5–6 preflight/unlock/authentication flow before writing. Add tests for failure after writable hardening and at each initialization statement using a crate-private test executor seam. After closing SQLite, remove only sidecars/main bytes proven to have been created by this call: an absent target must be absent again and a pre-existing zero-byte target must be the same zero-byte file again. If target identity/ownership cannot be proven, do not delete or truncate it; return preservation failure. Every cleanly restored failure must allow a subsequent initialization retry. Assert no half schema/singleton remains.
 
 - [ ] **Step 6: Verify dependency features and commit**
 

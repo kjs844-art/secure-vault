@@ -135,9 +135,11 @@ PRAGMA user_version = 1;
 CREATE TABLE vault_state (
     singleton                 INTEGER PRIMARY KEY CHECK (singleton = 1),
     password_wire_version     INTEGER NOT NULL
-        CHECK (password_wire_version BETWEEN 0 AND 4294967295),
+        CHECK (typeof(password_wire_version) = 'integer'
+               AND password_wire_version BETWEEN 0 AND 4294967295),
     password_suite_id         INTEGER NOT NULL
-        CHECK (password_suite_id BETWEEN 0 AND 4294967295),
+        CHECK (typeof(password_suite_id) = 'integer'
+               AND password_suite_id BETWEEN 0 AND 4294967295),
     password_envelope         BLOB NOT NULL
         CHECK (typeof(password_envelope) = 'blob'
                AND length(password_envelope) BETWEEN 1 AND 65536)
@@ -149,13 +151,17 @@ CREATE TABLE revisions (
     revision_id               BLOB NOT NULL
         CHECK (typeof(revision_id) = 'blob' AND length(revision_id) = 32),
     wire_version              INTEGER NOT NULL
-        CHECK (wire_version BETWEEN 0 AND 4294967295),
+        CHECK (typeof(wire_version) = 'integer'
+               AND wire_version BETWEEN 0 AND 4294967295),
     suite_id                  INTEGER NOT NULL
-        CHECK (suite_id BETWEEN 0 AND 4294967295),
+        CHECK (typeof(suite_id) = 'integer'
+               AND suite_id BETWEEN 0 AND 4294967295),
     key_epoch                 INTEGER NOT NULL
-        CHECK (key_epoch BETWEEN 1 AND 4294967295),
+        CHECK (typeof(key_epoch) = 'integer'
+               AND key_epoch BETWEEN 1 AND 4294967295),
     padding_bucket            INTEGER NOT NULL
-        CHECK (padding_bucket IN (1024, 4096, 16384, 61440)),
+        CHECK (typeof(padding_bucket) = 'integer'
+               AND padding_bucket IN (1024, 4096, 16384, 61440)),
     envelope                  BLOB NOT NULL
         CHECK (typeof(envelope) = 'blob'
                AND length(envelope) BETWEEN 1 AND 65536),
@@ -208,9 +214,23 @@ BEFORE DELETE ON revisions
 BEGIN
     SELECT RAISE(ABORT, 'immutable revisions');
 END;
+
+CREATE TRIGGER conflicts_no_update
+BEFORE UPDATE ON conflicts
+BEGIN
+    SELECT RAISE(ABORT, 'immutable conflicts');
+END;
+
+CREATE TRIGGER conflicts_no_delete
+BEFORE DELETE ON conflicts
+BEGIN
+    SELECT RAISE(ABORT, 'immutable conflicts');
+END;
 ```
 
-`revisions`의 고정 이름 trigger는 application bug에 의한 `UPDATE`와 `DELETE`를 거부한다. 이는 malicious DB editor를 막는 암호학적 장치가 아니라 구현 실수 방지 장치다. schema 검사는 `application_id`, `user_version`, application-owned object 이름 집합, `table_xinfo`, primary key, `foreign_key_list`, `index_list`와 두 trigger SQL을 checked-in golden manifest와 정해진 순서로 비교한다. 알 수 없는 application table·index·trigger를 포함해 하나라도 다르면 정상 쓰기를 시작하지 않는다.
+`revisions`와 `conflicts`의 고정 이름 trigger는 application bug에 의한 `UPDATE`와 `DELETE`를 거부한다. 이는 malicious DB editor를 막는 암호학적 장치가 아니라 구현 실수 방지 장치다. schema 검사는 `application_id`, `user_version`, application-owned object 이름 집합, `table_xinfo`, primary key, `foreign_key_list`, `index_list`와 네 trigger SQL을 checked-in golden manifest와 정해진 순서로 비교한다. 알 수 없는 application table·index·trigger를 포함해 하나라도 다르면 정상 쓰기를 시작하지 않는다.
+
+숫자 metadata의 `typeof(...)= 'integer'` 조건은 SQLite affinity 적용 뒤 **최종 저장 storage class**를 고정한다. SQLite가 lossless하게 INTEGER로 변환하는 입력 literal의 원래 SQL 표현까지 구별하거나 거부한다고 주장하지 않는다. 구현은 숫자를 Rust 정수 parameter로 bind하고, 검증 테스트는 affinity 뒤에도 REAL/TEXT로 남는 비정수·비수치 값을 거부하는지 확인한다.
 
 `PRAGMA application_id`는 Secure Vault 전용 `0x53564C54`(`SVLT`), `PRAGMA user_version`은 `1`로 고정한다. 더 높은 `user_version`은 downgrade하거나 새 DB로 초기화하지 않고 `UpgradeRequired` 읽기 전용 보존 상태로 연다. 알려진 하위 버전 migration은 향후 golden fixture와 원자 migration이 생기기 전에는 지원한다고 주장하지 않는다.
 
@@ -248,7 +268,7 @@ WAL의 `-wal`과 `-shm`은 DB 상태의 일부다. live DB의 main 파일만 복
 ### 새 금고
 
 1. 기존 `create_vault_v0alpha1`가 합성 password로 session과 password envelope를 만든다.
-2. 길이가 0인 새 파일에서만 schema, pragma 식별자와 `vault_state` singleton을 한 초기화 transaction으로 만든다. 기존 DB에 singleton이 없거나 일부 table만 있으면 자동 초기화하지 않고 읽기 전용 보존 모드가 된다.
+2. 존재하지 않거나 호출 시작 시 길이가 0인 파일에서만 schema, pragma 식별자와 `vault_state` singleton을 한 초기화 transaction으로 만든다. 초기화 중 실패하면 SQLite handle을 먼저 닫고, 이 호출이 만든 sidecar만 제거한 뒤 호출 전 상태를 복구한다. 호출 전 경로가 없었다면 이 호출이 만든 main 파일도 제거하고, 기존 zero-byte 파일이었다면 같은 파일을 다시 정확히 0 bytes로 만든다. 대상이 교체됐거나 호출 소유권을 확인할 수 없으면 삭제·truncate하지 않고 읽기 전용 보존 오류로 끝낸다. 각 hardening/DDL/singleton failpoint 뒤 호출 전 byte-state와 재시도 가능성을 검사한다. 기존 non-empty DB에 singleton이 없거나 일부 table만 있으면 자동 초기화하지 않고 읽기 전용 보존 모드가 된다.
 3. initial synthetic commit candidate를 한 transaction으로 `revisions`와 `heads`에 기록한다.
 4. session과 모든 opened model을 버리고 DB connection을 닫는다.
 
