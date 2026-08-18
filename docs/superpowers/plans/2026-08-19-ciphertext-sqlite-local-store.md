@@ -6,7 +6,7 @@
 
 **Architecture:** `vault-crypto`는 canonical outer envelope 검사와 AAD metadata 파생을, `vault-local-core`는 session-bound persistence projection과 합성 successor 생성을, 새 `vault-local-store-sqlite` crate는 opaque BLOB·revision graph·exclusive process lock·two-stage open·CAS만 소유한다. 기존 DB는 반드시 no-create read-only preflight와 모든 current envelope 인증을 통과한 뒤에만 no-create writable WAL handle로 승격한다. future schema/wire, wrong password와 current corruption은 서로 다른 비쓰기 outcome으로 보존한다.
 
-**Tech Stack:** Rust 1.95.0 (edition 2024), `rusqlite` 0.40.2 with bundled SQLite 3.53.2 and only the `bundled` feature, `blake3` 1.8.5 in portable pure mode for streaming same-run logical digests, standard-library `std::fs::File::try_lock`, `tempfile` 3.27.0 for tests, existing `vault-crypto` 0.0.1-alpha.1, existing `vault-local-core` 0.0.1-alpha.1, `minicbor` 2.3.0, `thiserror` 2.0.20, `trybuild` 1.0.120, Cargo, rustfmt, Clippy.
+**Tech Stack:** Rust 1.95.0 (edition 2024), `rusqlite` 0.40.2 with bundled SQLite 3.53.2 and exactly the `bundled` + `load_extension` features (the latter only for safe runtime disable), `blake3` 1.8.5 in portable pure mode for streaming same-run logical digests, standard-library `std::fs::File::try_lock`, `tempfile` 3.27.0 for tests, existing `vault-crypto` 0.0.1-alpha.1, existing `vault-local-core` 0.0.1-alpha.1, `minicbor` 2.3.0, `thiserror` 2.0.20, `trybuild` 1.0.120, Cargo, rustfmt, Clippy.
 
 **Spec:** `docs/superpowers/specs/2026-08-17-ciphertext-sqlite-local-store-design.md`
 
@@ -19,7 +19,7 @@
 - password/record envelope 하나는 1..=65,536 bytes, head는 5,000개, revision은 10,000개, conflict는 5,000개, record envelope 합계는 128 MiB로 제한한다.
 - existing DB는 OS exclusive lock 뒤 `SQLITE_OPEN_READ_ONLY | SQLITE_OPEN_NOFOLLOW` no-create connection으로 먼저 검사한다. application ID, user version, schema, bounds, wire 분류, unlock과 모든 current revision 인증 전에는 writable connection을 만들지 않는다.
 - `application_id=0x53564C54`, `user_version=1`이다. `user_version>1`은 v1 table query보다 먼저 file-level `SchemaUpgradeRequired`가 된다.
-- writable current DB는 `SQLITE_OPEN_READ_WRITE | SQLITE_OPEN_NOFOLLOW`, 5초 busy timeout, `journal_mode=WAL`, `synchronous=FULL`, `foreign_keys=ON`, `trusted_schema=OFF`, `SQLITE_DBCONFIG_DEFENSIVE=ON`을 적용하고 반환값을 재검증한다. loadable-extension feature는 활성화하지 않는다.
+- writable current DB는 `SQLITE_OPEN_READ_WRITE | SQLITE_OPEN_NOFOLLOW`, 5초 busy timeout, `journal_mode=WAL`, `synchronous=FULL`, `foreign_keys=ON`, `trusted_schema=OFF`, `SQLITE_DBCONFIG_DEFENSIVE=ON`을 적용하고 반환값을 재검증한다. rusqlite `load_extension` Cargo feature는 안전한 `load_extension_disable()` 호출에만 허용하고, store crate의 unsafe 금지와 source scan으로 runtime enable/load 호출을 금지한다.
 - `revisions`는 append-only다. revision insert, expected-head CAS와 conflict insert는 하나의 short `BEGIN IMMEDIATE` transaction이다. LWW, 문자열 merge, 자동 repair/delete/overwrite를 하지 않는다.
 - 같은 candidate bytes의 idempotency 판정은 CAS보다 먼저 한다. 기존 conflict mapping은 최초 expected/observed를 보존하고 현재 head 진행과 무관하게 `ConflictPreserved`; conflict가 없는 동일 revision은 `AlreadyCommitted`이다.
 - 다른 vault candidate는 `WrongVaultCandidate`, 존재하지 않는 expected base 또는 head 없는 successor는 `MissingBase`이며 둘 다 어떤 row도 쓰거나 store를 corruption latch하지 않는다.
@@ -383,7 +383,7 @@ git commit -m "feat: add hardened sqlite store boundary"
 
 - [ ] **Step 1: Write the complete RED CAS matrix**
 
-Tests must cover initial commit, correct successor, two siblings, winner retry after a later head, stale conflict retry after a later head, same PK/different envelope, different-vault candidate, missing expected base and headless successor. Snapshot table counts and canonical head before each rejected case and assert no change afterward.
+Public integration tests must cover initial commit, correct successor, two siblings, winner retry after a later head, stale conflict retry after a later head, different-vault candidate and missing expected base using only closed Task 2 projections. Snapshot table counts and canonical head before each rejected case and assert no change afterward. Edge cases that cannot be produced through the closed public API — same PK/different persistent bytes, existing conflict with changed expected, headless successor and initial candidate for an existing record — belong in `commit.rs` crate-private unit tests over a private `PreparedCandidateV1` and private DB fixture seam. The invariant tests must then submit a known-good candidate after the latch is set and prove stable `InvariantViolation`, unchanged logical DB state, and a private SQL-access counter of zero for that second call. Cover both same-PK persistent-byte mismatch and projection/envelope metadata mismatch as latch triggers. No public raw projection/ID/SQL constructor may be added for testing.
 
 - [ ] **Step 2: Run RED**
 
@@ -399,9 +399,9 @@ Use `transaction_with_behavior(TransactionBehavior::Immediate)`. Before any inse
 
 1. Strictly inspect projection/envelope metadata and compare all cached columns.
 2. Compare candidate commitment to the current password-envelope commitment; mismatch returns `WrongVaultCandidate` and rolls back without latching.
-3. If expected exists, require both the same-record base revision and current head; missing returns `MissingBase` and rolls back.
-4. Query same PK before CAS. Different stored fields/envelope returns `InvariantViolation`. Same bytes with a conflict row verifies only the stored expected and returns `ConflictPreserved` without changing observed. Same bytes without a conflict row returns `AlreadyCommitted` regardless of current head.
-5. Only for a new PK, insert the immutable revision and perform initial/head CAS. On mismatch insert one conflict row with first expected/observed and keep head unchanged.
+3. Query same PK before base/head validation or CAS. Different stored fields/envelope rolls back, returns `InvariantViolation`, and one-way latches this writable handle so every later commit returns `InvariantViolation` without DB access. Same bytes with a conflict row verifies only stored expected; mismatch is an invariant violation before any base lookup, while a match returns `ConflictPreserved` without comparing/changing observed. Same bytes without a conflict row returns `AlreadyCommitted` regardless of current head or supplied expected because canonical revisions do not persist expected provenance.
+4. Only for a new PK with expected set, require both the same-record base revision and current head; missing returns `MissingBase` and rolls back without latching.
+5. Only for a new PK, insert the immutable revision and perform initial/head CAS. On mismatch insert one conflict row with first expected/observed and keep head unchanged. `WrongVaultCandidate` and `MissingBase` never latch; projection/envelope metadata mismatch follows the same invariant latch as a same-PK byte mismatch.
 
 Do not expose SQL connection or generic execute/query APIs. Do not add update/delete methods.
 
@@ -434,11 +434,11 @@ git commit -m "feat: preserve immutable sqlite revisions"
 
 - [ ] **Step 1: Write RED ordering and non-writing outcome tests**
 
-Tests must prove: a valid current store returns `ExistingVaultPreflightV1`; a higher user version returns schema upgrade before any v1 table query; future outer/current unknown suite returns crypto upgrade; malformed current row returns preservation. For every terminal outcome compare main and existing `-wal` bytes before/after and compare logical row counts; ignore transient `-shm` bookkeeping only. Wrong-password and authenticated future-inner tests belong to Task 6 because this task performs no unlock.
+Tests must prove: a valid current store returns `ExistingVaultPreflightV1`; a higher user version returns schema upgrade before any v1 table query; future outer/current unknown suite returns crypto upgrade; malformed current row returns preservation. For every terminal outcome compare main and an actually live pre-existing `-wal` byte-for-byte before/after and compare logical row counts; ignore transient `-shm` bookkeeping only. The higher-version fixture's SQL trace must prove no `sqlite_schema`, v1 table, fingerprint or `integrity_check` query executed. Wrong-password and authenticated future-inner tests belong to Task 6 because this task performs no unlock.
 
 - [ ] **Step 2: Write RED bounded-loader tests**
 
-Use synthetic databases at cap and cap+1 for heads/revisions/conflicts, 128 MiB aggregate boundary via `length(envelope)` values, zero-length and 65,537-byte BLOBs. Instrument the row reader under `cfg(test)` to prove it checks SQL `length()` and streams one row at a time without collecting all envelopes or reserving from attacker-controlled count.
+Use synthetic databases at cap and cap+1 for heads/revisions/conflicts, 128 MiB aggregate revision-envelope boundary via `length(envelope)` values, zero-length and 65,537-byte BLOBs, malformed ID widths, and numeric cache values that remain REAL/TEXT after affinity. Instrument the row reader under `cfg(test)` to prove it checks SQL `typeof`/`length()` before obtaining or copying BLOB bytes, streams one row at a time, uses checked aggregate addition, and never collects all envelopes or reserves from attacker-controlled count.
 
 - [ ] **Step 3: Implement the read-only structural half of the state machine**
 
@@ -449,9 +449,9 @@ With the exclusive lock held:
 3. Read `user_version` before schema queries; `>1` returns schema upgrade immediately.
 4. For v1 only, validate schema, integrity, foreign keys and caps using `cap+1` keyset pagination.
 5. Classify password/record first-version prefix. Strictly inspect current outer envelopes and compare derived metadata; preserve future bytes without trusting legacy cache columns beyond wire-version equality.
-6. Return `ExistingVaultPreflightV1` owning the read-only connection, process lock, password envelope and logical digest. It exposes `password_envelope(&self) -> &[u8]` and later streams private-field `UntrustedStoredRevisionV1<'row>`; it exposes no cache locator for AAD construction and no raw SQL handle.
+6. Return `ExistingVaultPreflightV1` owning the read-only connection, process lock, password envelope and logical digest. It exposes `password_envelope(&self) -> &[u8]` and later streams private-field `UntrustedStoredRevisionV1<'row>` only inside a borrowing callback; no `Row`, `Statement`, BLOB borrow or cache locator can escape, and no raw SQL handle is exposed. Task 6 must consume this preflight, finish/drop statements, explicitly close only the read-only connection while retaining the same lock, then open no-create writable and revalidate; it must never drop/reacquire the lock between stages.
 
-The bounded loader uses keyset pagination and `cap+1`, checks `typeof` and SQL `length()` before BLOB allocation, and checked-adds aggregate size. It must reject INTEGER cache values stored as REAL/TEXT. Higher `user_version` must be proven by SQL trace to execute no v1 table/fingerprint query. In one fixed table/primary-key order, `digest.rs` feeds every field as `domain tag || u64 big-endian length || bytes` into a fresh BLAKE3 hasher. This digest detects changes between this process's read-only and writable stages only; it is not persisted, authenticated, or described as rollback/omission protection.
+The bounded loader uses keyset pagination and `cap+1`, checks `typeof` and SQL `length()` before BLOB allocation, and checked-adds aggregate size. It must reject INTEGER cache values stored as REAL/TEXT. Higher `user_version` must be proven by SQL trace to execute no v1 table/fingerprint query. The exact digest byte stream is: ASCII `SVLT-LOCAL-DIGEST-V1`; then for each table in fixed order `vault_state=0x01`, `revisions=0x02`, `heads=0x03`, `conflicts=0x04`, append `TABLE=0x54 || one-byte table tag`; for every row in that table's primary-key byte order append `ROW=0x52`, then every DDL column in 1-based ordinal order; after the last row append `END_TABLE=0x45`. Each field is `one-byte ordinal || type tag || u64 big-endian payload length || payload`, with `NULL=0x00`, `INTEGER=0x01`, `BLOB=0x02`. INTEGER payload is exactly 8-byte signed two's-complement big-endian; BLOB payload is the exact bytes; NULL has length zero. Each table's fixed DDL column count plus explicit row/table markers makes the stream unambiguous, and nullable expected-head is distinct from an empty BLOB. Tests mutate every field class to cause a mismatch and prove different insertion order yields the same logical digest. This digest detects changes between this process's read-only and writable stages only; schema/pragma are revalidated separately, and the digest is not persisted, authenticated, or described as rollback/omission protection.
 
 - [ ] **Step 4: Verify and commit**
 

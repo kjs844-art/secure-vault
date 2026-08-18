@@ -295,12 +295,12 @@ Wrong master password는 DB 손상으로 분류하지 않는다. writable connec
 모든 commit은 다음 순서를 하나의 `BEGIN IMMEDIATE` transaction 안에서 수행한다.
 
 1. projection과 envelope metadata가 current wire/suite이고 서로 정확히 일치하는지 확인한다. candidate의 inspected vault commitment가 `vault_state` password envelope commitment와 다르면 어떤 row도 쓰지 않고 non-latching `WrongVaultCandidate`를 반환한다. 기존 DB가 아니라 들어온 candidate가 다른 금고 소속인 것이므로 저장소 손상으로 분류하지 않는다.
-2. successor의 `expected_revision_id`가 있으면 같은 `record_id`의 base revision과 canonical head가 모두 존재해야 한다. 하나라도 없으면 candidate를 insert하지 않고 non-latching `MissingBase`로 전체 rollback한다.
-3. 같은 `(record_id, revision_id)`가 이미 있는지 **CAS보다 먼저** 확인한다.
+2. 같은 `(record_id, revision_id)`가 이미 있는지 **base/head 검사와 CAS보다 먼저** 확인한다.
    - stored fields와 envelope 중 하나라도 다르면 ID collision 또는 immutability violation으로 transaction을 중단하고 읽기 전용 보존 상태로 전환한다.
-   - byte-for-byte 같고 기존 conflict mapping이 있으면 candidate의 expected가 그 mapping과 같은지만 확인한 뒤 현재 head와 무관하게 원래 mapping을 그대로 두고 `ConflictPreserved`를 반환한다. 최초 observed head는 재시도 때 갱신하지 않는다.
-   - byte-for-byte 같고 conflict mapping이 없으면 현재 head가 더 진행됐더라도 `AlreadyCommitted`를 반환한다. atomic transaction 계약상 이는 과거 또는 현재 canonical revision이다.
-4. primary key가 없는 **새 revision에만** immutable row를 insert하고 head CAS를 수행한다.
+   - byte-for-byte 같고 기존 conflict mapping이 있으면 candidate의 expected가 그 mapping과 같은지만 확인한다. 다르면 base 존재 여부를 보기 전에 invariant violation이다. 같으면 현재 head와 무관하게 원래 mapping을 그대로 두고 `ConflictPreserved`를 반환하며 최초 observed head를 갱신하지 않는다.
+   - byte-for-byte 같고 conflict mapping이 없으면 현재 head가 더 진행됐더라도 `AlreadyCommitted`를 반환한다. atomic transaction 계약상 이는 과거 또는 현재 canonical revision이다. canonical revision에는 원래 expected를 저장하지 않으므로 retry가 가져온 expected의 동일성을 증명한다고 주장하지 않으며, 그 값 때문에 새 conflict나 write를 만들지 않는다.
+3. primary key가 **새 candidate**이고 `expected_revision_id`가 있으면 같은 `record_id`의 base revision과 canonical head가 모두 존재해야 한다. 하나라도 없으면 candidate를 insert하지 않고 non-latching `MissingBase`로 전체 rollback한다.
+4. primary key가 없는 새 revision에만 immutable row를 insert하고 head CAS를 수행한다.
    - initial candidate는 expected와 head가 모두 없으면 새 head가 된다.
    - initial candidate인데 같은 record의 head가 이미 있으면 head를 유지하고 candidate를 conflict로 보존한다.
    - successor의 expected와 head가 같으면 head를 candidate revision으로 바꾼다.
@@ -309,7 +309,9 @@ Wrong master password는 DB 손상으로 분류하지 않는다. writable connec
 
 Conflict는 정상적인 동시성 결과다. LWW, 문자열 merge, 자동 삭제 또는 candidate 덮어쓰기를 하지 않는다. 이번 단계에는 conflict resolution, rotation cutover, tombstone 또는 GC가 없으므로 revision·conflict 물리 삭제 API를 제공하지 않는다.
 
-동일 candidate의 conflict retry는 head가 바뀐 뒤에도 idempotent하다. 같은 candidate bytes로 다른 expected가 나오면 invariant violation이지만, 현재 observed head가 최초 mapping과 달라진 것은 정상 head 진행이므로 비교·갱신하지 않는다.
+동일 candidate의 conflict retry는 head가 바뀐 뒤에도 idempotent하다. 기존 conflict mapping이 있는 같은 candidate bytes로 다른 expected가 나오면 invariant violation이지만, 현재 observed head가 최초 mapping과 달라진 것은 정상 head 진행이므로 비교·갱신하지 않는다. conflict mapping이 없는 canonical retry는 expected를 보존하지 않으므로 동일성을 검증한다고 주장하지 않고 무쓰기 `AlreadyCommitted`로 끝낸다.
+
+same-PK persistent bytes 불일치 또는 private projection/envelope metadata 불일치는 transaction을 rollback한 뒤 해당 writable handle을 one-way 읽기 전용 보존 latch로 전환한다. trigger가 된 호출과 이후 `commit`은 안정적인 `InvariantViolation`만 반환하고 DB query/write를 더 수행하지 않는다. `WrongVaultCandidate`와 `MissingBase`는 candidate 입력 문제이므로 latch하지 않으며 이후 정상 commit을 허용한다. latch는 DB row가 아니라 process-memory handle 상태다.
 
 ## 9. future version·손상·보존 상태
 
