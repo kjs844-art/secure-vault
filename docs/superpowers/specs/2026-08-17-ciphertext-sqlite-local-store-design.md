@@ -236,7 +236,7 @@ END;
 
 ## 6. 연결 설정과 파일 경계
 
-로컬 앱 전용 디렉터리의 한 DB만 열고 network share, 사용자 cloud-sync 폴더 또는 Git 작업 트리를 저장 경로로 허용하지 않는다. DB를 열기 전에 비밀을 포함하지 않는 별도 lock file의 OS exclusive lock을 얻어 한 process에 single writer만 허용한다. 쓰기는 짧은 `BEGIN IMMEDIATE` transaction만 사용하고 lock 대기는 5초 busy timeout 뒤 비민감 `Busy` 오류로 끝낸다.
+OS가 제공한 로컬 앱 전용 디렉터리를 trusted app-data root로 먼저 고정하고 그 아래 한 DB만 연다. target에서 그 root까지의 모든 ancestor(둘 다 포함)는 `.git`/`.hg`/`.svn` marker와 cloud-provider component를 검사하며, root 위의 사용자 profile·volume ancestor는 이 정책의 권한 경계 밖이므로 검사하지 않는다. 이는 사용자 home 자체가 우연히 repository인 환경에서도 OS 전용 app-data root를 사용할 수 있게 하면서, root 내부의 깊은 Git 작업 트리·OneDrive류 폴더를 막는다. trusted root 자체가 network share 또는 cloud-sync root이면 거부한다. DB를 열기 전에 비밀을 포함하지 않는 별도 lock file의 OS exclusive lock을 얻어 한 process에 single writer만 허용한다. 쓰기는 짧은 `BEGIN IMMEDIATE` transaction만 사용하고 lock 대기는 5초 busy timeout 뒤 비민감 `Busy` 오류로 끝낸다.
 
 기존 파일은 `no-create` read-only connection으로 먼저 연다. `application_id`, `user_version`, schema, row bounds, future/current 분류와 합성 password unlock·모든 current revision 인증이 끝나기 전에는 writable connection을 열지 않는다. wrong password, future version 또는 손상이면 read-only connection을 닫고 보존 상태만 반환한다. SQLite가 read-only WAL을 위해 만드는 일시적 `-shm` lock bookkeeping은 논리 DB write와 구분한다.
 
@@ -268,7 +268,7 @@ WAL의 `-wal`과 `-shm`은 DB 상태의 일부다. live DB의 main 파일만 복
 ### 새 금고
 
 1. 기존 `create_vault_v0alpha1`가 합성 password로 session과 password envelope를 만든다.
-2. 존재하지 않거나 호출 시작 시 길이가 0인 파일에서만 schema, pragma 식별자와 `vault_state` singleton을 한 초기화 transaction으로 만든다. 초기화 중 실패하면 SQLite handle을 먼저 닫고, 이 호출이 만든 sidecar만 제거한 뒤 호출 전 상태를 복구한다. 호출 전 경로가 없었다면 이 호출이 만든 main 파일도 제거하고, 기존 zero-byte 파일이었다면 같은 파일을 다시 정확히 0 bytes로 만든다. 대상이 교체됐거나 호출 소유권을 확인할 수 없으면 삭제·truncate하지 않고 읽기 전용 보존 오류로 끝낸다. 각 hardening/DDL/singleton failpoint 뒤 호출 전 byte-state와 재시도 가능성을 검사한다. 기존 non-empty DB에 singleton이 없거나 일부 table만 있으면 자동 초기화하지 않고 읽기 전용 보존 모드가 된다.
+2. 존재하지 않거나 호출 시작 시 길이가 0인 파일에서만 schema, pragma 식별자와 `vault_state` singleton을 한 초기화 transaction으로 만든다. main-file ownership handle은 SQLite open/create 전에 얻어 SQLite close 뒤까지 유지하며 pathname으로 다시 열지 않는다. 초기화 실패 시 SQLite를 먼저 닫은 다음 **아직 아무것도 변경하지 않은 상태에서** WAL/SHM/journal 존재와 pathname↔ownership-handle identity를 검사한다. sidecar가 남거나 pathname이 다른 파일을 가리키면 truncate·sync·unlink·pathname mutation을 전혀 하지 않고 읽기 전용 보존 오류로 끝낸다. 이상이 없는 clean rollback branch에서만 ownership handle이 가리키는 그 파일 자체를 0 bytes로 truncate·sync하고 identity/sidecar 상태를 다시 확인한다. 따라서 호출 전 경로가 없었더라도 실패 뒤에는 안전한 call-owned zero-byte main 파일이 남을 수 있으며 이는 재시도 가능한 정상 초기 상태다. 기존 zero-byte 파일도 같은 handle로 0 bytes를 유지한다. clean hardening/DDL/singleton failpoint는 main zero-byte·sidecar 없음·재시도 성공을 검사한다. 별도 injected lingering-sidecar/rename-and-replace test는 보존 오류, replacement와 sidecar bytes 불변, 어떤 pathname 삭제도 없음을 검사하며 재시도 가능성을 요구하지 않는다. 기존 non-empty DB에 singleton이 없거나 일부 table만 있으면 자동 초기화하지 않고 읽기 전용 보존 모드가 된다. 이 retained-handle 보장을 플랫폼이 제공하지 못하면 약하게 fallback하지 않고 해당 초기화를 `UnsupportedPlatform`으로 막는다.
 3. initial synthetic commit candidate를 한 transaction으로 `revisions`와 `heads`에 기록한다.
 4. session과 모든 opened model을 버리고 DB connection을 닫는다.
 
