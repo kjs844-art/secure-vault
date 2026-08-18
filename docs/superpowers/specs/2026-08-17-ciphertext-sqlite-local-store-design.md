@@ -1,6 +1,6 @@
 # 암호문 전용 SQLite 로컬 저장소 설계
 
-- 상태: 사용자 설계 승인, 작성 명세 검토 대기
+- 상태: 사용자 명세 승인(2026-08-19), 구현 계획 진행
 - 기준일: 2026-08-17
 - 적용 제품: Secure Vault 합성 데이터 전용 `v0alpha1` 로컬 코어
 - 기준 브랜치: `codex/firstvibe-credential-local-core` @ `e2727132b8afc298afaf3662ce77f0b12e81fd62`
