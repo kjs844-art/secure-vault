@@ -305,6 +305,7 @@ Wrong master password는 DB 손상으로 분류하지 않는다. writable connec
    - initial candidate인데 같은 record의 head가 이미 있으면 head를 유지하고 candidate를 conflict로 보존한다.
    - successor의 expected와 head가 같으면 head를 candidate revision으로 바꾼다.
    - successor의 expected base는 존재하지만 현재 head가 다르면 head를 유지하고 candidate와 최초 expected/observed head를 `conflicts`에 기록한다.
+   - revision, initial head와 conflict의 plain `INSERT`는 각각 affected-row count가 정확히 `1`이어야 한다. successor head CAS `UPDATE`는 `1`이면 commit, `0`이면 stale conflict 경로이고 그 밖의 값은 invariant violation이다. `INSERT`가 오류 없이 `0`을 반환하는 trigger/authorizer 개입도 transaction 전체 rollback 뒤 one-way latch로 처리하여 orphan revision을 commit하지 않는다.
 5. commit 성공 뒤 `Committed`, `AlreadyCommitted` 또는 `ConflictPreserved` 비민감 outcome을 반환한다.
 
 Conflict는 정상적인 동시성 결과다. LWW, 문자열 merge, 자동 삭제 또는 candidate 덮어쓰기를 하지 않는다. 이번 단계에는 conflict resolution, rotation cutover, tombstone 또는 GC가 없으므로 revision·conflict 물리 삭제 API를 제공하지 않는다.
