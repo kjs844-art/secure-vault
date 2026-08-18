@@ -1,6 +1,7 @@
 use vault_crypto::{
     CryptoError, CryptoErrorCode, KeyEpoch, OpaqueRecordId, PaddingBucketV0Alpha1,
-    RecordContextV0Alpha1, RevisionId, VaultSession, open_record_v0alpha1, seal_record_v0alpha1,
+    RecordContextV0Alpha1, RecordEnvelopeStorageDispositionV1, RevisionId, VaultSession,
+    inspect_record_envelope_for_storage_v1, open_record_v0alpha1, seal_record_v0alpha1,
 };
 
 use crate::LocalVaultError;
@@ -20,15 +21,16 @@ pub enum StoredPaddingBucketV0Alpha1 {
 }
 
 pub struct RecordLocatorV0Alpha1 {
-    record_id: RecordIdV1,
-    revision_id: RevisionIdV1,
-    key_epoch: u32,
-    padding_bucket: StoredPaddingBucketV0Alpha1,
+    pub(crate) record_id: RecordIdV1,
+    pub(crate) revision_id: RevisionIdV1,
+    pub(crate) key_epoch: u32,
+    pub(crate) padding_bucket: StoredPaddingBucketV0Alpha1,
 }
 
 pub struct SealedCredentialRecordV0Alpha1 {
-    locator: RecordLocatorV0Alpha1,
-    envelope: Vec<u8>,
+    pub(crate) vault_commitment: [u8; 32],
+    pub(crate) locator: RecordLocatorV0Alpha1,
+    pub(crate) envelope: Vec<u8>,
 }
 
 pub struct OpenedCredentialV1 {
@@ -87,15 +89,7 @@ pub fn seal_synthetic_fixture_v1(
     )?;
     let envelope = seal_record_v0alpha1(session, &context, &plaintext).map_err(map_crypto_error)?;
 
-    Ok(SealedCredentialRecordV0Alpha1 {
-        locator: RecordLocatorV0Alpha1 {
-            record_id: identity.record_id,
-            revision_id: identity.revision_id,
-            key_epoch: session.key_epoch().get(),
-            padding_bucket,
-        },
-        envelope,
-    })
+    sealed_from_current_envelope(envelope)
 }
 
 pub fn open_credential_record_v1(
@@ -125,7 +119,7 @@ pub fn open_credential_record_v1(
     }
 }
 
-fn record_context(
+pub(crate) fn record_context(
     session: &VaultSession,
     record_id: RecordIdV1,
     revision_id: RevisionIdV1,
@@ -142,7 +136,7 @@ fn record_context(
     ))
 }
 
-fn map_crypto_error(error: CryptoError) -> LocalVaultError {
+pub(crate) fn map_crypto_error(error: CryptoError) -> LocalVaultError {
     match error.code() {
         CryptoErrorCode::AuthenticationFailed => LocalVaultError::AuthenticationFailed,
         CryptoErrorCode::RngUnavailable => LocalVaultError::RngUnavailable,
@@ -155,7 +149,9 @@ fn map_crypto_error(error: CryptoError) -> LocalVaultError {
     }
 }
 
-fn select_bucket(payload_len: usize) -> Result<StoredPaddingBucketV0Alpha1, LocalVaultError> {
+pub(crate) fn select_bucket(
+    payload_len: usize,
+) -> Result<StoredPaddingBucketV0Alpha1, LocalVaultError> {
     match payload_len {
         0..=1_020 => Ok(StoredPaddingBucketV0Alpha1::Bytes1024),
         1_021..=4_092 => Ok(StoredPaddingBucketV0Alpha1::Bytes4096),
@@ -166,12 +162,53 @@ fn select_bucket(payload_len: usize) -> Result<StoredPaddingBucketV0Alpha1, Loca
 }
 
 impl StoredPaddingBucketV0Alpha1 {
-    const fn into_crypto(self) -> PaddingBucketV0Alpha1 {
+    pub(crate) const fn into_crypto(self) -> PaddingBucketV0Alpha1 {
         match self {
             Self::Bytes1024 => PaddingBucketV0Alpha1::Bytes1024,
             Self::Bytes4096 => PaddingBucketV0Alpha1::Bytes4096,
             Self::Bytes16384 => PaddingBucketV0Alpha1::Bytes16384,
             Self::Bytes61440 => PaddingBucketV0Alpha1::Bytes61440,
+        }
+    }
+}
+
+pub(crate) fn sealed_from_current_envelope(
+    envelope: Vec<u8>,
+) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
+    let inspection =
+        match inspect_record_envelope_for_storage_v1(&envelope).map_err(map_crypto_error)? {
+            RecordEnvelopeStorageDispositionV1::Current(inspection) => inspection,
+            RecordEnvelopeStorageDispositionV1::FutureWire(_)
+            | RecordEnvelopeStorageDispositionV1::UnsupportedSuite(_) => {
+                return Err(LocalVaultError::CryptoFailure);
+            }
+        };
+    let record_id = RecordIdV1::from_bytes(*inspection.record_id());
+    let revision_id = RevisionIdV1::from_bytes(*inspection.revision_id());
+    let padding_bucket =
+        StoredPaddingBucketV0Alpha1::from_bytes(inspection.padding_bucket_bytes())?;
+    let vault_commitment = *inspection.vault_commitment();
+    let key_epoch = inspection.key_epoch();
+    Ok(SealedCredentialRecordV0Alpha1 {
+        vault_commitment,
+        locator: RecordLocatorV0Alpha1 {
+            record_id,
+            revision_id,
+            key_epoch,
+            padding_bucket,
+        },
+        envelope,
+    })
+}
+
+impl StoredPaddingBucketV0Alpha1 {
+    pub(crate) fn from_bytes(bytes: usize) -> Result<Self, LocalVaultError> {
+        match bytes {
+            1_024 => Ok(Self::Bytes1024),
+            4_096 => Ok(Self::Bytes4096),
+            16_384 => Ok(Self::Bytes16384),
+            61_440 => Ok(Self::Bytes61440),
+            _ => Err(LocalVaultError::CryptoFailure),
         }
     }
 }
@@ -207,7 +244,7 @@ pub(crate) fn open_synthetic_future_version_v1(
 }
 
 #[cfg(test)]
-fn seal_synthetic_future_inner_v2(
+pub(crate) fn seal_synthetic_future_inner_v2(
     session: &VaultSession,
 ) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
     let identity = generate_record_identity()?;
@@ -222,15 +259,7 @@ fn seal_synthetic_future_inner_v2(
     )?;
     let envelope = seal_record_v0alpha1(session, &context, &plaintext).map_err(map_crypto_error)?;
 
-    Ok(SealedCredentialRecordV0Alpha1 {
-        locator: RecordLocatorV0Alpha1 {
-            record_id: identity.record_id,
-            revision_id: identity.revision_id,
-            key_epoch: session.key_epoch().get(),
-            padding_bucket,
-        },
-        envelope,
-    })
+    sealed_from_current_envelope(envelope)
 }
 
 #[cfg(test)]

@@ -8,12 +8,20 @@ mod codec;
 mod error;
 mod ids;
 mod model;
+mod persistence;
 mod record;
 mod secret;
 mod synthetic;
 
 pub use error::{LocalVaultError, LocalVaultErrorCode};
 pub use ids::{RecordIdV1, RevisionIdV1};
+pub use persistence::{
+    AuthenticatedStoredCredentialRevisionV1, CredentialCommitPersistenceProjectionV1,
+    CredentialStorageAuthenticatorV1, OwnedPreservedCredentialEnvelopeV1,
+    OwnedRehydratedCredentialOutcomeV1, OwnedRehydratedCredentialV1,
+    PreservedStoredCredentialEnvelopeV1, StoredCredentialAuthenticationOutcomeV1,
+    SyntheticCredentialSuccessorV1, create_synthetic_successor_v1,
+};
 pub use record::{
     OpenCredentialOutcome, OpenedCredentialV1, RecordLocatorV0Alpha1,
     SealedCredentialRecordV0Alpha1, StoredPaddingBucketV0Alpha1, open_credential_record_v1,
