@@ -33,3 +33,6 @@ record-envelope-v0alpha1 = [
 ; The fixed decoded body is:
 ; uint32_be(plaintext_length) || plaintext || zero_padding
 ; The complete deterministically encoded envelope MUST be at most 65,536 bytes.
+; Future outer wires preserved by storage v1 MUST retain a definite top-level array
+; whose first field is a minimal canonical unsigned wire-version; the remaining bytes
+; are preserved without interpretation by a v1 reader.

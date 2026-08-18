@@ -2,7 +2,10 @@ use core::convert::Infallible;
 
 use minicbor::{Decoder, Encoder, encode::Write};
 
-use crate::{CryptoError, RecordContextV0Alpha1};
+use crate::{
+    CryptoError, KeyEpoch, OpaqueRecordId, PaddingBucketV0Alpha1, RecordContextV0Alpha1,
+    RevisionId, VaultCommitment,
+};
 
 use super::kdf::{CANDIDATE_LANES, CANDIDATE_MEMORY_KIB, CANDIDATE_TIME_COST};
 
@@ -97,6 +100,34 @@ pub(crate) struct RecordEnvelopeFields<'a> {
     pub(crate) encrypted_body: &'a [u8],
 }
 
+pub(crate) enum PasswordEnvelopeStorageFields {
+    Current {
+        wire_version: u32,
+        suite_id: u32,
+        vault_commitment: VaultCommitment,
+    },
+    UnsupportedSuite {
+        wire_version: u32,
+        suite_id: u32,
+    },
+}
+
+pub(crate) enum RecordEnvelopeStorageFields {
+    Current {
+        wire_version: u32,
+        suite_id: u32,
+        vault_commitment: VaultCommitment,
+        record_id: OpaqueRecordId,
+        revision_id: RevisionId,
+        key_epoch: KeyEpoch,
+        padding_bucket: PaddingBucketV0Alpha1,
+    },
+    UnsupportedSuite {
+        wire_version: u32,
+        suite_id: u32,
+    },
+}
+
 /// Validate a password envelope without exposing parsed or mutable fields.
 pub fn inspect_password_envelope_v0alpha1(input: &[u8]) -> Result<(), CryptoError> {
     decode_password_envelope(input).map(|_| ())
@@ -116,6 +147,45 @@ pub(crate) fn decode_password_envelope(
     validate_header(
         fields.wire_version,
         fields.suite_id,
+        fields.object_kind,
+        PASSWORD_OBJECT_KIND,
+    )?;
+    validate_password_field_lengths(&fields)?;
+    validate_exact_candidate_kdf(&fields)?;
+    Ok(fields)
+}
+
+pub(crate) fn decode_password_envelope_for_storage(
+    input: &[u8],
+) -> Result<PasswordEnvelopeStorageFields, CryptoError> {
+    let fields = match decode_password_envelope(input) {
+        Ok(fields) => fields,
+        Err(CryptoError::UnsupportedSuite) => decode_password_envelope_shape(input)?,
+        Err(error) => return Err(error),
+    };
+    let wire_version = checked_storage_u32(fields.wire_version)?;
+    let suite_id = checked_storage_u32(fields.suite_id)?;
+
+    if fields.suite_id != SUITE_ID {
+        return Ok(PasswordEnvelopeStorageFields::UnsupportedSuite {
+            wire_version,
+            suite_id,
+        });
+    }
+
+    Ok(PasswordEnvelopeStorageFields::Current {
+        wire_version,
+        suite_id,
+        vault_commitment: VaultCommitment::from_bytes(copy_array(fields.vault_commitment)?),
+    })
+}
+
+fn decode_password_envelope_shape(input: &[u8]) -> Result<PasswordEnvelopeFields<'_>, CryptoError> {
+    reject_if_over_64_kib(input)?;
+    let fields = parse_fixed_password_array(input)?;
+    ensure_password_envelope_is_canonical(input, &fields)?;
+    validate_current_wire_and_object_kind(
+        fields.wire_version,
         fields.object_kind,
         PASSWORD_OBJECT_KIND,
     )?;
@@ -282,6 +352,51 @@ pub(crate) fn decode_record_envelope(
     Ok(fields)
 }
 
+pub(crate) fn decode_record_envelope_for_storage(
+    input: &[u8],
+) -> Result<RecordEnvelopeStorageFields, CryptoError> {
+    let fields = match decode_record_envelope(input) {
+        Ok(fields) => fields,
+        Err(CryptoError::UnsupportedSuite) => decode_record_envelope_shape(input)?,
+        Err(error) => return Err(error),
+    };
+    let wire_version = checked_storage_u32(fields.wire_version)?;
+    let suite_id = checked_storage_u32(fields.suite_id)?;
+
+    if fields.suite_id != SUITE_ID {
+        return Ok(RecordEnvelopeStorageFields::UnsupportedSuite {
+            wire_version,
+            suite_id,
+        });
+    }
+
+    Ok(RecordEnvelopeStorageFields::Current {
+        wire_version,
+        suite_id,
+        vault_commitment: VaultCommitment::from_bytes(copy_array(fields.vault_commitment)?),
+        record_id: OpaqueRecordId::from_bytes(copy_array(fields.opaque_record_id)?),
+        revision_id: RevisionId::from_bytes(copy_array(fields.revision_id)?),
+        key_epoch: KeyEpoch::new(checked_storage_u32(fields.key_epoch)?)?,
+        padding_bucket: padding_bucket_from_value(fields.padding_bucket)?,
+    })
+}
+
+fn decode_record_envelope_shape(input: &[u8]) -> Result<RecordEnvelopeFields<'_>, CryptoError> {
+    reject_if_over_64_kib(input)?;
+    let fields = parse_fixed_record_array(input)?;
+    ensure_record_envelope_is_canonical(input, &fields)?;
+    validate_current_wire_and_object_kind(
+        fields.wire_version,
+        fields.object_kind,
+        RECORD_OBJECT_KIND,
+    )?;
+    validate_record_field_lengths(&fields)?;
+    validate_record_epoch(fields.key_epoch)?;
+    let bucket = validate_padding_bucket(fields.padding_bucket)?;
+    validate_encrypted_body_length(fields.encrypted_body, bucket)?;
+    Ok(fields)
+}
+
 fn reject_if_over_64_kib(input: &[u8]) -> Result<(), CryptoError> {
     if input.len() > MAX_ENVELOPE_BYTES {
         return Err(CryptoError::LimitsExceeded);
@@ -350,11 +465,30 @@ fn validate_header(
     if wire_version != WIRE_VERSION {
         return Err(CryptoError::UnsupportedVersion);
     }
-    if suite_id != SUITE_ID {
-        return Err(CryptoError::UnsupportedSuite);
+    validate_suite(suite_id)?;
+    if object_kind != expected_kind {
+        return Err(CryptoError::NonCanonicalEncoding);
+    }
+    Ok(())
+}
+
+fn validate_current_wire_and_object_kind(
+    wire_version: u64,
+    object_kind: u64,
+    expected_kind: u64,
+) -> Result<(), CryptoError> {
+    if wire_version != WIRE_VERSION {
+        return Err(CryptoError::UnsupportedVersion);
     }
     if object_kind != expected_kind {
         return Err(CryptoError::NonCanonicalEncoding);
+    }
+    Ok(())
+}
+
+fn validate_suite(suite_id: u64) -> Result<(), CryptoError> {
+    if suite_id != SUITE_ID {
+        return Err(CryptoError::UnsupportedSuite);
     }
     Ok(())
 }
@@ -401,10 +535,25 @@ fn validate_record_epoch(key_epoch: u64) -> Result<(), CryptoError> {
 }
 
 fn validate_padding_bucket(padding_bucket: u64) -> Result<usize, CryptoError> {
+    Ok(padding_bucket_from_value(padding_bucket)?.byte_len())
+}
+
+fn padding_bucket_from_value(padding_bucket: u64) -> Result<PaddingBucketV0Alpha1, CryptoError> {
     match padding_bucket {
-        1_024 | 4_096 | 16_384 | 61_440 => Ok(padding_bucket as usize),
+        1_024 => Ok(PaddingBucketV0Alpha1::Bytes1024),
+        4_096 => Ok(PaddingBucketV0Alpha1::Bytes4096),
+        16_384 => Ok(PaddingBucketV0Alpha1::Bytes16384),
+        61_440 => Ok(PaddingBucketV0Alpha1::Bytes61440),
         _ => Err(CryptoError::LimitsExceeded),
     }
+}
+
+fn checked_storage_u32(value: u64) -> Result<u32, CryptoError> {
+    u32::try_from(value).map_err(|_| CryptoError::LimitsExceeded)
+}
+
+fn copy_array<const N: usize>(input: &[u8]) -> Result<[u8; N], CryptoError> {
+    input.try_into().map_err(|_| CryptoError::InvalidLength)
 }
 
 fn validate_encrypted_body_length(
