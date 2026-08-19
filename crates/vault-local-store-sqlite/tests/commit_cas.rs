@@ -11,7 +11,7 @@ use vault_local_core::{
 };
 use vault_local_store_sqlite::{
     CommitOutcomeV1, InitializeStoreOutcomeV1, StorageErrorCode, StoreLocationPolicyV1,
-    StoreLocationV1, SyntheticWritableStoreV1, initialize_v1,
+    StoreLocationV1, SyntheticWritableStoreV1, TrustedLocalAppDataRootV1, initialize_v1,
 };
 
 struct TestStore {
@@ -31,7 +31,8 @@ struct TableSnapshot {
 
 fn new_store(password: &str) -> TestStore {
     let directory = tempfile::tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let password = MasterPassword::from_utf8(password.to_owned()).unwrap();
     let created = create_vault_v0alpha1(&password).unwrap();

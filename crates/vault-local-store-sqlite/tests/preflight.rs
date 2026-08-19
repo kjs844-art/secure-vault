@@ -8,12 +8,13 @@ use vault_crypto::{
 };
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, InitializeStoreOutcomeV1, StoreLocationPolicyV1,
-    initialize_v1, preflight_existing_v1,
+    TrustedLocalAppDataRootV1, initialize_v1, preflight_existing_v1,
 };
 
 fn initialized_location() -> (tempfile::TempDir, vault_local_store_sqlite::StoreLocationV1) {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("synthetic.invalid").unwrap();
     let password =
         MasterPassword::from_utf8("DEMO_VALUE_ONLY_preflight.invalid".to_owned()).unwrap();

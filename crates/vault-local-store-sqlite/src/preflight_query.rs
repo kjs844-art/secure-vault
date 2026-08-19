@@ -1500,7 +1500,7 @@ mod tests {
     use super::*;
     use crate::{
         ExistingVaultPreflightOutcomeV1, SCHEMA_V1_SQL, StoreLocationPolicyV1,
-        preflight_existing_v1,
+        TrustedLocalAppDataRootV1, preflight_existing_v1,
     };
 
     struct Fixture {
@@ -2199,7 +2199,8 @@ mod tests {
     #[test]
     fn future_schema_observes_only_application_id_then_user_version() {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let connection = Connection::open(location.database_path()).unwrap();
         connection.execute_batch(SCHEMA_V1_SQL).unwrap();
