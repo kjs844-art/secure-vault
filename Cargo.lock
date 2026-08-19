@@ -828,8 +828,10 @@ version = "0.0.1-alpha.1"
 dependencies = [
  "blake3",
  "rusqlite",
+ "serde",
  "tempfile",
  "thiserror",
+ "trybuild",
  "vault-crypto",
  "vault-local-core",
 ]

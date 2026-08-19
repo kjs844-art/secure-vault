@@ -26,6 +26,8 @@ fn cannot_observe_promotion(stage: AuthenticatedVaultPreflightV1<'_>) {
 )]
 
 mod commit;
+#[cfg(test)]
+mod crash_tests;
 mod digest;
 mod error;
 mod lock;

@@ -1,0 +1,23 @@
+error[E0451]: fields `vault_commitment`, `record_id`, `revision_id`, `expected_revision_id`, `wire_version`, `suite_id`, `key_epoch`, `padding_bucket` and `envelope` of struct `CredentialCommitPersistenceProjectionV1` are private
+  --> tests/ui/secret_traits/candidate_constructor.rs:19:9
+   |
+18 |     let _ = CredentialCommitPersistenceProjectionV1 {
+   |             --------------------------------------- in this type
+19 |         vault_commitment,
+   |         ^^^^^^^^^^^^^^^^ private field
+20 |         record_id,
+   |         ^^^^^^^^^ private field
+21 |         revision_id,
+   |         ^^^^^^^^^^^ private field
+22 |         expected_revision_id,
+   |         ^^^^^^^^^^^^^^^^^^^^ private field
+23 |         wire_version,
+   |         ^^^^^^^^^^^^ private field
+24 |         suite_id,
+   |         ^^^^^^^^ private field
+25 |         key_epoch,
+   |         ^^^^^^^^^ private field
+26 |         padding_bucket,
+   |         ^^^^^^^^^^^^^^ private field
+27 |         envelope,
+   |         ^^^^^^^^ private field

@@ -7,6 +7,9 @@ use vault_local_core::{CredentialCommitPersistenceProjectionV1, StoredPaddingBuc
 
 use crate::{StorageError, StorageErrorCode, SyntheticWritableStoreV1};
 
+#[cfg(test)]
+use std::sync::OnceLock;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommitOutcomeV1 {
     Committed,
@@ -37,6 +40,45 @@ struct StoredRevisionV1 {
 enum CommitFailureV1 {
     NonLatching(StorageErrorCode),
     Invariant,
+}
+
+struct CommitTransactionResultV1 {
+    outcome: CommitOutcomeV1,
+    #[cfg(test)]
+    created_revision: bool,
+}
+
+impl CommitTransactionResultV1 {
+    fn new(outcome: CommitOutcomeV1, _created_revision: bool) -> Self {
+        Self {
+            outcome,
+            #[cfg(test)]
+            created_revision: _created_revision,
+        }
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum TransactionCrashPointV1 {
+    InitialBefore,
+    InitialAfter,
+    ConflictBefore,
+    ConflictAfter,
+}
+
+#[cfg(test)]
+type TransactionObserverV1 = fn(TransactionCrashPointV1);
+
+#[cfg(test)]
+static TRANSACTION_OBSERVER_V1: OnceLock<TransactionObserverV1> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) fn install_transaction_observer_for_test(observer: TransactionObserverV1) {
+    assert!(
+        TRANSACTION_OBSERVER_V1.set(observer).is_ok(),
+        "transaction observer was already installed"
+    );
 }
 
 impl PreparedCandidateV1 {
@@ -83,12 +125,16 @@ impl SyntheticWritableStoreV1 {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(transaction_start_error)?;
         match commit_in_transaction(&transaction, candidate) {
-            Ok(outcome) => {
+            Ok(result) => {
+                #[cfg(test)]
+                observe_transaction_boundary(candidate, &result, true);
                 if transaction.commit().is_err() {
                     self.preservation_latched = true;
                     return Err(StorageError::new(StorageErrorCode::Io));
                 }
-                Ok(outcome)
+                #[cfg(test)]
+                observe_transaction_boundary(candidate, &result, false);
+                Ok(result.outcome)
             }
             Err(CommitFailureV1::NonLatching(code)) => {
                 drop(transaction);
@@ -106,7 +152,7 @@ impl SyntheticWritableStoreV1 {
 fn commit_in_transaction(
     transaction: &Transaction<'_>,
     candidate: &PreparedCandidateV1,
-) -> Result<CommitOutcomeV1, CommitFailureV1> {
+) -> Result<CommitTransactionResultV1, CommitFailureV1> {
     validate_candidate_metadata(candidate)?;
     if candidate.vault_commitment != read_current_vault_commitment(transaction)? {
         return Err(CommitFailureV1::NonLatching(
@@ -132,9 +178,15 @@ fn commit_in_transaction(
             {
                 return Err(CommitFailureV1::Invariant);
             }
-            return Ok(CommitOutcomeV1::ConflictPreserved);
+            return Ok(CommitTransactionResultV1::new(
+                CommitOutcomeV1::ConflictPreserved,
+                false,
+            ));
         }
-        return Ok(CommitOutcomeV1::AlreadyCommitted);
+        return Ok(CommitTransactionResultV1::new(
+            CommitOutcomeV1::AlreadyCommitted,
+            false,
+        ));
     }
 
     let observed_head = read_head(transaction, &candidate.record_id)?;
@@ -158,11 +210,17 @@ fn commit_in_transaction(
                 )
                 .map_err(|_| CommitFailureV1::Invariant)?;
             require_exactly_one(changed)?;
-            Ok(CommitOutcomeV1::Committed)
+            Ok(CommitTransactionResultV1::new(
+                CommitOutcomeV1::Committed,
+                true,
+            ))
         }
         (None, Some(observed)) => {
             insert_conflict(transaction, candidate, None, &observed)?;
-            Ok(CommitOutcomeV1::ConflictPreserved)
+            Ok(CommitTransactionResultV1::new(
+                CommitOutcomeV1::ConflictPreserved,
+                true,
+            ))
         }
         (Some(expected), Some(_)) => {
             let changed = transaction
@@ -176,17 +234,52 @@ fn commit_in_transaction(
                 )
                 .map_err(|_| CommitFailureV1::Invariant)?;
             match changed {
-                1 => Ok(CommitOutcomeV1::Committed),
+                1 => Ok(CommitTransactionResultV1::new(
+                    CommitOutcomeV1::Committed,
+                    true,
+                )),
                 0 => {
                     let observed = read_head(transaction, &candidate.record_id)?
                         .ok_or(CommitFailureV1::Invariant)?;
                     insert_conflict(transaction, candidate, Some(expected), &observed)?;
-                    Ok(CommitOutcomeV1::ConflictPreserved)
+                    Ok(CommitTransactionResultV1::new(
+                        CommitOutcomeV1::ConflictPreserved,
+                        true,
+                    ))
                 }
                 _ => Err(CommitFailureV1::Invariant),
             }
         }
         (Some(_), None) => unreachable!("head presence was checked before insert"),
+    }
+}
+
+#[cfg(test)]
+fn observe_transaction_boundary(
+    candidate: &PreparedCandidateV1,
+    result: &CommitTransactionResultV1,
+    before_commit: bool,
+) {
+    if !result.created_revision {
+        return;
+    }
+    let point = match (
+        candidate.expected_revision_id.is_none(),
+        result.outcome,
+        before_commit,
+    ) {
+        (true, CommitOutcomeV1::Committed, true) => TransactionCrashPointV1::InitialBefore,
+        (true, CommitOutcomeV1::Committed, false) => TransactionCrashPointV1::InitialAfter,
+        (false, CommitOutcomeV1::ConflictPreserved, true) => {
+            TransactionCrashPointV1::ConflictBefore
+        }
+        (false, CommitOutcomeV1::ConflictPreserved, false) => {
+            TransactionCrashPointV1::ConflictAfter
+        }
+        _ => return,
+    };
+    if let Some(observer) = TRANSACTION_OBSERVER_V1.get() {
+        observer(point);
     }
 }
 
