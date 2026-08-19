@@ -1,7 +1,7 @@
 //! The sole owner of the preflight SQLite connection and preflight SQL.
 
 use std::collections::BTreeSet;
-use std::fs;
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -62,6 +62,249 @@ struct StorageSizeLimits {
     max_main_bytes: u64,
     max_wal_bytes: u64,
     max_shm_bytes: u64,
+}
+
+struct PreOpenFilesSnapshot {
+    main: RetainedPreOpenFile,
+    wal: OptionalPreOpenFile,
+    shm: OptionalPreOpenFile,
+    allow_new_wal: bool,
+}
+
+enum OptionalPreOpenFile {
+    Absent { path: PathBuf, maximum: u64 },
+    Present(RetainedPreOpenFile),
+}
+
+struct RetainedPreOpenFile {
+    path: PathBuf,
+    file: File,
+    initial_length: u64,
+    maximum: u64,
+    #[cfg(unix)]
+    identity: UnixFileIdentity,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct UnixFileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+impl PreOpenFilesSnapshot {
+    fn capture(
+        database_path: &Path,
+        limits: StorageSizeLimits,
+        allow_new_wal: bool,
+    ) -> Result<Self, StorageError> {
+        Ok(Self {
+            main: RetainedPreOpenFile::open_required(
+                database_path.to_path_buf(),
+                limits.max_main_bytes,
+            )?,
+            wal: OptionalPreOpenFile::capture(
+                sidecar_path(database_path, "-wal"),
+                limits.max_wal_bytes,
+            )?,
+            shm: OptionalPreOpenFile::capture(
+                sidecar_path(database_path, "-shm"),
+                limits.max_shm_bytes,
+            )?,
+            allow_new_wal,
+        })
+    }
+
+    #[cfg(test)]
+    fn capture_for_test(
+        database_path: &Path,
+        limits: StorageSizeLimits,
+    ) -> Result<Self, StorageError> {
+        Self::capture(database_path, limits, false)
+    }
+
+    fn revalidate(&mut self) -> Result<(), StorageError> {
+        self.main.revalidate()?;
+        let wal_was_present = matches!(self.wal, OptionalPreOpenFile::Present(_));
+        self.wal.revalidate(self.allow_new_wal)?;
+        // SQLite may create missing WAL/SHM bookkeeping even for a read-only
+        // database when its directory is writable. Such new files are opened
+        // no-follow, capped, and retained before integrity work.
+        self.shm.revalidate(self.allow_new_wal || wal_was_present)
+    }
+
+    fn revalidate_before_sqlite_open(&mut self) -> Result<(), StorageError> {
+        self.main.revalidate()?;
+        self.wal.revalidate(false)?;
+        self.shm.revalidate(false)
+    }
+}
+
+impl OptionalPreOpenFile {
+    fn capture(path: PathBuf, maximum: u64) -> Result<Self, StorageError> {
+        match RetainedPreOpenFile::open_optional(path.clone(), maximum)? {
+            Some(file) => Ok(Self::Present(file)),
+            None => Ok(Self::Absent { path, maximum }),
+        }
+    }
+
+    fn revalidate(&mut self, allow_new: bool) -> Result<(), StorageError> {
+        let newly_opened = match self {
+            Self::Present(file) => return file.revalidate(),
+            Self::Absent { path, maximum } => {
+                RetainedPreOpenFile::open_optional(path.clone(), *maximum)?
+            }
+        };
+        match newly_opened {
+            None => Ok(()),
+            Some(file) if allow_new => {
+                *self = Self::Present(file);
+                Ok(())
+            }
+            Some(_) => Err(StorageError::new(StorageErrorCode::CorruptStorage)),
+        }
+    }
+}
+
+impl RetainedPreOpenFile {
+    fn open_required(path: PathBuf, maximum: u64) -> Result<Self, StorageError> {
+        match Self::open_optional(path, maximum)? {
+            Some(file) => Ok(file),
+            None => Err(StorageError::new(StorageErrorCode::UnsupportedPlatform)),
+        }
+    }
+
+    fn open_optional(path: PathBuf, maximum: u64) -> Result<Option<Self>, StorageError> {
+        let file = match open_preflight_file_no_follow(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if is_no_follow_rejection(&error) => {
+                return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+            }
+            Err(_) => return Err(StorageError::new(StorageErrorCode::Io)),
+        };
+        let metadata = checked_regular_metadata(&file)?;
+        let initial_length = metadata.len();
+        if initial_length > maximum {
+            return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
+        }
+        Ok(Some(Self {
+            path,
+            file,
+            initial_length,
+            maximum,
+            #[cfg(unix)]
+            identity: unix_file_identity(&metadata),
+        }))
+    }
+
+    fn revalidate(&self) -> Result<(), StorageError> {
+        let retained_metadata = checked_regular_metadata(&self.file)?;
+        if retained_metadata.len() > self.maximum {
+            return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
+        }
+        if retained_metadata.len() != self.initial_length {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        }
+
+        let current = open_preflight_file_no_follow(&self.path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound || is_no_follow_rejection(&error) {
+                StorageError::new(StorageErrorCode::CorruptStorage)
+            } else {
+                StorageError::new(StorageErrorCode::Io)
+            }
+        })?;
+        let current_metadata = checked_regular_metadata(&current)?;
+        if current_metadata.len() > self.maximum {
+            return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
+        }
+        if current_metadata.len() != self.initial_length {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        }
+        #[cfg(unix)]
+        if unix_file_identity(&current_metadata) != self.identity {
+            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn open_preflight_file_no_follow(path: &Path) -> std::io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    // Deliberately omit FILE_SHARE_DELETE. While this handle is retained,
+    // Windows cannot replace the directory entry, so equality does not rely
+    // on the legacy 64-bit file index that is not unique on ReFS.
+    OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+}
+
+#[cfg(unix)]
+fn open_preflight_file_no_follow(path: &Path) -> std::io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+}
+
+#[cfg(not(any(windows, unix)))]
+fn open_preflight_file_no_follow(_path: &Path) -> std::io::Result<File> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "preflight file retention is unsupported on this platform",
+    ))
+}
+
+fn checked_regular_metadata(file: &File) -> Result<std::fs::Metadata, StorageError> {
+    let metadata = file
+        .metadata()
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+    if !metadata.file_type().is_file() || metadata_is_windows_reparse_point(&metadata) {
+        return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+    }
+    Ok(metadata)
+}
+
+#[cfg(windows)]
+fn metadata_is_windows_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn metadata_is_windows_reparse_point(_metadata: &std::fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn is_no_follow_rejection(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(libc::ELOOP)
+}
+
+#[cfg(not(unix))]
+fn is_no_follow_rejection(_error: &std::io::Error) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn unix_file_identity(metadata: &std::fs::Metadata) -> UnixFileIdentity {
+    use std::os::unix::fs::MetadataExt;
+
+    UnixFileIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    }
 }
 
 impl StorageSizeLimits {
@@ -137,6 +380,7 @@ pub(crate) struct PreflightQueryGate {
     connection: Connection,
     limits: ScanLimits,
     observer: PreflightObserver,
+    pre_open_files: Box<PreOpenFilesSnapshot>,
 }
 
 impl PreflightQueryGate {
@@ -148,8 +392,24 @@ impl PreflightQueryGate {
         path: &Path,
         size_limits: StorageSizeLimits,
     ) -> Result<Self, StorageError> {
+        Self::open_read_only_with_size_limits_and_hook(path, size_limits, |_| {})
+    }
+
+    fn open_read_only_with_size_limits_and_hook(
+        path: &Path,
+        size_limits: StorageSizeLimits,
+        hook: impl FnOnce(&Path),
+    ) -> Result<Self, StorageError> {
         let observer = PreflightObserver::active();
-        validate_pre_open_file_sizes(path, size_limits)?;
+        // A WAL-mode read-only open may create missing WAL/SHM bookkeeping.
+        // Existing files remain identity/length pinned; new files are opened
+        // no-follow, capped, and retained before integrity work.
+        let mut pre_open_files = Box::new(PreOpenFilesSnapshot::capture(path, size_limits, true)?);
+        hook(path);
+        // Close the deterministic capture-to-open gap before any SQLite VFS
+        // work. Retained handles keep substitutions blocked/detectable; this
+        // second exact size check catches in-place growth as well.
+        pre_open_files.revalidate_before_sqlite_open()?;
         observer.sqlite_open_attempt();
         let connection = Connection::open_with_flags(path, schema_contract::read_only_open_flags())
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
@@ -166,17 +426,33 @@ impl PreflightQueryGate {
             connection,
             limits: ScanLimits::production(),
             observer,
+            pre_open_files,
         })
+    }
+
+    #[cfg(test)]
+    fn open_read_only_with_pre_open_hook_for_test(
+        path: &Path,
+        size_limits: StorageSizeLimits,
+        hook: impl FnOnce(&Path),
+    ) -> Result<Self, StorageError> {
+        Self::open_read_only_with_size_limits_and_hook(path, size_limits, hook)
     }
 
     pub(crate) fn open_hardened_writable(path: &Path) -> Result<Self, StorageError> {
         let size_limits = StorageSizeLimits::production();
-        validate_pre_open_file_sizes(path, size_limits)?;
+        // SQLite may create absent WAL bookkeeping during a writable open. Any
+        // file already present is retained and must keep its identity/length;
+        // a newly created sidecar is no-follow opened and capped before the
+        // first integrity walk.
+        let mut pre_open_files = Box::new(PreOpenFilesSnapshot::capture(path, size_limits, true)?);
+        pre_open_files.revalidate_before_sqlite_open()?;
         let connection = crate::schema::open_existing_writable(path)?;
         Ok(Self {
             connection,
             limits: ScanLimits::production(),
             observer: PreflightObserver::active(),
+            pre_open_files,
         })
     }
 
@@ -332,6 +608,9 @@ impl PreflightQueryGate {
         &mut self,
         max_database_page_bytes: u64,
     ) -> Result<(), StorageError> {
+        // Keep the no-follow handles alive across SQLite open, then bind the
+        // integrity walk to the same bounded files at its last safe point.
+        self.pre_open_files.revalidate()?;
         self.observe(PreflightQueryStage::PageCount);
         let page_count: i64 = self
             .connection
@@ -1008,27 +1287,6 @@ fn checked_integer(
     }
 }
 
-fn validate_pre_open_file_sizes(
-    database_path: &Path,
-    limits: StorageSizeLimits,
-) -> Result<(), StorageError> {
-    for (path, maximum) in [
-        (database_path.to_path_buf(), limits.max_main_bytes),
-        (sidecar_path(database_path, "-wal"), limits.max_wal_bytes),
-        (sidecar_path(database_path, "-shm"), limits.max_shm_bytes),
-    ] {
-        match fs::metadata(path) {
-            Ok(metadata) if metadata.len() > maximum => {
-                return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(StorageError::new(StorageErrorCode::Io)),
-        }
-    }
-    Ok(())
-}
-
 fn sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
     let mut path = database_path.as_os_str().to_os_string();
     path.push(suffix);
@@ -1232,6 +1490,7 @@ thread_local! {
 #[cfg(test)]
 mod tests {
     use std::fs::{self, OpenOptions};
+    use std::io::{Read, Seek, SeekFrom, Write};
     use std::path::{Path, PathBuf};
     use std::rc::Rc;
 
@@ -1321,6 +1580,12 @@ mod tests {
             .unwrap()
             .set_len(length)
             .unwrap();
+    }
+
+    fn read_prefix(path: &Path) -> [u8; 100] {
+        let mut prefix = [0_u8; 100];
+        File::open(path).unwrap().read_exact(&mut prefix).unwrap();
+        prefix
     }
 
     fn record_id(index: u64) -> [u8; 16] {
@@ -1516,6 +1781,280 @@ mod tests {
         assert!(events.contains(&TestEvent::Query(PreflightQueryStage::PageCount)));
         assert!(events.contains(&TestEvent::Query(PreflightQueryStage::PageSize)));
         assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::Integrity)));
+    }
+
+    #[test]
+    fn retained_pre_open_files_reject_main_wal_and_shm_growth_and_substitution() {
+        for suffix in ["", "-wal", "-shm"] {
+            let fixture = Fixture::new();
+            let target = if suffix.is_empty() {
+                fixture.path.clone()
+            } else {
+                let target = sidecar_path(&fixture.path, suffix);
+                fs::write(&target, b"synthetic-sidecar").unwrap();
+                target
+            };
+            let limits = StorageSizeLimits::production();
+
+            let mut snapshot =
+                PreOpenFilesSnapshot::capture_for_test(&fixture.path, limits).unwrap();
+            let original_length = fs::metadata(&target).unwrap().len();
+            sparse_file(&target, original_length + 1);
+            assert_eq!(
+                snapshot.revalidate().unwrap_err().code(),
+                StorageErrorCode::CorruptStorage,
+                "{suffix} growth must invalidate the retained snapshot"
+            );
+
+            sparse_file(&target, original_length);
+            let mut snapshot =
+                PreOpenFilesSnapshot::capture_for_test(&fixture.path, limits).unwrap();
+            let detached = target.with_extension(format!("{suffix}-detached"));
+            let replacement = target.with_extension(format!("{suffix}-replacement"));
+            fs::copy(&target, &replacement).unwrap();
+            #[cfg(windows)]
+            {
+                assert!(
+                    fs::rename(&target, &detached).is_err(),
+                    "{suffix} substitution must be blocked by the retained no-delete handle"
+                );
+                snapshot.revalidate().unwrap();
+            }
+            #[cfg(unix)]
+            {
+                fs::rename(&target, &detached).unwrap();
+                fs::rename(&replacement, &target).unwrap();
+                assert_eq!(
+                    snapshot.revalidate().unwrap_err().code(),
+                    StorageErrorCode::CorruptStorage,
+                    "{suffix} substitution must invalidate the retained snapshot"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn capture_to_open_main_substitution_is_blocked_or_rejected_before_sqlite() {
+        let fixture = Fixture::new();
+        let replacement = fixture.path.with_extension("replacement.sqlite3");
+        fs::copy(&fixture.path, &replacement).unwrap();
+
+        let (result, state) = observed(|_| {
+            let mut gate = PreflightQueryGate::open_read_only_with_pre_open_hook_for_test(
+                &fixture.path,
+                StorageSizeLimits::production(),
+                move |database_path| {
+                    let detached = database_path.with_extension("detached.sqlite3");
+                    #[cfg(windows)]
+                    assert!(fs::rename(database_path, detached).is_err());
+                    #[cfg(unix)]
+                    {
+                        fs::rename(database_path, detached).unwrap();
+                        fs::rename(replacement, database_path).unwrap();
+                    }
+                },
+            )?;
+            gate.verify_bounded_integrity()
+        });
+
+        #[cfg(windows)]
+        result.unwrap();
+        #[cfg(unix)]
+        assert_eq!(result.unwrap_err().code(), StorageErrorCode::CorruptStorage);
+        let events = events(&state);
+        #[cfg(windows)]
+        {
+            assert!(events.contains(&TestEvent::SqliteOpenAttempt));
+            assert!(events.contains(&TestEvent::Query(PreflightQueryStage::Integrity)));
+        }
+        #[cfg(unix)]
+        {
+            assert!(!events.contains(&TestEvent::SqliteOpenAttempt));
+            assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::PageCount)));
+            assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::Integrity)));
+        }
+    }
+
+    #[test]
+    fn main_growth_between_retention_and_sqlite_open_fails_before_page_work() {
+        let fixture = Fixture::new();
+        let original_length = fs::metadata(&fixture.path).unwrap().len();
+
+        let (result, state) = observed(|_| {
+            let mut gate = PreflightQueryGate::open_read_only_with_pre_open_hook_for_test(
+                &fixture.path,
+                StorageSizeLimits::production(),
+                |database_path| sparse_file(database_path, original_length + 1),
+            )?;
+            gate.verify_bounded_integrity()
+        });
+
+        assert_eq!(result.unwrap_err().code(), StorageErrorCode::CorruptStorage);
+        let events = events(&state);
+        assert!(!events.contains(&TestEvent::SqliteOpenAttempt));
+        assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::PageCount)));
+        assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::Integrity)));
+    }
+
+    #[test]
+    fn wal_and_shm_growth_between_retention_and_sqlite_open_fail_before_sqlite() {
+        for suffix in ["-wal", "-shm"] {
+            let fixture = Fixture::new();
+            let writer = fixture.connection_ignoring_checks();
+            let journal_mode: String = writer
+                .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+            writer
+                .execute_batch("PRAGMA wal_autocheckpoint=0;")
+                .unwrap();
+            writer
+                .execute(
+                    "UPDATE vault_state SET password_envelope=?1 WHERE singleton=1",
+                    [[2_u8].as_slice()],
+                )
+                .unwrap();
+            let target = sidecar_path(&fixture.path, suffix);
+            let original_length = fs::metadata(&target).unwrap().len();
+
+            let (result, state) = observed(|_| {
+                let _gate = PreflightQueryGate::open_read_only_with_pre_open_hook_for_test(
+                    &fixture.path,
+                    StorageSizeLimits::production(),
+                    |database_path| {
+                        sparse_file(&sidecar_path(database_path, suffix), original_length + 1);
+                    },
+                )?;
+                Ok::<_, StorageError>(())
+            });
+
+            assert_eq!(result.unwrap_err().code(), StorageErrorCode::CorruptStorage);
+            assert!(!events(&state).contains(&TestEvent::SqliteOpenAttempt));
+            drop(writer);
+        }
+    }
+
+    #[test]
+    fn wal_and_shm_substitution_between_retention_and_open_is_blocked_or_rejected() {
+        for suffix in ["-wal", "-shm"] {
+            let fixture = Fixture::new();
+            let writer = fixture.connection_ignoring_checks();
+            let journal_mode: String = writer
+                .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+            writer
+                .execute_batch("PRAGMA wal_autocheckpoint=0;")
+                .unwrap();
+            writer
+                .execute(
+                    "UPDATE vault_state SET password_envelope=?1 WHERE singleton=1",
+                    [[2_u8].as_slice()],
+                )
+                .unwrap();
+            let target = sidecar_path(&fixture.path, suffix);
+            let replacement = target.with_extension("replacement-sidecar");
+            fs::copy(&target, &replacement).unwrap();
+
+            let (result, state) = observed(|_| {
+                PreflightQueryGate::open_read_only_with_pre_open_hook_for_test(
+                    &fixture.path,
+                    StorageSizeLimits::production(),
+                    |database_path| {
+                        let target = sidecar_path(database_path, suffix);
+                        let detached = target.with_extension("detached-sidecar");
+                        #[cfg(windows)]
+                        assert!(fs::rename(&target, detached).is_err());
+                        #[cfg(unix)]
+                        {
+                            fs::rename(&target, detached).unwrap();
+                            fs::rename(&replacement, &target).unwrap();
+                        }
+                    },
+                )
+            });
+
+            #[cfg(windows)]
+            {
+                assert!(result.is_ok());
+                assert!(events(&state).contains(&TestEvent::SqliteOpenAttempt));
+            }
+            #[cfg(unix)]
+            {
+                let error = match result {
+                    Err(error) => error,
+                    Ok(_) => panic!("{suffix} substitution reached SQLite open"),
+                };
+                assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+                assert!(!events(&state).contains(&TestEvent::SqliteOpenAttempt));
+            }
+            drop(writer);
+        }
+    }
+
+    #[test]
+    fn public_preflight_maps_pre_open_limit_to_error_and_post_open_page_limit_to_preservation() {
+        let pre_open_directory = tempdir().unwrap();
+        let pre_open_policy = StoreLocationPolicyV1::new(pre_open_directory.path()).unwrap();
+        let pre_open_location = pre_open_policy.location("pre-open.sqlite3").unwrap();
+        let connection = Connection::open(pre_open_location.database_path()).unwrap();
+        connection.execute_batch(SCHEMA_V1_SQL).unwrap();
+        drop(connection);
+        sparse_file(
+            pre_open_location.database_path(),
+            MAX_PREOPEN_MAIN_BYTES + 1,
+        );
+        let error = match preflight_existing_v1(&pre_open_location) {
+            Err(error) => error,
+            Ok(_) => panic!("pre-open oversized storage must be a direct error"),
+        };
+        assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
+
+        let post_open_directory = tempdir().unwrap();
+        let post_open_policy = StoreLocationPolicyV1::new(post_open_directory.path()).unwrap();
+        let post_open_location = post_open_policy.location("post-open.sqlite3").unwrap();
+        let connection = Connection::open(post_open_location.database_path()).unwrap();
+        connection.execute_batch(SCHEMA_V1_SQL).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vault_state(singleton,password_wire_version,password_suite_id,password_envelope) VALUES(1,1,1,?1)",
+                [[1_u8].as_slice()],
+            )
+            .unwrap();
+        let page_size: i64 = connection
+            .query_row("PRAGMA page_size", [], |row| row.get(0))
+            .unwrap();
+        drop(connection);
+        let page_size = u64::try_from(page_size).unwrap();
+        let oversized_pages = MAX_DATABASE_PAGE_BYTES / page_size + 1;
+        let oversized_length = oversized_pages.checked_mul(page_size).unwrap();
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(post_open_location.database_path())
+            .unwrap();
+        file.set_len(oversized_length).unwrap();
+        file.seek(SeekFrom::Start(28)).unwrap();
+        file.write_all(&u32::try_from(oversized_pages).unwrap().to_be_bytes())
+            .unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        let header_before = read_prefix(post_open_location.database_path());
+
+        assert!(matches!(
+            preflight_existing_v1(&post_open_location).unwrap(),
+            ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation
+        ));
+        assert_eq!(
+            fs::metadata(post_open_location.database_path())
+                .unwrap()
+                .len(),
+            oversized_length
+        );
+        assert_eq!(
+            read_prefix(post_open_location.database_path()),
+            header_before
+        );
     }
 
     #[test]
