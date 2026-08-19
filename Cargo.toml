@@ -27,6 +27,5 @@ serde_json = "=1.0.151"
 thiserror = "=2.0.20"
 tempfile = "=3.27.0"
 trybuild = "=1.0.120"
-winapi-util = "=0.1.11"
 windows-sys = { version = "=0.61.2", default-features = false }
 zeroize = { version = "=1.9.0", features = ["derive"] }

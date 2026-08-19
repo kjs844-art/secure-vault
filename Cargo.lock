@@ -843,7 +843,6 @@ dependencies = [
  "vault-crypto",
  "vault-local-core",
  "vault-local-platform-windows",
- "winapi-util",
 ]
 
 [[package]]

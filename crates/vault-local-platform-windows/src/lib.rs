@@ -1,4 +1,4 @@
-//! Audited safe boundary for the two Win32 calls needed by the local vault store.
+//! Audited safe boundary for the Win32 APIs needed by the local vault store.
 //!
 //! The SQLite store crate keeps `unsafe` forbidden. This crate owns the small FFI surface and
 //! exports only a fail-closed lookup for the current user's OS-provided LocalAppData directory.
