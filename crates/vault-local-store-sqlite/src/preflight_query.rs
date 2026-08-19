@@ -8,7 +8,8 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::digest::LogicalDigestV1;
 use crate::rows::{
-    MAX_ROWS_PER_TABLE, MAX_TOTAL_REVISION_ENVELOPE_BYTES, UntrustedStoredRevisionV1,
+    MAX_CONFLICTS, MAX_HEADS, MAX_REVISIONS, MAX_TOTAL_REVISION_ENVELOPE_BYTES,
+    UntrustedStoredRevisionV1,
 };
 use crate::schema_contract::{
     self, SchemaColumnV1, SchemaForeignKeyV1, SchemaIndexV1, SchemaObjectV1, SchemaSnapshotV1,
@@ -40,7 +41,9 @@ const MAX_SCHEMA_TEXT_BYTES: usize = 64 * 1024;
 struct ScanLimits {
     page_rows: usize,
     query_limit: i64,
-    max_rows_per_table: usize,
+    max_revisions: usize,
+    max_heads: usize,
+    max_conflicts: usize,
     max_total_revision_envelope_bytes: usize,
 }
 
@@ -49,20 +52,30 @@ impl ScanLimits {
         Self {
             page_rows: KEYSET_PAGE_ROWS,
             query_limit: KEYSET_QUERY_LIMIT,
-            max_rows_per_table: MAX_ROWS_PER_TABLE,
+            max_revisions: MAX_REVISIONS,
+            max_heads: MAX_HEADS,
+            max_conflicts: MAX_CONFLICTS,
             max_total_revision_envelope_bytes: MAX_TOTAL_REVISION_ENVELOPE_BYTES,
         }
     }
 
     #[cfg(test)]
-    fn reduced(page_rows: usize, max_rows: usize, aggregate_bytes: usize) -> Self {
+    fn reduced(
+        page_rows: usize,
+        max_revisions: usize,
+        max_heads: usize,
+        max_conflicts: usize,
+        aggregate_bytes: usize,
+    ) -> Self {
         Self {
             page_rows,
             query_limit: i64::try_from(page_rows)
                 .expect("test page size must fit i64")
                 .checked_add(1)
                 .expect("test query limit must fit i64"),
-            max_rows_per_table: max_rows,
+            max_revisions,
+            max_heads,
+            max_conflicts,
             max_total_revision_envelope_bytes: aggregate_bytes,
         }
     }
@@ -410,7 +423,7 @@ impl PreflightQueryGate {
                 return Ok(true);
             }
             let _row = self.observer.begin_row("revisions");
-            increment_row_count(count, self.limits.max_rows_per_table)?;
+            increment_row_count(count, self.limits.max_revisions)?;
             let metadata = read_revision_metadata(row, &self.observer)?;
             let next_aggregate = aggregate.checked_add(metadata.envelope_length);
             self.observer
@@ -470,7 +483,7 @@ impl PreflightQueryGate {
                 return Ok(true);
             }
             let _row = self.observer.begin_row("heads");
-            increment_row_count(count, self.limits.max_rows_per_table)?;
+            increment_row_count(count, self.limits.max_heads)?;
             let head = HeadRow {
                 record_id: checked_blob(row, 0, 1, 2, 16, "heads.record_id", &self.observer)?,
                 revision_id: checked_blob(row, 3, 4, 5, 32, "heads.revision_id", &self.observer)?,
@@ -510,7 +523,7 @@ impl PreflightQueryGate {
                 return Ok(true);
             }
             let _row = self.observer.begin_row("conflicts");
-            increment_row_count(count, self.limits.max_rows_per_table)?;
+            increment_row_count(count, self.limits.max_conflicts)?;
             let conflict = ConflictRow {
                 record_id: checked_blob(row, 0, 1, 2, 16, "conflicts.record_id", &self.observer)?,
                 candidate_revision_id: checked_blob(
@@ -1194,9 +1207,92 @@ mod tests {
         let limits = ScanLimits::production();
         assert_eq!(limits.page_rows, 256);
         assert_eq!(limits.query_limit, 257);
-        assert_eq!(limits.max_rows_per_table, 100_000);
+        assert_eq!(limits.max_revisions, 10_000);
+        assert_eq!(limits.max_heads, 5_000);
+        assert_eq!(limits.max_conflicts, 5_000);
         assert_eq!(limits.max_total_revision_envelope_bytes, 128 * 1024 * 1024);
         assert_eq!(schema_contract::MAX_ENVELOPE_BYTES, 65_536);
+    }
+
+    #[test]
+    fn production_revision_cap_accepts_10000_and_rejects_10001() {
+        let fixture = Fixture::new();
+        let connection = fixture.connection_ignoring_checks();
+        connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        for index in 0..10_000 {
+            insert_revision(&connection, index, &[1]);
+        }
+        connection.execute_batch("COMMIT;").unwrap();
+        drop(connection);
+
+        let mut visited = 0_usize;
+        PreflightQueryGate::open_read_only(&fixture.path)
+            .unwrap()
+            .with_revisions(|_| {
+                visited += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(visited, 10_000);
+
+        let connection = fixture.connection_ignoring_checks();
+        insert_revision(&connection, 10_000, &[1]);
+        drop(connection);
+        let error = PreflightQueryGate::open_read_only(&fixture.path)
+            .unwrap()
+            .with_revisions(|_| Ok(()))
+            .unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
+    }
+
+    #[test]
+    fn production_head_cap_accepts_5000_and_rejects_5001() {
+        let fixture = Fixture::new();
+        let connection = fixture.connection_ignoring_checks();
+        connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        for index in 0..5_000 {
+            insert_head(&connection, index);
+        }
+        connection.execute_batch("COMMIT;").unwrap();
+        drop(connection);
+
+        let mut gate = PreflightQueryGate::open_read_only(&fixture.path).unwrap();
+        let mut digest = LogicalDigestV1::new();
+        gate.digest_heads(&mut digest).unwrap();
+        drop(gate);
+
+        let connection = fixture.connection_ignoring_checks();
+        insert_head(&connection, 5_000);
+        drop(connection);
+        let mut gate = PreflightQueryGate::open_read_only(&fixture.path).unwrap();
+        let mut digest = LogicalDigestV1::new();
+        let error = gate.digest_heads(&mut digest).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
+    }
+
+    #[test]
+    fn production_conflict_cap_accepts_5000_and_rejects_5001() {
+        let fixture = Fixture::new();
+        let connection = fixture.connection_ignoring_checks();
+        connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        for index in 0..5_000 {
+            insert_conflict(&connection, index);
+        }
+        connection.execute_batch("COMMIT;").unwrap();
+        drop(connection);
+
+        let mut gate = PreflightQueryGate::open_read_only(&fixture.path).unwrap();
+        let mut digest = LogicalDigestV1::new();
+        gate.digest_conflicts(&mut digest).unwrap();
+        drop(gate);
+
+        let connection = fixture.connection_ignoring_checks();
+        insert_conflict(&connection, 5_000);
+        drop(connection);
+        let mut gate = PreflightQueryGate::open_read_only(&fixture.path).unwrap();
+        let mut digest = LogicalDigestV1::new();
+        let error = gate.digest_conflicts(&mut digest).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
     }
 
     #[test]
@@ -1245,7 +1341,7 @@ mod tests {
                 insert_revision(&connection, index, &[index as u8]);
             }
             drop(connection);
-            let limits = ScanLimits::reduced(3, 3, 16);
+            let limits = ScanLimits::reduced(3, 3, 8, 8, 16);
             let (result, state) =
                 observed(|_| gate_with_limits(&fixture.path, limits).with_revisions(|_| Ok(())));
             if rows == 3 {
@@ -1283,7 +1379,7 @@ mod tests {
                 insert_head(&connection, index);
             }
             drop(connection);
-            let limits = ScanLimits::reduced(3, 3, 16);
+            let limits = ScanLimits::reduced(3, 8, 3, 8, 16);
             let (result, state) = observed(|_| {
                 let mut gate = gate_with_limits(&fixture.path, limits);
                 let mut digest = LogicalDigestV1::new();
@@ -1324,7 +1420,7 @@ mod tests {
                 insert_conflict(&connection, index);
             }
             drop(connection);
-            let limits = ScanLimits::reduced(3, 3, 16);
+            let limits = ScanLimits::reduced(3, 8, 8, 3, 16);
             let (result, state) = observed(|_| {
                 let mut gate = gate_with_limits(&fixture.path, limits);
                 let mut digest = LogicalDigestV1::new();
@@ -1364,7 +1460,7 @@ mod tests {
         insert_revision(&connection, 1, &[2, 3]);
         drop(connection);
 
-        let exact_limits = ScanLimits::reduced(8, 8, 3);
+        let exact_limits = ScanLimits::reduced(8, 8, 8, 8, 3);
         let (result, state) =
             observed(|_| gate_with_limits(&fixture.path, exact_limits).with_revisions(|_| Ok(())));
         assert!(result.is_ok());
@@ -1402,7 +1498,7 @@ mod tests {
             ]
         );
 
-        let plus_one_limits = ScanLimits::reduced(8, 8, 2);
+        let plus_one_limits = ScanLimits::reduced(8, 8, 8, 8, 2);
         let (result, state) = observed(|_| {
             let mut gate = gate_with_limits(&fixture.path, plus_one_limits);
             let mut digest = LogicalDigestV1::new();

@@ -1,6 +1,8 @@
 //! Bounded, untrusted row values.  This module never sees a SQLite handle.
 
-pub(crate) const MAX_ROWS_PER_TABLE: usize = 100_000;
+pub(crate) const MAX_REVISIONS: usize = 10_000;
+pub(crate) const MAX_HEADS: usize = 5_000;
+pub(crate) const MAX_CONFLICTS: usize = 5_000;
 pub(crate) const MAX_TOTAL_REVISION_ENVELOPE_BYTES: usize = 128 * 1024 * 1024;
 
 pub struct UntrustedStoredRevisionV1<'row> {

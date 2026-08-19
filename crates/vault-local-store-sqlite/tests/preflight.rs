@@ -121,6 +121,30 @@ fn same_shape_but_changed_trigger_sql_is_preserved() {
 }
 
 #[test]
+fn oversized_current_schema_catalog_is_preserved_without_writes() {
+    let (_directory, location) = initialized_location();
+    let connection = Connection::open(location.database_path()).unwrap();
+    let oversized_message = "x".repeat(70_000);
+    connection
+        .execute_batch(&format!(
+            "DROP TRIGGER conflicts_no_delete;
+             CREATE TRIGGER conflicts_no_delete
+             BEFORE DELETE ON conflicts
+             BEGIN
+                 SELECT RAISE(ABORT, '{oversized_message}');
+             END;"
+        ))
+        .unwrap();
+    drop(connection);
+    assert_outcome_preserves_live_main_and_wal(&location, |outcome| {
+        matches!(
+            outcome,
+            ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation
+        )
+    });
+}
+
+#[test]
 fn future_outer_password_envelope_requires_crypto_upgrade() {
     let (_directory, location) = initialized_location();
     let connection = Connection::open(location.database_path()).unwrap();

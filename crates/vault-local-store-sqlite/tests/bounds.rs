@@ -44,10 +44,15 @@ fn task_five_modules_cannot_bypass_the_closed_query_gate() {
 fn digest_and_row_boundaries_are_declared_without_attacker_count_allocation() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let gate = fs::read_to_string(root.join("preflight_query.rs")).unwrap();
+    let rows = fs::read_to_string(root.join("rows.rs")).unwrap();
     assert!(gate.contains("MAX_TOTAL_REVISION_ENVELOPE_BYTES"));
     assert!(gate.contains("checked_add"));
     assert!(gate.contains("length(envelope)"));
     assert!(gate.contains("typeof(envelope)"));
+    assert!(rows.contains("MAX_REVISIONS: usize = 10_000"));
+    assert!(rows.contains("MAX_HEADS: usize = 5_000"));
+    assert!(rows.contains("MAX_CONFLICTS: usize = 5_000"));
+    assert!(!rows.contains("MAX_ROWS_PER_TABLE"));
 }
 
 #[test]

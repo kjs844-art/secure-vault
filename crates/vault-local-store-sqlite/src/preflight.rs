@@ -7,7 +7,9 @@ use vault_crypto::{
 
 use crate::preflight_query::PreflightQueryGate;
 use crate::schema_contract::{self, APPLICATION_ID, STORAGE_SCHEMA_VERSION};
-use crate::{StorageError, StoreLocationV1, StoreLockV1, UntrustedStoredRevisionV1};
+use crate::{
+    StorageError, StorageErrorCode, StoreLocationV1, StoreLockV1, UntrustedStoredRevisionV1,
+};
 
 pub enum ExistingVaultPreflightOutcomeV1 {
     Current(ExistingVaultPreflightV1),
@@ -58,7 +60,18 @@ pub fn preflight_existing_v1(
     if user_version != STORAGE_SCHEMA_VERSION {
         return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
     }
-    let snapshot = gate.schema_snapshot()?;
+    let snapshot = match gate.schema_snapshot() {
+        Ok(snapshot) => snapshot,
+        Err(error)
+            if matches!(
+                error.code(),
+                StorageErrorCode::CorruptStorage | StorageErrorCode::LimitsExceeded
+            ) =>
+        {
+            return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
+        }
+        Err(error) => return Err(error),
+    };
     if schema_contract::verify_schema_snapshot(&snapshot).is_err() {
         return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
     }
