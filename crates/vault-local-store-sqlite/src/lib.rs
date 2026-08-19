@@ -3,6 +3,27 @@
 //! This alpha crate is not approved for real passwords, API keys, or recovery data.
 
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    not(feature = "test-seams"),
+    doc = r#"
+The deterministic integration seams are compiled out of ordinary downstream builds and cannot be
+named unless the explicit, non-default `test-seams` feature is enabled.
+
+```compile_fail
+use vault_local_store_sqlite::ExistingVaultPreflightV1;
+
+let _ = ExistingVaultPreflightV1::writable_open_count_for_test_v1();
+```
+
+```compile_fail
+use vault_local_store_sqlite::AuthenticatedVaultPreflightV1;
+
+fn cannot_observe_promotion(stage: AuthenticatedVaultPreflightV1<'_>) {
+    let _ = stage.promote_with_test_observer_v1(|_| {});
+}
+```
+"#
+)]
 
 mod commit;
 mod digest;

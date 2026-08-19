@@ -1,6 +1,8 @@
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rusqlite::Connection;
 use vault_crypto::{
     MasterPassword, PasswordEnvelopeStorageDispositionV1, create_vault_v0alpha1,
     inspect_password_envelope_for_storage_v1, unlock_vault_v0alpha1,
@@ -42,21 +44,57 @@ fn files_below(root: &Path) -> Vec<PathBuf> {
 }
 
 fn file_role(path: &Path, database: &Path) -> &'static str {
-    let text = path.to_string_lossy();
-    let database_text = database.to_string_lossy();
-    if path == database {
+    let name = path.file_name();
+    let database_name = database.file_name().unwrap();
+    let mut wal_name = OsString::from(database_name);
+    wal_name.push("-wal");
+    let mut shm_name = OsString::from(database_name);
+    shm_name.push("-shm");
+    let mut journal_name = OsString::from(database_name);
+    journal_name.push("-journal");
+    if name == Some(database_name) {
         "main database"
-    } else if text == format!("{database_text}-wal") {
+    } else if name == Some(wal_name.as_os_str()) {
         "wal"
-    } else if text == format!("{database_text}-shm") {
+    } else if name == Some(shm_name.as_os_str()) {
         "shared memory"
-    } else if text == format!("{database_text}-journal") {
+    } else if name == Some(journal_name.as_os_str()) {
         "rollback journal"
-    } else if text.ends_with(".lock") {
+    } else if path.to_string_lossy().ends_with(".lock") {
         "lock bookkeeping"
     } else {
         "temporary snapshot candidate"
     }
+}
+
+fn read_file_for_scan(path: &Path, role: &str) -> Vec<u8> {
+    if role == "lock bookkeeping" {
+        return Vec::new();
+    }
+    #[cfg(windows)]
+    if role == "shared memory" {
+        use std::fs::File;
+        use std::os::windows::fs::FileExt;
+
+        let file = File::open(path).unwrap();
+        let length = file.metadata().unwrap().len();
+        let mut bytes = Vec::with_capacity(length as usize);
+        for offset in 0..length {
+            let mut byte = [0_u8; 1];
+            match file.seek_read(&mut byte, offset) {
+                Ok(1) => bytes.push(byte[0]),
+                Ok(_) => panic!("shared-memory scan ended early"),
+                Err(error) if error.raw_os_error() == Some(33) => {
+                    // SQLite holds byte-range locks in SHM coordination bytes on Windows.
+                    // Insert a separator so marker matching cannot cross the unread lock byte.
+                    bytes.push(0);
+                }
+                Err(_) => panic!("shared-memory scan failed outside SQLite lock bookkeeping"),
+            }
+        }
+        return bytes;
+    }
+    fs::read(path).unwrap()
 }
 
 #[test]
@@ -107,11 +145,45 @@ fn no_known_synthetic_plaintext_marker_occurs_in_store_files() {
         .expect("authenticated current store should promote");
     assert_eq!(heads.len(), 3);
     drop(heads);
-    drop(store);
 
+    let scan_connection = Connection::open(location.database_path()).unwrap();
+    scan_connection
+        .execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;")
+        .unwrap();
+    let suite_id: i64 = scan_connection
+        .query_row(
+            "SELECT password_suite_id FROM vault_state WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    scan_connection
+        .execute(
+            "UPDATE vault_state SET password_suite_id=?1 WHERE singleton=1",
+            [suite_id + 1],
+        )
+        .unwrap();
+    scan_connection
+        .execute(
+            "UPDATE vault_state SET password_suite_id=?1 WHERE singleton=1",
+            [suite_id],
+        )
+        .unwrap();
+
+    let wal = PathBuf::from(format!("{}-wal", location.database_path().display()));
+    assert!(wal.exists(), "wal role was absent before plaintext scan");
+    assert!(
+        fs::metadata(&wal).unwrap().len() > 0,
+        "wal role was empty before plaintext scan"
+    );
+
+    let mut scanned_nonempty_wal = false;
     for path in files_below(directory.path()) {
-        let bytes = fs::read(&path).unwrap();
         let role = file_role(&path, location.database_path());
+        let bytes = read_file_for_scan(&path, role);
+        if role == "wal" {
+            scanned_nonempty_wal = !bytes.is_empty();
+        }
         for (marker_index, marker) in MARKERS.iter().enumerate() {
             assert!(
                 !bytes.windows(marker.len()).any(|window| window == *marker),
@@ -119,4 +191,7 @@ fn no_known_synthetic_plaintext_marker_occurs_in_store_files() {
             );
         }
     }
+    assert!(scanned_nonempty_wal, "non-empty wal role was not scanned");
+    drop(scan_connection);
+    drop(store);
 }

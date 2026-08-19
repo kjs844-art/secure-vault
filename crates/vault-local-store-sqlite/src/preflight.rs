@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-#[cfg(debug_assertions)]
+#[cfg(feature = "test-seams")]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use vault_crypto::{
@@ -24,7 +24,7 @@ use crate::{
     UntrustedStoredRevisionV1,
 };
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "test-seams")]
 static WRITABLE_OPEN_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[allow(
@@ -95,7 +95,7 @@ impl ExistingVaultPreflightV1 {
     }
 
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "test-seams")]
     pub fn writable_open_count_for_test_v1() -> usize {
         WRITABLE_OPEN_COUNT.load(Ordering::Relaxed)
     }
@@ -249,7 +249,7 @@ impl AuthenticatedVaultPreflightV1<'_> {
     }
 
     #[doc(hidden)]
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "test-seams")]
     pub fn promote_with_test_observer_v1(
         self,
         observer: impl FnMut(usize),
@@ -490,10 +490,10 @@ const fn padding_bucket_bytes(bucket: StoredPaddingBucketV0Alpha1) -> i64 {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "test-seams")]
 fn record_writable_open() {
     WRITABLE_OPEN_COUNT.fetch_add(1, Ordering::Relaxed);
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(feature = "test-seams"))]
 const fn record_writable_open() {}

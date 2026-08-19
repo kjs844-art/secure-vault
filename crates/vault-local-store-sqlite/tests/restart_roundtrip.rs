@@ -11,12 +11,60 @@ use vault_local_core::{
     OpenCredentialOutcome, StoredPaddingBucketV0Alpha1, SyntheticCredentialFixtureId,
     open_credential_record_v1, seal_synthetic_fixture_v1,
 };
+#[cfg(feature = "test-seams")]
+use vault_local_store_sqlite::StorageErrorCode;
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1, InitializeStoreOutcomeV1,
-    StorageErrorCode, StoreLocationPolicyV1, StoreLocationV1, initialize_v1, preflight_existing_v1,
+    StoreLocationPolicyV1, StoreLocationV1, initialize_v1, preflight_existing_v1,
 };
 
 const PASSWORD_TEXT: &str = "DEMO_VALUE_ONLY_restart_roundtrip.invalid";
+
+#[test]
+fn opened_plaintext_is_never_formatted_by_task_six_assertions() {
+    let source = include_str!("restart_roundtrip.rs");
+    let forbidden_provider_assertion = ["assert_", "eq!(opened.provider_name()"].concat();
+    let forbidden_item_assertion = ["assert_", "eq!(opened.item_name()"].concat();
+    let forbidden_file_bytes_assertion = ["assert_", "eq!(fs::read"].concat();
+    let forbidden_multiline_file_bytes_assertion = ["assert_", "eq!(\n        fs::read"].concat();
+    let forbidden_rows_assertion = ["assert_", "eq!(rows_after"].concat();
+    assert!(
+        !source.contains(&forbidden_provider_assertion)
+            && !source.contains(&forbidden_item_assertion)
+            && !source.contains(&forbidden_file_bytes_assertion)
+            && !source.contains(&forbidden_multiline_file_bytes_assertion)
+            && !source.contains(&forbidden_rows_assertion),
+        "opened plaintext assertion formatting detected"
+    );
+}
+
+#[test]
+fn deterministic_integration_seams_require_an_explicit_non_default_feature() {
+    let manifest = include_str!("../Cargo.toml");
+    let source = include_str!("../src/preflight.rs");
+    assert!(
+        manifest.contains("[features]\ndefault = []\ntest-seams = []"),
+        "test seam feature declaration is missing or enabled by default"
+    );
+    for api in [
+        "pub fn writable_open_count_for_test_v1",
+        "pub fn promote_with_test_observer_v1",
+    ] {
+        let position = source
+            .find(api)
+            .expect("required integration seam is missing");
+        let start = position.saturating_sub(160);
+        let attributes = &source[start..position];
+        assert!(
+            attributes.contains("#[cfg(feature = \"test-seams\")]"),
+            "integration seam lacks the explicit feature gate"
+        );
+        assert!(
+            !attributes.contains("#[cfg(debug_assertions)]"),
+            "ordinary debug builds expose an integration seam"
+        );
+    }
+}
 
 struct RestartFixture {
     _directory: TempDir,
@@ -122,7 +170,10 @@ fn encrypted_head_is_authenticated_promoted_and_opened_after_restart() {
     else {
         panic!("current encrypted head unexpectedly required an upgrade");
     };
-    assert_eq!(opened.provider_name(), "Example AI Workshop");
+    assert!(
+        opened.provider_name() == "Example AI Workshop",
+        "restored synthetic provider relationship mismatch"
+    );
     assert_eq!(opened.connection_count(), 1);
     drop(store);
 }
@@ -156,6 +207,7 @@ fn wrong_password_never_opens_writable_and_preserves_live_files_and_rows() {
                 .unwrap()
         })
         .collect();
+    #[cfg(feature = "test-seams")]
     let writable_before = ExistingVaultPreflightV1::writable_open_count_for_test_v1();
 
     let preflight = current_preflight(&fixture.location);
@@ -174,16 +226,23 @@ fn wrong_password_never_opens_writable_and_preserves_live_files_and_rows() {
                 .unwrap()
         })
         .collect();
+    #[cfg(feature = "test-seams")]
     assert_eq!(
         ExistingVaultPreflightV1::writable_open_count_for_test_v1(),
         writable_before
     );
-    assert_eq!(
-        fs::read(fixture.location.database_path()).unwrap(),
-        main_before
+    assert!(
+        fs::read(fixture.location.database_path()).unwrap() == main_before,
+        "main database changed after rejected authentication"
     );
-    assert_eq!(fs::read(wal_path).unwrap(), wal_before);
-    assert_eq!(rows_after, rows_before);
+    assert!(
+        fs::read(wal_path).unwrap() == wal_before,
+        "wal changed after rejected authentication"
+    );
+    assert!(
+        rows_after == rows_before,
+        "logical rows changed after rejected authentication"
+    );
 }
 
 #[test]
@@ -213,6 +272,7 @@ fn one_valid_change_restarts_full_preflight_and_authentication_once() {
 }
 
 #[test]
+#[cfg(feature = "test-seams")]
 fn a_second_change_during_the_single_restart_returns_busy() {
     let fixture = committed_fixture();
     let preflight = current_preflight(&fixture.location);
@@ -232,10 +292,11 @@ fn a_second_change_during_the_single_restart_returns_busy() {
             .unwrap();
     let connection = Connection::open(fixture.location.database_path()).unwrap();
     insert_valid_independent_head(&connection, first.persistence_projection_v1());
+    #[cfg(feature = "test-seams")]
     let writable_before = ExistingVaultPreflightV1::writable_open_count_for_test_v1();
 
     let error = match authenticated.promote_with_test_observer_v1(|restart_count| {
-        assert_eq!(restart_count, 1);
+        assert!(restart_count == 1, "unexpected promotion restart count");
         insert_valid_independent_head(&connection, second.persistence_projection_v1());
     }) {
         Ok(_) => panic!("a second logical change was unexpectedly promoted"),
@@ -271,6 +332,7 @@ fn empty_revision_graph_still_requires_the_password_derived_vault_commitment() {
         MasterPassword::from_utf8("DEMO_VALUE_ONLY_other_empty_vault.invalid".into()).unwrap();
     let other = create_vault_v0alpha1(&other_password).unwrap();
     let authenticator = CredentialStorageAuthenticatorV1::new(&other.session);
+    #[cfg(feature = "test-seams")]
     let writable_before = ExistingVaultPreflightV1::writable_open_count_for_test_v1();
     assert!(matches!(
         current_preflight(&location)
@@ -278,6 +340,7 @@ fn empty_revision_graph_still_requires_the_password_derived_vault_commitment() {
             .unwrap(),
         vault_local_store_sqlite::PreflightAuthenticationOutcomeV1::ReadOnlyPreservation
     ));
+    #[cfg(feature = "test-seams")]
     assert_eq!(
         ExistingVaultPreflightV1::writable_open_count_for_test_v1(),
         writable_before
