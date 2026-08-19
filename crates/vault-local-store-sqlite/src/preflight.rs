@@ -395,8 +395,39 @@ fn inspect_gate(mut gate: PreflightQueryGate) -> Result<StructuralGateOutcomeV1,
     if schema_contract::verify_schema_snapshot(&snapshot).is_err() {
         return Ok(StructuralGateOutcomeV1::ReadOnlyPreservation);
     }
-    if gate.verify_integrity().is_err() {
-        return Ok(StructuralGateOutcomeV1::ReadOnlyPreservation);
+    if let Err(error) = gate.verify_bounded_integrity() {
+        return if matches!(
+            error.code(),
+            StorageErrorCode::CorruptStorage | StorageErrorCode::LimitsExceeded
+        ) {
+            Ok(StructuralGateOutcomeV1::ReadOnlyPreservation)
+        } else {
+            Err(error)
+        };
+    }
+    // This digest walk is also the cap+1 admission pass for every application
+    // table. It must finish before foreign-key validation can inspect rows.
+    let logical_digest = match gate.validate_and_digest() {
+        Ok(digest) => digest,
+        Err(error)
+            if matches!(
+                error.code(),
+                StorageErrorCode::CorruptStorage | StorageErrorCode::LimitsExceeded
+            ) =>
+        {
+            return Ok(StructuralGateOutcomeV1::ReadOnlyPreservation);
+        }
+        Err(error) => return Err(error),
+    };
+    if let Err(error) = gate.verify_foreign_keys() {
+        return if matches!(
+            error.code(),
+            StorageErrorCode::CorruptStorage | StorageErrorCode::LimitsExceeded
+        ) {
+            Ok(StructuralGateOutcomeV1::ReadOnlyPreservation)
+        } else {
+            Err(error)
+        };
     }
     let password = match gate.password() {
         Ok(password) => password,
@@ -469,10 +500,6 @@ fn inspect_gate(mut gate: PreflightQueryGate) -> Result<StructuralGateOutcomeV1,
     if crypto_upgrade {
         return Ok(StructuralGateOutcomeV1::CryptoUpgradeRequired);
     }
-    let logical_digest = match gate.validate_and_digest() {
-        Ok(digest) => digest,
-        Err(_) => return Ok(StructuralGateOutcomeV1::ReadOnlyPreservation),
-    };
     Ok(StructuralGateOutcomeV1::Current {
         gate,
         password_envelope: password.envelope,
