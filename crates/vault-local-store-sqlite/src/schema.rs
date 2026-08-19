@@ -10,15 +10,13 @@ use vault_crypto::{
     inspect_password_envelope_for_storage_v1,
 };
 
+use crate::schema_contract::{APPLICATION_ID, MAX_ENVELOPE_BYTES, STORAGE_SCHEMA_VERSION};
 use crate::{
     StorageError, StorageErrorCode, StoreLocationV1, StoreLockV1, SyntheticWritableStoreV1,
 };
 
 pub const SCHEMA_V1_SQL: &str = include_str!("../../../contracts/storage-v1/schema-v1.sql");
 
-const APPLICATION_ID: i64 = 0x5356_4c54;
-const STORAGE_SCHEMA_VERSION: i64 = 1;
-const MAX_ENVELOPE_BYTES: i64 = 65_536;
 const COMMON_FLAGS: OpenFlags = OpenFlags::SQLITE_OPEN_NO_MUTEX
     .union(OpenFlags::SQLITE_OPEN_PRIVATE_CACHE)
     .union(OpenFlags::SQLITE_OPEN_NOFOLLOW)
@@ -288,7 +286,7 @@ fn validate_bootstrap(
 
 pub(crate) fn open_read_only(path: &Path) -> Result<Connection, StorageError> {
     let connection =
-        Connection::open_with_flags(path, COMMON_FLAGS | OpenFlags::SQLITE_OPEN_READ_ONLY)
+        Connection::open_with_flags(path, crate::schema_contract::read_only_open_flags())
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
     connection
         .busy_timeout(Duration::from_secs(5))
