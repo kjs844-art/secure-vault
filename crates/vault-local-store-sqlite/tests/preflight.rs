@@ -98,7 +98,49 @@ fn future_schema_short_circuits_before_v1_queries() {
 }
 
 #[test]
+fn same_shape_but_changed_trigger_sql_is_preserved() {
+    let (_directory, location) = initialized_location();
+    let connection = Connection::open(location.database_path()).unwrap();
+    connection
+        .execute_batch(
+            "DROP TRIGGER conflicts_no_delete;
+             CREATE TRIGGER conflicts_no_delete
+             BEFORE DELETE ON conflicts
+             BEGIN
+                 SELECT RAISE(ABORT, 'changed immutable conflict rule');
+             END;",
+        )
+        .unwrap();
+    drop(connection);
+    assert_outcome_preserves_live_main_and_wal(&location, |outcome| {
+        matches!(
+            outcome,
+            ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation
+        )
+    });
+}
+
+#[test]
 fn future_outer_password_envelope_requires_crypto_upgrade() {
+    let (_directory, location) = initialized_location();
+    let connection = Connection::open(location.database_path()).unwrap();
+    connection
+        .execute(
+            "UPDATE vault_state SET password_wire_version=1,password_envelope=?1",
+            [[0x82_u8, 0x01, 0x40].as_slice()],
+        )
+        .unwrap();
+    drop(connection);
+    assert_outcome_preserves_live_main_and_wal(&location, |outcome| {
+        matches!(
+            outcome,
+            ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired
+        )
+    });
+}
+
+#[test]
+fn future_outer_cache_version_mismatch_is_preserved() {
     let (_directory, location) = initialized_location();
     let connection = Connection::open(location.database_path()).unwrap();
     connection
@@ -111,7 +153,7 @@ fn future_outer_password_envelope_requires_crypto_upgrade() {
     assert_outcome_preserves_live_main_and_wal(&location, |outcome| {
         matches!(
             outcome,
-            ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired
+            ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation
         )
     });
 }

@@ -71,8 +71,16 @@ pub fn preflight_existing_v1(
     };
     let password_inspection = match inspect_password_envelope_for_storage_v1(&password.envelope) {
         Ok(PasswordEnvelopeStorageDispositionV1::Current(inspection)) => inspection,
-        Ok(PasswordEnvelopeStorageDispositionV1::FutureWire(_))
-        | Ok(PasswordEnvelopeStorageDispositionV1::UnsupportedSuite(_)) => {
+        Ok(PasswordEnvelopeStorageDispositionV1::FutureWire(inspection)) => {
+            if password.wire_version != i64::from(inspection.wire_version()) {
+                return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
+            }
+            return Ok(ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired);
+        }
+        Ok(PasswordEnvelopeStorageDispositionV1::UnsupportedSuite(inspection)) => {
+            if password.wire_version != i64::from(inspection.wire_version()) {
+                return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
+            }
             return Ok(ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired);
         }
         Err(_) => return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation),
@@ -85,31 +93,48 @@ pub fn preflight_existing_v1(
     let commitment = *password_inspection.vault_commitment();
     let mut crypto_upgrade = false;
     let mut malformed = false;
-    gate.with_revisions(|revision| {
-        match inspect_record_envelope_for_storage_v1(revision.envelope) {
-            Ok(RecordEnvelopeStorageDispositionV1::Current(inspection)) => {
-                if revision.record_id != inspection.record_id()
-                    || revision.revision_id != inspection.revision_id()
-                    || revision.wire_version != i64::from(inspection.wire_version())
-                    || revision.suite_id != i64::from(inspection.suite_id())
-                    || revision.key_epoch != i64::from(inspection.key_epoch())
-                    || revision.padding_bucket != inspection.padding_bucket_bytes() as i64
-                    || inspection.vault_commitment() != &commitment
-                {
-                    malformed = true;
+    if gate
+        .with_revisions(|revision| {
+            match inspect_record_envelope_for_storage_v1(revision.envelope) {
+                Ok(RecordEnvelopeStorageDispositionV1::Current(inspection)) => {
+                    if revision.record_id != inspection.record_id()
+                        || revision.revision_id != inspection.revision_id()
+                        || revision.wire_version != i64::from(inspection.wire_version())
+                        || revision.suite_id != i64::from(inspection.suite_id())
+                        || revision.key_epoch != i64::from(inspection.key_epoch())
+                        || revision.padding_bucket != inspection.padding_bucket_bytes() as i64
+                        || inspection.vault_commitment() != &commitment
+                    {
+                        malformed = true;
+                    }
                 }
+                Ok(RecordEnvelopeStorageDispositionV1::FutureWire(inspection)) => {
+                    if revision.wire_version == i64::from(inspection.wire_version()) {
+                        crypto_upgrade = true;
+                    } else {
+                        malformed = true;
+                    }
+                }
+                Ok(RecordEnvelopeStorageDispositionV1::UnsupportedSuite(inspection)) => {
+                    if revision.wire_version == i64::from(inspection.wire_version()) {
+                        crypto_upgrade = true;
+                    } else {
+                        malformed = true;
+                    }
+                }
+                Err(_) => malformed = true,
             }
-            Ok(RecordEnvelopeStorageDispositionV1::FutureWire(_))
-            | Ok(RecordEnvelopeStorageDispositionV1::UnsupportedSuite(_)) => crypto_upgrade = true,
-            Err(_) => malformed = true,
-        }
-        Ok(())
-    })?;
-    if crypto_upgrade {
-        return Ok(ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired);
+            Ok(())
+        })
+        .is_err()
+    {
+        return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
     }
     if malformed {
         return Ok(ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation);
+    }
+    if crypto_upgrade {
+        return Ok(ExistingVaultPreflightOutcomeV1::CryptoUpgradeRequired);
     }
     let logical_digest = match gate.validate_and_digest() {
         Ok(digest) => digest,
