@@ -5,7 +5,8 @@ use vault_crypto::{
     inspect_password_envelope_for_storage_v1,
 };
 use vault_local_store_sqlite::{
-    InitializeStoreOutcomeV1, SCHEMA_V1_SQL, StorageErrorCode, StoreLocationPolicyV1, initialize_v1,
+    InitializeStoreOutcomeV1, SCHEMA_V1_SQL, StorageErrorCode, StoreLocationPolicyV1,
+    TrustedLocalAppDataRootV1, initialize_v1,
 };
 
 const APPLICATION_ID: i64 = 0x5356_4c54;
@@ -246,7 +247,8 @@ fn numeric_metadata_accepts_only_final_integer_storage_classes_and_ranges() {
 #[test]
 fn initialize_is_atomic_idempotent_and_rejects_schema_drift() {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let (created, password_bytes) = bootstrap();
     let disposition = inspect_password_envelope_for_storage_v1(&password_bytes).unwrap();
@@ -301,7 +303,8 @@ fn initialize_is_atomic_idempotent_and_rejects_schema_drift() {
 #[test]
 fn application_id_is_classified_before_future_user_version() {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let foreign_location = policy.location("foreign.sqlite3").unwrap();
     let secure_vault_location = policy.location("secure-vault.sqlite3").unwrap();
     let (_created, password_bytes) = bootstrap();
