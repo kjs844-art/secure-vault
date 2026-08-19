@@ -842,7 +842,6 @@ dependencies = [
  "trybuild",
  "vault-crypto",
  "vault-local-core",
- "winapi-util",
  "vault-local-platform-windows",
 ]
 
