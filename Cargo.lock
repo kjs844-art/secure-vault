@@ -827,6 +827,7 @@ name = "vault-local-store-sqlite"
 version = "0.0.1-alpha.1"
 dependencies = [
  "blake3",
+ "libc",
  "rusqlite",
  "serde",
  "tempfile",
@@ -834,6 +835,7 @@ dependencies = [
  "trybuild",
  "vault-crypto",
  "vault-local-core",
+ "winapi-util",
 ]
 
 [[package]]
