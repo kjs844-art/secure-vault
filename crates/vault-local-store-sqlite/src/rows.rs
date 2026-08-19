@@ -4,6 +4,7 @@ pub(crate) const MAX_REVISIONS: usize = 10_000;
 pub(crate) const MAX_HEADS: usize = 5_000;
 pub(crate) const MAX_CONFLICTS: usize = 5_000;
 pub(crate) const MAX_TOTAL_REVISION_ENVELOPE_BYTES: usize = 128 * 1024 * 1024;
+pub(crate) type RevisionKeyV1 = ([u8; 16], [u8; 32]);
 
 pub struct UntrustedStoredRevisionV1<'row> {
     pub(crate) record_id: &'row [u8],
@@ -13,6 +14,12 @@ pub struct UntrustedStoredRevisionV1<'row> {
     pub(crate) key_epoch: i64,
     pub(crate) padding_bucket: i64,
     pub(crate) envelope: &'row [u8],
+}
+
+pub(crate) struct AuthenticatedRevisionNodeV1 {
+    pub(crate) record_id: [u8; 16],
+    pub(crate) revision_id: [u8; 32],
+    pub(crate) parent_revision_id: Option<[u8; 32]>,
 }
 
 impl UntrustedStoredRevisionV1<'_> {

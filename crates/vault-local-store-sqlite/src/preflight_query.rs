@@ -1,5 +1,6 @@
 //! The sole owner of the preflight SQLite connection and preflight SQL.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::digest::LogicalDigestV1;
 use crate::rows::{
-    MAX_CONFLICTS, MAX_HEADS, MAX_REVISIONS, MAX_TOTAL_REVISION_ENVELOPE_BYTES,
+    MAX_CONFLICTS, MAX_HEADS, MAX_REVISIONS, MAX_TOTAL_REVISION_ENVELOPE_BYTES, RevisionKeyV1,
     UntrustedStoredRevisionV1,
 };
 use crate::schema_contract::{
@@ -103,11 +104,39 @@ impl PreflightQueryGate {
         connection
             .load_extension_disable()
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+        connection
+            .execute_batch("BEGIN")
+            .map_err(|_| StorageError::new(StorageErrorCode::Busy))?;
         Ok(Self {
             connection,
             limits: ScanLimits::production(),
             observer: PreflightObserver::active(),
         })
+    }
+
+    pub(crate) fn open_hardened_writable(path: &Path) -> Result<Self, StorageError> {
+        let connection = crate::schema::open_existing_writable(path)?;
+        Ok(Self {
+            connection,
+            limits: ScanLimits::production(),
+            observer: PreflightObserver::active(),
+        })
+    }
+
+    pub(crate) fn begin_immediate(&self) -> Result<(), StorageError> {
+        self.connection
+            .execute_batch("BEGIN IMMEDIATE")
+            .map_err(|_| StorageError::new(StorageErrorCode::Busy))
+    }
+
+    pub(crate) fn commit_immediate(&self) -> Result<(), StorageError> {
+        self.connection
+            .execute_batch("COMMIT")
+            .map_err(|_| StorageError::new(StorageErrorCode::Io))
+    }
+
+    pub(crate) fn into_connection(self) -> Connection {
+        self.connection
     }
 
     pub(crate) fn application_id(&mut self) -> Result<i64, StorageError> {
@@ -310,6 +339,34 @@ impl PreflightQueryGate {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn current_head_keys(&mut self) -> Result<BTreeSet<RevisionKeyV1>, StorageError> {
+        let mut heads = BTreeSet::new();
+        let mut count = 0usize;
+        let mut cursor = None;
+        loop {
+            let has_more = self.scan_head_page(&mut cursor, &mut count, |head| {
+                let record_id: [u8; 16] = head
+                    .record_id
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| StorageError::new(StorageErrorCode::CorruptStorage))?;
+                let revision_id: [u8; 32] = head
+                    .revision_id
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| StorageError::new(StorageErrorCode::CorruptStorage))?;
+                if !heads.insert((record_id, revision_id)) {
+                    return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+                }
+                Ok(())
+            })?;
+            if !has_more {
+                break;
+            }
+        }
+        Ok(heads)
     }
 
     fn digest_vault_state(&mut self, digest: &mut LogicalDigestV1) -> Result<(), StorageError> {

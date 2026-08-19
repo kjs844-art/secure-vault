@@ -19,8 +19,9 @@ pub use commit::CommitOutcomeV1;
 pub use error::{StorageError, StorageErrorCode};
 pub use lock::{StoreLocationPolicyV1, StoreLocationV1, StoreLockV1};
 pub use preflight::{
-    ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1, preflight_existing_v1,
+    AuthenticatedVaultPreflightV1, ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1,
+    PreflightAuthenticationOutcomeV1, preflight_existing_v1,
 };
 pub use rows::UntrustedStoredRevisionV1;
 pub use schema::{InitializeStoreOutcomeV1, SCHEMA_V1_SQL, initialize_v1};
-pub use store::SyntheticWritableStoreV1;
+pub use store::{ExistingVaultOpenOutcomeV1, SyntheticWritableStoreV1};
