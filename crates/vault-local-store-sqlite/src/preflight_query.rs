@@ -1,7 +1,8 @@
 //! The sole owner of the preflight SQLite connection and preflight SQL.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use rusqlite::types::ValueRef;
@@ -22,6 +23,8 @@ use crate::{StorageError, StorageErrorCode};
 enum PreflightQueryStage {
     ApplicationId,
     UserVersion,
+    PageCount,
+    PageSize,
     SchemaObjects,
     TableXInfo,
     ForeignKeys,
@@ -37,6 +40,48 @@ enum PreflightQueryStage {
 const KEYSET_PAGE_ROWS: usize = 256;
 const KEYSET_QUERY_LIMIT: i64 = KEYSET_PAGE_ROWS as i64 + 1;
 const MAX_SCHEMA_TEXT_BYTES: usize = 64 * 1024;
+
+// These are local adversarial-input limits, not product quotas. The post-open
+// page budget starts with the admitted 128 MiB revision-envelope aggregate and
+// one 64 KiB password envelope. It then allows one 4 KiB SQLite page of
+// structure/slack per admitted logical row plus 64 fixed schema/B-tree pages.
+// The coarse pre-open main/WAL limits are twice that bounded page budget; SHM
+// is index metadata and receives one thirty-second of it plus one 32 KiB region.
+const SQLITE_ROW_OVERHEAD_BYTES: u64 = 4 * 1024;
+const SQLITE_FIXED_OVERHEAD_PAGES: u64 = 64;
+const MAX_LOGICAL_ROWS: u64 = 1 + MAX_REVISIONS as u64 + MAX_HEADS as u64 + MAX_CONFLICTS as u64;
+const MAX_DATABASE_PAGE_BYTES: u64 = MAX_TOTAL_REVISION_ENVELOPE_BYTES as u64
+    + schema_contract::MAX_ENVELOPE_BYTES as u64
+    + (MAX_LOGICAL_ROWS + SQLITE_FIXED_OVERHEAD_PAGES) * SQLITE_ROW_OVERHEAD_BYTES;
+const MAX_PREOPEN_MAIN_BYTES: u64 = MAX_DATABASE_PAGE_BYTES * 2;
+const MAX_PREOPEN_WAL_BYTES: u64 = MAX_DATABASE_PAGE_BYTES * 2;
+const MAX_PREOPEN_SHM_BYTES: u64 = MAX_DATABASE_PAGE_BYTES / 32 + 32 * 1024;
+
+#[derive(Clone, Copy)]
+struct StorageSizeLimits {
+    max_main_bytes: u64,
+    max_wal_bytes: u64,
+    max_shm_bytes: u64,
+}
+
+impl StorageSizeLimits {
+    const fn production() -> Self {
+        Self {
+            max_main_bytes: MAX_PREOPEN_MAIN_BYTES,
+            max_wal_bytes: MAX_PREOPEN_WAL_BYTES,
+            max_shm_bytes: MAX_PREOPEN_SHM_BYTES,
+        }
+    }
+
+    #[cfg(test)]
+    const fn reduced(max_main_bytes: u64, max_wal_bytes: u64, max_shm_bytes: u64) -> Self {
+        Self {
+            max_main_bytes,
+            max_wal_bytes,
+            max_shm_bytes,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 struct ScanLimits {
@@ -96,6 +141,16 @@ pub(crate) struct PreflightQueryGate {
 
 impl PreflightQueryGate {
     pub(crate) fn open_read_only(path: &Path) -> Result<Self, StorageError> {
+        Self::open_read_only_with_size_limits(path, StorageSizeLimits::production())
+    }
+
+    fn open_read_only_with_size_limits(
+        path: &Path,
+        size_limits: StorageSizeLimits,
+    ) -> Result<Self, StorageError> {
+        let observer = PreflightObserver::active();
+        validate_pre_open_file_sizes(path, size_limits)?;
+        observer.sqlite_open_attempt();
         let connection = Connection::open_with_flags(path, schema_contract::read_only_open_flags())
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
         connection
@@ -110,11 +165,13 @@ impl PreflightQueryGate {
         Ok(Self {
             connection,
             limits: ScanLimits::production(),
-            observer: PreflightObserver::active(),
+            observer,
         })
     }
 
     pub(crate) fn open_hardened_writable(path: &Path) -> Result<Self, StorageError> {
+        let size_limits = StorageSizeLimits::production();
+        validate_pre_open_file_sizes(path, size_limits)?;
         let connection = crate::schema::open_existing_writable(path)?;
         Ok(Self {
             connection,
@@ -267,24 +324,63 @@ impl PreflightQueryGate {
         })
     }
 
-    pub(crate) fn verify_integrity(&mut self) -> Result<(), StorageError> {
-        self.observe(PreflightQueryStage::Integrity);
-        let integrity: String = self
+    pub(crate) fn verify_bounded_integrity(&mut self) -> Result<(), StorageError> {
+        self.verify_bounded_integrity_with_page_limit(MAX_DATABASE_PAGE_BYTES)
+    }
+
+    fn verify_bounded_integrity_with_page_limit(
+        &mut self,
+        max_database_page_bytes: u64,
+    ) -> Result<(), StorageError> {
+        self.observe(PreflightQueryStage::PageCount);
+        let page_count: i64 = self
             .connection
-            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .query_row("PRAGMA page_count", [], |row| row.get(0))
             .map_err(corrupt)?;
-        if integrity != "ok" {
-            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        self.observe(PreflightQueryStage::PageSize);
+        let page_size: i64 = self
+            .connection
+            .query_row("PRAGMA page_size", [], |row| row.get(0))
+            .map_err(corrupt)?;
+        let page_count = u64::try_from(page_count)
+            .map_err(|_| StorageError::new(StorageErrorCode::CorruptStorage))?;
+        let page_size = u64::try_from(page_size)
+            .ok()
+            .filter(|size| *size > 0)
+            .ok_or_else(|| StorageError::new(StorageErrorCode::CorruptStorage))?;
+        let page_bytes = page_count
+            .checked_mul(page_size)
+            .ok_or_else(|| StorageError::new(StorageErrorCode::LimitsExceeded))?;
+        if page_bytes > max_database_page_bytes {
+            return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
         }
 
-        self.observe(PreflightQueryStage::ForeignKeyCheck);
-        let violations: i64 = self
+        self.observe(PreflightQueryStage::Integrity);
+        let integrity_ok = self
             .connection
-            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |row| {
-                row.get(0)
+            .query_row("PRAGMA integrity_check(1)", [], |row| {
+                Ok(matches!(row.get_ref(0)?, ValueRef::Text(b"ok")))
             })
             .map_err(corrupt)?;
-        if violations == 0 {
+        if integrity_ok {
+            Ok(())
+        } else {
+            Err(StorageError::new(StorageErrorCode::CorruptStorage))
+        }
+    }
+
+    pub(crate) fn verify_foreign_keys(&mut self) -> Result<(), StorageError> {
+        self.observe(PreflightQueryStage::ForeignKeyCheck);
+        let violation = self
+            .connection
+            .query_row(
+                "SELECT 1 FROM pragma_foreign_key_check LIMIT 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(corrupt)?;
+        if violation.is_none() {
             Ok(())
         } else {
             Err(StorageError::new(StorageErrorCode::CorruptStorage))
@@ -912,6 +1008,33 @@ fn checked_integer(
     }
 }
 
+fn validate_pre_open_file_sizes(
+    database_path: &Path,
+    limits: StorageSizeLimits,
+) -> Result<(), StorageError> {
+    for (path, maximum) in [
+        (database_path.to_path_buf(), limits.max_main_bytes),
+        (sidecar_path(database_path, "-wal"), limits.max_wal_bytes),
+        (sidecar_path(database_path, "-shm"), limits.max_shm_bytes),
+    ] {
+        match fs::metadata(path) {
+            Ok(metadata) if metadata.len() > maximum => {
+                return Err(StorageError::new(StorageErrorCode::LimitsExceeded));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(StorageError::new(StorageErrorCode::Io)),
+        }
+    }
+    Ok(())
+}
+
+fn sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
+    let mut path = database_path.as_os_str().to_os_string();
+    path.push(suffix);
+    PathBuf::from(path)
+}
+
 fn corrupt<T>(_error: T) -> StorageError {
     StorageError::new(StorageErrorCode::CorruptStorage)
 }
@@ -934,6 +1057,11 @@ impl PreflightObserver {
         {
             Self::default()
         }
+    }
+
+    fn sqlite_open_attempt(&self) {
+        #[cfg(test)]
+        self.event(TestEvent::SqliteOpenAttempt);
     }
 
     fn query(&self, _stage: PreflightQueryStage) {
@@ -1068,6 +1196,7 @@ impl Drop for RowObservation {
 #[cfg(test)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum TestEvent {
+    SqliteOpenAttempt,
     Query(PreflightQueryStage),
     PageBegin(&'static str),
     PageEnd(&'static str),
@@ -1102,6 +1231,7 @@ thread_local! {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::{self, OpenOptions};
     use std::path::{Path, PathBuf};
     use std::rc::Rc;
 
@@ -1174,6 +1304,23 @@ mod tests {
 
     fn count_event(events: &[TestEvent], predicate: impl Fn(&TestEvent) -> bool) -> usize {
         events.iter().filter(|event| predicate(event)).count()
+    }
+
+    fn sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
+        let mut path = database_path.as_os_str().to_os_string();
+        path.push(suffix);
+        PathBuf::from(path)
+    }
+
+    fn sparse_file(path: &Path, length: u64) {
+        OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_len(length)
+            .unwrap();
     }
 
     fn record_id(index: u64) -> [u8; 16] {
@@ -1269,6 +1416,164 @@ mod tests {
         assert_eq!(limits.max_conflicts, 5_000);
         assert_eq!(limits.max_total_revision_envelope_bytes, 128 * 1024 * 1024);
         assert_eq!(schema_contract::MAX_ENVELOPE_BYTES, 65_536);
+        let sizes = StorageSizeLimits::production();
+        assert_eq!(MAX_LOGICAL_ROWS, 20_001);
+        assert_eq!(
+            MAX_DATABASE_PAGE_BYTES,
+            128 * 1024 * 1024 + 65_536 + (20_001 + 64) * 4096
+        );
+        assert_eq!(sizes.max_main_bytes, MAX_DATABASE_PAGE_BYTES * 2);
+        assert_eq!(sizes.max_wal_bytes, MAX_DATABASE_PAGE_BYTES * 2);
+        assert_eq!(
+            sizes.max_shm_bytes,
+            MAX_DATABASE_PAGE_BYTES / 32 + 32 * 1024
+        );
+    }
+
+    #[test]
+    fn oversized_sparse_main_file_is_rejected_before_sqlite_open() {
+        let fixture = Fixture::new();
+        sparse_file(&fixture.path, 2 * 1024 * 1024);
+        let limits = StorageSizeLimits::reduced(1024 * 1024, u64::MAX, u64::MAX);
+
+        let (result, state) = observed(|_| {
+            PreflightQueryGate::open_read_only_with_size_limits(&fixture.path, limits)
+        });
+
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("oversized main file reached SQLite open"),
+        };
+        assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
+        assert!(!events(&state).contains(&TestEvent::SqliteOpenAttempt));
+        assert_eq!(fs::metadata(&fixture.path).unwrap().len(), 2 * 1024 * 1024);
+    }
+
+    #[test]
+    fn oversized_wal_and_shm_are_each_rejected_before_sqlite_open() {
+        for (suffix, limits) in [
+            ("-wal", StorageSizeLimits::reduced(u64::MAX, 4096, u64::MAX)),
+            ("-shm", StorageSizeLimits::reduced(u64::MAX, u64::MAX, 4096)),
+        ] {
+            let fixture = Fixture::new();
+            let sidecar = sidecar_path(&fixture.path, suffix);
+            sparse_file(&sidecar, 4097);
+
+            let (result, state) = observed(|_| {
+                PreflightQueryGate::open_read_only_with_size_limits(&fixture.path, limits)
+            });
+
+            let error = match result {
+                Err(error) => error,
+                Ok(_) => panic!("oversized sidecar reached SQLite open"),
+            };
+            assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
+            assert!(!events(&state).contains(&TestEvent::SqliteOpenAttempt));
+            assert_eq!(fs::metadata(sidecar).unwrap().len(), 4097);
+        }
+    }
+
+    #[test]
+    fn oversized_freelist_page_span_is_rejected_before_integrity_work() {
+        let fixture = Fixture::new();
+        let connection = fixture.connection_ignoring_checks();
+        connection
+            .execute_batch(
+                "CREATE TABLE bounded_preflight_filler(payload BLOB NOT NULL);
+                 INSERT INTO bounded_preflight_filler(payload) VALUES(zeroblob(524288));
+                 DROP TABLE bounded_preflight_filler;",
+            )
+            .unwrap();
+        let page_count: i64 = connection
+            .query_row("PRAGMA page_count", [], |row| row.get(0))
+            .unwrap();
+        let page_size: i64 = connection
+            .query_row("PRAGMA page_size", [], |row| row.get(0))
+            .unwrap();
+        let freelist_count: i64 = connection
+            .query_row("PRAGMA freelist_count", [], |row| row.get(0))
+            .unwrap();
+        drop(connection);
+        assert!(freelist_count > 0, "fixture must contain free pages");
+        let page_span = u64::try_from(page_count)
+            .unwrap()
+            .checked_mul(u64::try_from(page_size).unwrap())
+            .unwrap();
+        let limits = StorageSizeLimits::reduced(
+            fs::metadata(&fixture.path).unwrap().len(),
+            u64::MAX,
+            u64::MAX,
+        );
+
+        let (result, state) = observed(|_| {
+            let mut gate =
+                PreflightQueryGate::open_read_only_with_size_limits(&fixture.path, limits)?;
+            gate.verify_bounded_integrity_with_page_limit(page_span - 1)
+        });
+
+        assert_eq!(result.unwrap_err().code(), StorageErrorCode::LimitsExceeded);
+        let events = events(&state);
+        assert!(events.contains(&TestEvent::Query(PreflightQueryStage::PageCount)));
+        assert!(events.contains(&TestEvent::Query(PreflightQueryStage::PageSize)));
+        assert!(!events.contains(&TestEvent::Query(PreflightQueryStage::Integrity)));
+    }
+
+    #[test]
+    fn capped_table_scans_precede_first_foreign_key_violation_query() {
+        let directory = tempdir().unwrap();
+        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let location = policy.location("vault.sqlite3").unwrap();
+        let connection = Connection::open(location.database_path()).unwrap();
+        connection.execute_batch(SCHEMA_V1_SQL).unwrap();
+        connection
+            .execute(
+                "INSERT INTO vault_state(singleton,password_wire_version,password_suite_id,password_envelope) VALUES(1,1,1,?1)",
+                [[1_u8].as_slice()],
+            )
+            .unwrap();
+        connection
+            .execute_batch("PRAGMA foreign_keys=OFF;")
+            .unwrap();
+        connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        for index in 0..1024 {
+            insert_head(&connection, index);
+        }
+        connection.execute_batch("COMMIT;").unwrap();
+        drop(connection);
+
+        let (outcome, state) = observed(|_| preflight_existing_v1(&location).unwrap());
+        assert!(matches!(
+            outcome,
+            ExistingVaultPreflightOutcomeV1::ReadOnlyPreservation
+        ));
+        let queries = events(&state)
+            .into_iter()
+            .filter_map(|event| match event {
+                TestEvent::Query(stage) => Some(stage),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let foreign_key_check = queries
+            .iter()
+            .position(|stage| *stage == PreflightQueryStage::ForeignKeyCheck)
+            .unwrap();
+        for capped_stage in [
+            PreflightQueryStage::Revisions,
+            PreflightQueryStage::Heads,
+            PreflightQueryStage::Conflicts,
+        ] {
+            assert!(
+                queries
+                    .iter()
+                    .position(|stage| *stage == capped_stage)
+                    .is_some_and(|position| position < foreign_key_check),
+                "{capped_stage:?} must run before foreign-key validation"
+            );
+        }
+        let source = include_str!("preflight_query.rs");
+        assert!(source.contains("SELECT 1 FROM pragma_foreign_key_check LIMIT 1"));
+        let unbounded_count = ["SELECT count(", "*) FROM pragma_foreign_key_check"].concat();
+        assert!(!source.contains(&unbounded_count));
     }
 
     #[test]
