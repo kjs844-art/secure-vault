@@ -43,6 +43,8 @@ apps/android/             Kotlin Android 클라이언트
 apps/web/                 React + TypeScript 웹 클라이언트
 services/api/             Spring Boot 동기화·인증 API
 crates/vault-crypto/      공유 Rust 암호화 코어
+crates/vault-local-core/  합성 자격 증명 관계·영속 경계 코어
+crates/vault-local-store-sqlite/ 합성 암호문 SQLite adapter
 contracts/                버전이 지정된 암호문·동기화 계약
 docs/                     제품·보안·위협 모델 문서
 tests/fixtures/synthetic/ 합성 테스트 데이터 전용

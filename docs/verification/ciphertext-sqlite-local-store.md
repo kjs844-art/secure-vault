@@ -17,13 +17,7 @@
 
 ## 최종 gate
 
-아래 명령은 모두 같은 source root에서 실행하며 기존 승인 Cargo target을 사용했습니다. 문서에는 로컬 DB 경로, opaque ID, ciphertext 또는 fixture 값을 기록하지 않습니다.
-
-공통 환경:
-
-```powershell
-$env:CARGO_TARGET_DIR='C:\Users\USER\Desktop\secure-vault-recovery-design\target'
-```
+아래 명령은 모두 같은 source root와 사전 승인된 외부 build target에서 실행했습니다. 문서에는 로컬 경로, DB 경로, opaque ID, ciphertext 또는 fixture 값을 기록하지 않습니다.
 
 | 명령 | 종료 코드 | 관찰 결과 |
 |---|---:|---|
@@ -43,7 +37,13 @@ Bounded scan은 다음 exact command로 실행했습니다.
 rg -n --hidden --glob '!target/**' --glob '!.git/**' --glob '!docs/superpowers/**' -- '(?i)(sk-[a-z0-9]{16,}|api[_-]?key\s*[:=]\s*[A-Za-z0-9_\-]{12,}|secret\s*[:=]\s*[A-Za-z0-9_\-]{12,}|password\s*[:=]\s*[^\s]{8,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' .
 ```
 
-결과는 예상한 exit 1/no matches가 아니라 exit 0과 64개 candidate line이었습니다. Captured candidates는 합성 `MasterPassword` 생성·변수/함수 parameter와 compile-fail diagnostic 같은 source-level false positive였지만, binding regex의 no-match gate 자체는 통과하지 않았으므로 secret scan pass를 주장하지 않습니다.
+결과는 예상한 exit 1/no matches가 아니라 exit 0과 64개 candidate line이었습니다. 64개를 전부 수동 분류한 결과는 합성 fixture/data-flow 56개, Rust type parameter 6개, accessor 1개, compile-fail stderr 1개였고 plausible credential은 0개였습니다. 모두 binding regex의 broad `password` branch가 잡은 source-level false positive였지만, binding no-match gate 자체는 통과하지 않았으므로 secret scan pass를 주장하지 않습니다. Candidate 값은 이 문서에 복사하지 않았습니다.
+
+수동 분류를 보조하기 위해 실제 credential assignment 형태만 좁혀 보는 supplementary PCRE2 scan도 실행했습니다. 이 secondary scan은 exit 1, 0 matches였지만 binding scan을 대체하거나 그 결과를 exit 1로 재표현하지 않습니다.
+
+```powershell
+rg -n --pcre2 --hidden --glob '!target/**' --glob '!.git/**' --glob '!docs/superpowers/**' -- '(?i)(?:\b(?:api[_-]?key|client[_-]?secret|secret[_-]?key|password|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*(?:r#)?[\x22\x27][^\x22\x27\r\n]{8,}[\x22\x27]|\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[A-Za-z0-9-]{10,})\b|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----)' .
+```
 
 `gitleaks` 실행 파일은 이 환경에서 unavailable이었습니다. 따라서 `gitleaks git --redact`를 실행하지 않았고 통과했다고 주장하지 않습니다.
 
