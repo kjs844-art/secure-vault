@@ -19,9 +19,8 @@
 |---|---|---|
 | Rust 암호화 코어 | 구현·합성 테스트 완료 | 합성 마스터 비밀번호, Root Key 래핑, 항목별 암호화와 변조 거부를 검증했습니다. |
 | 자격 증명 데이터 모델 | 구현·합성 테스트 완료 | 서비스·계정·프로젝트·환경·MCP 연결 관계를 엄격한 형식으로 표현합니다. |
-| SQLite 암호문 저장소 Task 1~5 | 구현·검증 완료 | 암호화 revision 저장, canonical head, 충돌 보존, bounded read-only preflight까지 구현했습니다. |
-| SQLite 잠금 해제 후 재시작 복구 | 진행 예정(Task 6) | 비밀번호 인증 뒤 읽기 전용 DB를 쓰기 가능 상태로 승격하고 current head를 복구해야 합니다. |
-| 강제 종료 원자성 | 미구현(Task 7) | 커밋 직전·직후 프로세스 종료에서도 revision/head가 반쪽만 남지 않는지 증명해야 합니다. |
+| SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
+| SQLite 보안 문서·전체 검토(Task 8) | 진행 중, GitHub 푸시 보류 | Critical은 없었습니다. Important 3건 중 원격 드라이브·zero-byte 경로 바꿔치기 2건은 재리뷰를 통과했고, bounded preflight의 open→첫 쿼리 TOCTOU 1건은 Round 2 보강 중입니다. Windows Application Control 오류 4551 때문에 전체 workspace 통과도 아직 주장하지 않습니다. |
 | Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
@@ -53,7 +52,7 @@
 
 ## 4. 배포까지의 권장 순서
 
-1. 합성 SQLite Task 6~8을 끝내고 현재 로컬 저장 경계를 증명합니다.
+1. 합성 SQLite Task 1~8의 남은 전체 workspace 게이트를 허용된 빌드 환경에서 다시 완주하고, 현재 로컬 저장 경계를 최종 승인합니다.
 2. 복구 Key Slot·신뢰 기기·Android Keystore를 합성 데이터로 구현합니다.
 3. Android 고보증 클라이언트에서 금고 생성·잠금·복구 훈련을 완성합니다.
 4. Spring Boot API와 PostgreSQL에 암호문 동기화·체크포인트를 구현합니다.
@@ -113,3 +112,6 @@
 
 - 2026-08-20 01:32 KST — `codex/firstvibe-sqlite-store`와 GitHub 원격이 `cb6acb7`로 일치하는 것을 확인했습니다. 전체 workspace 기준선 테스트가 exit 0이었고, 아직 완료되지 않은 Task 6 구현 실행을 시작했습니다.
 - 2026-08-20 02:54 KST — Task 6의 암호화 SQLite 종료·재실행·잠금 해제, 잘못된 비밀번호 무쓰기, 미래 버전·손상 보존, live WAL 포함 합성 평문 부재 검증을 완료했습니다. 전체 Task 6 패키지 66개 테스트와 포맷·Clippy가 통과했고, 독립 재검토에서 Critical/Important 문제가 없음을 확인한 뒤 `418a55e`까지 GitHub에 비강제 푸시했습니다.
+- 2026-08-20 03:32 KST (2시간 중간 기록) — Task 7의 SQLite 커밋 전·후 프로세스 종료 원자성 테스트와 공개 API 차단 compile-fail 테스트를 로컬 `2307d4f`까지 구현했습니다. 집중 테스트·포맷·Clippy·일반 라이브러리 빌드는 통과했고 독립 리뷰를 시작했습니다. 정확한 최종 트리 전체 패키지 재실행은 Windows Application Control이 새 통합 테스트 실행 파일 하나를 실행 전에 차단해 아직 완료로 판정하거나 GitHub에 푸시하지 않았습니다.
+- 2026-08-20 03:55 KST — Task 7의 공개 preflight 타입 경계를 보강한 `416f53d`까지 독립 재검토를 통과해 GitHub에 비강제 푸시했습니다. 강제 종료 테스트 2개와 trybuild 경계 테스트가 통과했으며, 전체 패키지의 한 실행 파일은 계속 오류 4551로 실행 전 차단됐다고 기록했습니다.
+- 2026-08-20 05:29 KST — Task 8 전체 브랜치 리뷰에서 Critical은 없고 Important 3건이 확인됐습니다. 매핑 원격 드라이브 우회와 zero-byte 초기화 경로 바꿔치기는 수정 후 독립 재리뷰를 통과했습니다. bounded preflight는 1차 보강 뒤에도 SQLite open→첫 쿼리 사이의 더 좁은 TOCTOU가 남아 Round 2를 진행 중입니다. 합쳐진 브랜치의 preflight 24/24, 파일 소유권 10/10, 로컬 경로 정책 6/6, 포맷과 workspace Clippy는 통과했지만, 검증되지 않은 Task 8 변경은 GitHub에 푸시하지 않았습니다. 실제 Secret 입력 금지는 계속 유지합니다.
