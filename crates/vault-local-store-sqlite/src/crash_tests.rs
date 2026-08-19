@@ -18,7 +18,7 @@ use vault_local_core::{
 use crate::commit::{TransactionCrashPointV1, install_transaction_observer_for_test};
 use crate::{
     CommitOutcomeV1, ExistingVaultPreflightOutcomeV1, InitializeStoreOutcomeV1,
-    StoreLocationPolicyV1, initialize_v1, preflight_existing_v1,
+    StoreLocationPolicyV1, TrustedLocalAppDataRootV1, initialize_v1, preflight_existing_v1,
 };
 
 const FAILPOINT_ENV: &str = "SVLT_SYNTHETIC_CRASH_FAILPOINT";
@@ -201,7 +201,10 @@ fn synthetic_crash_child_entrypoint() {
     assert_eq!(case.marker(), marker);
     let root = PathBuf::from(std::env::var_os(ROOT_ENV).expect("child root is missing"));
     let _ = std::env::var_os(READY_ENV).expect("child readiness path is missing");
-    let policy = StoreLocationPolicyV1::new(&root).expect("child location policy failed");
+    let trusted_root =
+        TrustedLocalAppDataRootV1::for_current_user().expect("child trusted root failed");
+    let policy =
+        StoreLocationPolicyV1::new(&trusted_root, &root).expect("child location policy failed");
     let location = policy
         .location(DATABASE_NAME)
         .expect("child database location failed");
@@ -290,7 +293,10 @@ fn transaction_observer(point: TransactionCrashPointV1) {
 }
 
 fn reopen_through_normal_preflight(root: &Path) -> ReopenedShapeV1 {
-    let policy = StoreLocationPolicyV1::new(root).expect("parent location policy failed");
+    let trusted_root =
+        TrustedLocalAppDataRootV1::for_current_user().expect("parent trusted root failed");
+    let policy =
+        StoreLocationPolicyV1::new(&trusted_root, root).expect("parent location policy failed");
     let location = policy
         .location(DATABASE_NAME)
         .expect("parent database location failed");

@@ -823,6 +823,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vault-local-platform-windows"
+version = "0.0.1-alpha.1"
+dependencies = [
+ "windows-sys",
+]
+
+[[package]]
 name = "vault-local-store-sqlite"
 version = "0.0.1-alpha.1"
 dependencies = [
@@ -836,6 +843,7 @@ dependencies = [
  "vault-crypto",
  "vault-local-core",
  "winapi-util",
+ "vault-local-platform-windows",
 ]
 
 [[package]]

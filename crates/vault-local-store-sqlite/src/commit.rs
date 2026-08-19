@@ -552,7 +552,8 @@ impl TestDbFixtureV1 {
         };
 
         let directory = tempfile::tempdir().unwrap();
-        let policy = crate::StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = crate::TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = crate::StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let password =
             MasterPassword::from_utf8("DEMO_VALUE_ONLY_private_commit_fixture".to_owned()).unwrap();

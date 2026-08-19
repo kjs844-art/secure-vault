@@ -40,7 +40,7 @@ mod store;
 
 pub use commit::CommitOutcomeV1;
 pub use error::{StorageError, StorageErrorCode};
-pub use lock::{StoreLocationPolicyV1, StoreLocationV1, StoreLockV1};
+pub use lock::{StoreLocationPolicyV1, StoreLocationV1, StoreLockV1, TrustedLocalAppDataRootV1};
 pub use preflight::{
     AuthenticatedVaultPreflightV1, ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1,
     PreflightAuthenticationOutcomeV1, preflight_existing_v1,
