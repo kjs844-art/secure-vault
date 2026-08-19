@@ -38,6 +38,25 @@
 7. 폐기된 복구 수단과 과거 device roster가 최신 `key_epoch` 또는 `account_recovery_generation`에서 다시 유효해지면 안 됩니다.
 8. 로컬 관계 인덱스를 지워도 암호화 레코드에서 같은 자격 증명 연결 지도를 재구축할 수 있어야 합니다.
 
+## 현재 합성 SQLite slice가 구현한 방어
+
+- 의미 있는 금고 내용과 검색용 index를 SQLite 평문 column에 저장하지 않고 canonical envelope BLOB으로 보존합니다.
+- immutable revision과 expected-head CAS를 사용하며 stale candidate를 자동 덮어쓰지 않고 암호문 conflict로 보존합니다.
+- 기존 DB는 bounded read-only preflight와 모든 current envelope 인증을 통과한 뒤에만, 같은 process lock을 유지하며 writable 상태로 승격합니다.
+- wrong master password는 손상으로 분류하지 않고 writable connection이나 application write 없이 인증 실패로 끝냅니다.
+- 더 높은 storage/wire/inner version은 upgrade-required로 원본을 보존하고, current schema·envelope·graph 손상은 store-wide 읽기 전용 보존 상태로 둡니다. 자동 repair·delete·overwrite는 하지 않습니다.
+- process 종료 테스트는 revision/head/conflict transaction의 commit 전·후 가시성을 검증합니다. 임의 hardware power loss, filesystem 또는 storage hardware의 잘못된 sync 동작까지 증명하지 않습니다.
+
+## 현재 탐지하지 못하는 rollback·누락
+
+현재 `v0alpha1`에는 signed event/manifest, authenticated checkpoint chain 또는 OS monotonic anchor가 없습니다. 따라서 공격자가 유효한 상태를 사용해 다음을 수행하면 탐지하지 못할 수 있으며, 위 보안 불변조건 5는 아직 충족되지 않습니다.
+
+- 과거의 정상 DB와 WAL 전체 snapshot으로 교체
+- canonical head를 과거의 유효 revision으로 되돌림
+- 논리 record와 그 revision row 전체를 누락
+
+RO→RW 사이의 BLAKE3 logical digest는 같은 process의 두 단계 사이 변경만 탐지합니다. 저장·인증된 freshness proof가 아니며 rollback 또는 누락 anchor로 사용할 수 없습니다.
+
 ## 보장하지 않는 것
 
 - 감염·루팅된 기기 또는 잠금 해제 중인 악성 브라우저에서의 평문 보호
@@ -51,4 +70,4 @@
 
 ## 출시 차단 조건
 
-암호 설계 외부 검토, 의존성 공급망 검토, 복구·분실 기기 훈련, 침투 테스트, 로그 비밀정보 검사, 웹 CSP 검증을 통과하기 전에는 실제 Secret 공개 베타를 시작하지 않습니다.
+rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 설계·구현 검토, 의존성 공급망 검토, 복구·분실 기기 및 backup/export 복구 훈련, 침투 테스트, 로그 비밀정보 검사와 웹 CSP 검증을 통과하기 전에는 실제 Secret 공개 베타를 시작하지 않습니다.

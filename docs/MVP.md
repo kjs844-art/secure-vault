@@ -8,7 +8,7 @@ OpenAI, Claude, Manus, Grok, Meta, Supabase 등 여러 개발·AI 서비스를 �
 
 ## 현재 구현 상태
 
-현재 구현·자동 검증된 범위는 합성 데이터 전용 `v0alpha1` 로컬 암호화 하네스와 합성 자격 증명 로컬 코어입니다.
+현재 구현된 범위는 합성 데이터 전용 `v0alpha1` 로컬 암호화 코어와 암호문 SQLite 영속 저장 slice입니다. 이것은 사용할 수 있는 비밀번호 관리자가 아닙니다.
 
 - 합성 비밀번호로 Vault Root Key를 생성·래핑하고 다시 잠금 해제
 - 타입이 고정된 `CredentialItemV1`과 세 가지 합성 관계 fixture
@@ -16,10 +16,17 @@ OpenAI, Claude, Manus, Grok, Meta, Supabase 등 여러 개발·AI 서비스를 �
 - 세션을 버린 뒤 다시 잠금 해제해 동일한 관계를 복구
 - canonical CBOR만 허용하는 엄격한 payload 및 envelope 코덱
 - 비밀번호 오류, epoch·문맥 교체, 암호문 변조, 미래 버전과 비정상 인코딩 처리
+- 의미 있는 평문 metadata를 두지 않는 SQLite schema와 bounded read-only preflight
+- immutable revision, expected-head CAS, stale candidate의 암호문 충돌 보존
+- 올바른 합성 비밀번호 인증 후 같은 process lock을 유지하는 writable 승격과 current-head 복원
+- wrong password 무쓰기, future version 원문 보존, current 손상의 store-wide 읽기 전용 보존
+- DB/WAL 계열 합성 marker scan, process-crash transaction 원자성, secret-bearing API compile-fail 경계
 
 **실제 비밀번호, API 키, Secret, 복구 코드 또는 사용자 데이터를 입력하거나 가져오는 것은 금지합니다.**
 
-디스크 DB·파일 영속 저장, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 복구 제품 정책 ADR은 승인됐지만 wire·Android 기기 키 후속 ADR, 합성 구현, 독립 암호 설계·구현 검토와 복구 훈련은 아직 남아 있습니다.
+실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합, Web/Android UI, 지원되는 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
+
+실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 
 GitHub는 소스 코드와 설계의 백업 장소일 뿐 사용자 금고 데이터의 백업 장소가 아닙니다. 현재 코어에는 실제 자격 증명을 입력하면 안 됩니다.
 

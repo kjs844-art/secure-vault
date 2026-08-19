@@ -4,7 +4,7 @@
 
 여러 서비스의 로그인 정보, 비밀번호, API 키, Secret, MCP 연결 정보를 서비스 → 계정 → 프로젝트 → 환경 단위로 정리하고, 각 자격 증명을 어느 앱·플러그인·MCP 서버·배포 환경에 연결했는지 기록합니다. 키를 회전할 때 사용자가 기록한 모든 연결처를 갱신하도록 안내하는 것이 제품의 핵심 차별점입니다.
 
-> 현재 단계: **합성 데이터 전용 `v0alpha1` 로컬 암호화 하네스**. 실제 비밀번호, API 키, 복구 키, 개인 금고 데이터는 입력·가져오기·저장하지 않습니다.
+> 현재 단계: **합성 데이터 전용 `v0alpha1` 암호문 SQLite 영속 저장 코어**. 실제 비밀번호, API 키, 복구 키, 개인 금고 데이터는 입력·가져오기·저장하지 않습니다. 아직 사용할 수 있는 비밀번호 관리자가 아닙니다.
 
 ## 현재 검증된 범위
 
@@ -16,10 +16,16 @@
 - 세션을 버리고 동일한 합성 비밀번호로 다시 잠금 해제한 뒤 관계를 복구하는 흐름
 - canonical CBOR만 허용하는 엄격한 payload 및 `v0alpha1` 코덱
 - 비밀번호 오류, epoch·문맥 교체, 암호문 변조, 미래 버전과 비정상 인코딩 처리 테스트
+- 의미 있는 평문 metadata 없이 password/record envelope를 저장하는 hardened SQLite schema
+- immutable revision, expected-head CAS와 stale candidate 암호문 충돌 보존
+- bounded read-only preflight 뒤 올바른 합성 비밀번호로 인증하고, 같은 process lock을 유지한 채 writable 상태로 승격하는 흐름
+- DB를 닫고 다시 연 뒤 현재 head 관계를 인증·복원하는 재시작 흐름과 wrong-password 무쓰기 검증
+- future schema/wire의 upgrade-required 보존, current 손상의 store-wide 읽기 전용 보존, 저장 파일 합성 marker scan
+- transaction 전·후 process 종료 원자성 및 secret-bearing API compile-fail 경계
 
-다음 기능은 **아직 구현되지 않았습니다**: 디스크 DB·파일 영속 저장, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 앱스토어 출시, plugin/MCP 실행과 실제 Secret 지원.
+다음 기능은 **아직 구현되지 않았습니다**: 실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 앱스토어 출시, plugin/MCP 실행, 지원되는 backup/export와 실제 Secret 지원.
 
-실제 자격 증명을 다루기 위한 다음 게이트는 **독립 암호 설계·구현 검토**와 승인된 **복구/기기 키 ADR의 구현·훈련**입니다. 두 게이트가 끝나기 전에는 실제 비밀번호나 API 키를 이 알파에 입력하면 안 됩니다.
+실제 자격 증명을 다루려면 rollback/누락 탐지 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트, backup/export 복구 훈련을 모두 완료해야 합니다. 이 게이트들이 끝나기 전에는 실제 비밀번호나 API 키를 이 알파에 입력하면 안 됩니다.
 
 ## 제품 원칙
 
@@ -61,6 +67,8 @@ GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 �
 - [AI 자격 증명·MCP 연결 지도 설계](docs/superpowers/specs/2026-08-14-ai-credential-relationship-design.md)
 - [`v0alpha1` 합성 하네스 검증 기록](docs/verification/v0alpha1-synthetic-crypto-harness.md)
 - [합성 자격 증명 로컬 코어 검증 기록](docs/verification/synthetic-credential-local-core.md)
+- [암호문 SQLite 로컬 저장소](crates/vault-local-store-sqlite/README.md)
+- [암호문 SQLite 로컬 저장소 검증 기록](docs/verification/ciphertext-sqlite-local-store.md)
 
 ## 개발 상태
 
