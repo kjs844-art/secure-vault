@@ -1995,7 +1995,9 @@ mod tests {
     #[test]
     fn public_preflight_maps_pre_open_limit_to_error_and_post_open_page_limit_to_preservation() {
         let pre_open_directory = tempdir().unwrap();
-        let pre_open_policy = StoreLocationPolicyV1::new(pre_open_directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let pre_open_policy =
+            StoreLocationPolicyV1::new(&trusted_root, pre_open_directory.path()).unwrap();
         let pre_open_location = pre_open_policy.location("pre-open.sqlite3").unwrap();
         let connection = Connection::open(pre_open_location.database_path()).unwrap();
         connection.execute_batch(SCHEMA_V1_SQL).unwrap();
@@ -2011,7 +2013,8 @@ mod tests {
         assert_eq!(error.code(), StorageErrorCode::LimitsExceeded);
 
         let post_open_directory = tempdir().unwrap();
-        let post_open_policy = StoreLocationPolicyV1::new(post_open_directory.path()).unwrap();
+        let post_open_policy =
+            StoreLocationPolicyV1::new(&trusted_root, post_open_directory.path()).unwrap();
         let post_open_location = post_open_policy.location("post-open.sqlite3").unwrap();
         let connection = Connection::open(post_open_location.database_path()).unwrap();
         connection.execute_batch(SCHEMA_V1_SQL).unwrap();
@@ -2060,7 +2063,8 @@ mod tests {
     #[test]
     fn capped_table_scans_precede_first_foreign_key_violation_query() {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let connection = Connection::open(location.database_path()).unwrap();
         connection.execute_batch(SCHEMA_V1_SQL).unwrap();
