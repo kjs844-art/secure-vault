@@ -6,13 +6,37 @@ use vault_crypto::{
     inspect_password_envelope_for_storage_v1,
 };
 use vault_local_store_sqlite::{
-    InitializeStoreOutcomeV1, StorageErrorCode, StoreLocationPolicyV1, StoreLockV1, initialize_v1,
+    InitializeStoreOutcomeV1, StorageErrorCode, StoreLocationPolicyV1, StoreLockV1,
+    TrustedLocalAppDataRootV1, initialize_v1,
 };
+
+#[test]
+fn os_local_app_data_capability_admits_an_existing_local_descendant() {
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let temp_root = trusted_root.path().join("Temp");
+    let directory = tempfile::Builder::new()
+        .prefix("svlt-local-root-")
+        .tempdir_in(temp_root)
+        .unwrap();
+
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
+    let location = policy.location("vault.sqlite3").unwrap();
+
+    assert_eq!(location.database_path().parent(), Some(directory.path()));
+
+    let outside_local_app_data = trusted_root.path().parent().unwrap();
+    let error = match StoreLocationPolicyV1::new(&trusted_root, outside_local_app_data) {
+        Ok(_) => panic!("path outside OS LocalAppData was admitted"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), StorageErrorCode::UnsupportedPlatform);
+}
 
 #[test]
 fn adjacent_lock_is_exclusive_and_reacquirable_after_drop() {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let first = StoreLockV1::try_acquire(&location).unwrap();
     let second_error = match StoreLockV1::try_acquire(&location) {
@@ -31,7 +55,8 @@ fn adjacent_lock_is_exclusive_and_reacquirable_after_drop() {
 #[test]
 fn policy_rejects_relative_parent_repository_cloud_and_uri_locations() {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     for path in [
         "../escape.sqlite3",
         ".git/vault.sqlite3",
@@ -48,20 +73,22 @@ fn policy_rejects_relative_parent_repository_cloud_and_uri_locations() {
             "{path}"
         );
     }
-    let relative_error = match StoreLocationPolicyV1::new(std::path::Path::new("relative-root")) {
-        Ok(_) => panic!("relative app root was accepted"),
-        Err(error) => error,
-    };
+    let relative_error =
+        match StoreLocationPolicyV1::new(&trusted_root, std::path::Path::new("relative-root")) {
+            Ok(_) => panic!("relative app root was accepted"),
+            Err(error) => error,
+        };
     assert_eq!(relative_error.code(), StorageErrorCode::UnsupportedPlatform);
 }
 
 #[test]
 fn policy_rejects_deep_repository_ancestors_and_provider_prefixed_cloud_roots() {
+    let platform_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
     let trusted_root = tempdir().unwrap();
     let marker_parent = trusted_root.path().join("a/b");
     fs::create_dir_all(marker_parent.join(".git")).unwrap();
     fs::create_dir_all(marker_parent.join("c/d/e")).unwrap();
-    let policy = StoreLocationPolicyV1::new(trusted_root.path()).unwrap();
+    let policy = StoreLocationPolicyV1::new(&platform_root, trusted_root.path()).unwrap();
     let repository_error = match policy.location("a/b/c/d/e/vault.sqlite3") {
         Ok(_) => panic!("deep repository descendant was accepted"),
         Err(error) => error,
@@ -95,14 +122,15 @@ fn policy_rejects_deep_repository_ancestors_and_provider_prefixed_cloud_roots() 
     fs::create_dir(repository_above_root.path().join(".git")).unwrap();
     let trusted_app_data = repository_above_root.path().join("trusted-app-data");
     fs::create_dir(&trusted_app_data).unwrap();
-    let policy = StoreLocationPolicyV1::new(&trusted_app_data).unwrap();
+    let policy = StoreLocationPolicyV1::new(&platform_root, &trusted_app_data).unwrap();
     policy.location("vault.sqlite3").unwrap();
 }
 
 #[test]
 fn failed_zero_byte_initialization_restores_pre_call_state_and_can_retry() {
     let directory = tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     fs::write(location.database_path(), []).unwrap();
 

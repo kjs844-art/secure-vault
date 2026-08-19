@@ -838,7 +838,7 @@ mod tests {
     use vault_crypto::PasswordEnvelopeStorageDispositionV1;
 
     use super::*;
-    use crate::StoreLocationPolicyV1;
+    use crate::{StoreLocationPolicyV1, TrustedLocalAppDataRootV1};
 
     const HARDENING_STEPS: usize = 13;
     const SYNTHETIC_PASSWORD_ENVELOPE: &[u8] = &[
@@ -872,7 +872,8 @@ mod tests {
         precreate_zero: bool,
     ) {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         if precreate_zero {
             fs::write(location.database_path(), []).unwrap();
@@ -965,7 +966,8 @@ mod tests {
     fn cleanup_never_deletes_or_truncates_a_replacement_path() {
         let bytes = bootstrap_bytes();
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
 
         with_bootstrap(&bytes, |bootstrap| {
@@ -1001,7 +1003,8 @@ mod tests {
     fn cleanup_preserves_an_injected_lingering_sidecar_exactly() {
         let bytes = bootstrap_bytes();
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
 
         with_bootstrap(&bytes, |bootstrap| {

@@ -14,7 +14,8 @@ use vault_local_core::{
 };
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, InitializeStoreOutcomeV1, PreflightAuthenticationOutcomeV1,
-    StoreLocationPolicyV1, StoreLocationV1, initialize_v1, preflight_existing_v1,
+    StoreLocationPolicyV1, StoreLocationV1, TrustedLocalAppDataRootV1, initialize_v1,
+    preflight_existing_v1,
 };
 
 struct Fixture {
@@ -38,7 +39,8 @@ struct ExactSnapshot {
 
 fn fixture() -> Fixture {
     let directory = tempfile::tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let password =
         MasterPassword::from_utf8("DEMO_VALUE_ONLY_mutation_matrix.invalid".into()).unwrap();

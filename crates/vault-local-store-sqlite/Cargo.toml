@@ -16,6 +16,7 @@ rusqlite.workspace = true
 thiserror.workspace = true
 vault-crypto = { path = "../vault-crypto" }
 vault-local-core = { path = "../vault-local-core" }
+vault-local-platform-windows = { path = "../vault-local-platform-windows" }
 
 [dev-dependencies]
 serde.workspace = true

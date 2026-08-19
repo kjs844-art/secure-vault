@@ -1,0 +1,7 @@
+error[E0451]: field `app_root` of struct `TrustedLocalAppDataRootV1` is private
+ --> tests/ui/secret_traits/trusted_root_constructor.rs:7:9
+  |
+6 |     let _ = TrustedLocalAppDataRootV1 {
+  |             ------------------------- in this type
+7 |         app_root: PathBuf::from(r"Z:\mapped-remote"),
+  |         ^^^^^^^^ private field

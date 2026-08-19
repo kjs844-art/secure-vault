@@ -12,7 +12,7 @@ use vault_local_core::{
 };
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, InitializeStoreOutcomeV1, StoreLocationPolicyV1,
-    initialize_v1, preflight_existing_v1,
+    TrustedLocalAppDataRootV1, initialize_v1, preflight_existing_v1,
 };
 
 const PASSWORD_TEXT: &str = "DEMO_VALUE_ONLY_plaintext_scan_password.invalid";
@@ -100,7 +100,8 @@ fn read_file_for_scan(path: &Path, role: &str) -> Vec<u8> {
 #[test]
 fn no_known_synthetic_plaintext_marker_occurs_in_store_files() {
     let directory = tempfile::tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let password = MasterPassword::from_utf8(PASSWORD_TEXT.to_owned()).unwrap();
     let created = create_vault_v0alpha1(&password).unwrap();

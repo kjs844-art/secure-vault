@@ -15,7 +15,8 @@ use vault_local_core::{
 use vault_local_store_sqlite::StorageErrorCode;
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1, InitializeStoreOutcomeV1,
-    StoreLocationPolicyV1, StoreLocationV1, initialize_v1, preflight_existing_v1,
+    StoreLocationPolicyV1, StoreLocationV1, TrustedLocalAppDataRootV1, initialize_v1,
+    preflight_existing_v1,
 };
 
 const PASSWORD_TEXT: &str = "DEMO_VALUE_ONLY_restart_roundtrip.invalid";
@@ -40,7 +41,7 @@ fn opened_plaintext_is_never_formatted_by_task_six_assertions() {
 
 #[test]
 fn deterministic_integration_seams_require_an_explicit_non_default_feature() {
-    let manifest = include_str!("../Cargo.toml");
+    let manifest = include_str!("../Cargo.toml").replace("\r\n", "\n");
     let source = include_str!("../src/preflight.rs");
     assert!(
         manifest.contains("[features]\ndefault = []\ntest-seams = []"),
@@ -73,7 +74,8 @@ struct RestartFixture {
 
 fn committed_fixture() -> RestartFixture {
     let directory = tempfile::tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("vault.sqlite3").unwrap();
     let password = MasterPassword::from_utf8(PASSWORD_TEXT.to_owned()).unwrap();
     let created = create_vault_v0alpha1(&password).unwrap();
@@ -312,7 +314,8 @@ fn a_second_change_during_the_single_restart_returns_busy() {
 #[test]
 fn empty_revision_graph_still_requires_the_password_derived_vault_commitment() {
     let directory = tempfile::tempdir().unwrap();
-    let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
     let location = policy.location("empty.sqlite3").unwrap();
     let password = MasterPassword::from_utf8("DEMO_VALUE_ONLY_empty_vault.invalid".into()).unwrap();
     let created = create_vault_v0alpha1(&password).unwrap();

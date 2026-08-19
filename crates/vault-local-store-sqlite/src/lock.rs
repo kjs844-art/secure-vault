@@ -4,6 +4,10 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::{StorageError, StorageErrorCode};
 
+pub struct TrustedLocalAppDataRootV1 {
+    app_root: PathBuf,
+}
+
 pub struct StoreLocationPolicyV1 {
     app_root: PathBuf,
 }
@@ -17,8 +21,29 @@ pub struct StoreLockV1 {
     file: File,
 }
 
+impl TrustedLocalAppDataRootV1 {
+    pub fn for_current_user() -> Result<Self, StorageError> {
+        let app_root = vault_local_platform_windows::trusted_local_app_data_root_v1()
+            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+        if !app_root.is_absolute()
+            || path_is_network_like(&app_root)
+            || path_is_disallowed(&app_root)
+        {
+            return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
+        }
+        Ok(Self { app_root })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.app_root
+    }
+}
+
 impl StoreLocationPolicyV1 {
-    pub fn new(app_root: &Path) -> Result<Self, StorageError> {
+    pub fn new(
+        trusted_local_app_data_root: &TrustedLocalAppDataRootV1,
+        app_root: &Path,
+    ) -> Result<Self, StorageError> {
         if !app_root.is_absolute() || path_is_network_like(app_root) || path_is_disallowed(app_root)
         {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
@@ -27,6 +52,7 @@ impl StoreLocationPolicyV1 {
             .canonicalize()
             .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
         if !canonical.is_absolute()
+            || !canonical.starts_with(trusted_local_app_data_root.path())
             || path_is_network_like(&canonical)
             || path_is_disallowed(&canonical)
             || has_repository_marker(&canonical)

@@ -7,12 +7,13 @@ use vault_local_core::{
 };
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, InitializeStoreOutcomeV1, StoreLocationPolicyV1,
-    initialize_v1, preflight_existing_v1,
+    TrustedLocalAppDataRootV1, initialize_v1, preflight_existing_v1,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
-    let policy = StoreLocationPolicyV1::new(directory.path())?;
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user()?;
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path())?;
     let location = policy.location("synthetic.sqlite3")?;
     let password_text = "DEMO_VALUE_ONLY_example_restart.invalid";
     let password = MasterPassword::from_utf8(password_text.to_owned())?;

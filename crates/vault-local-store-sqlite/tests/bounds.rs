@@ -3,7 +3,8 @@ use std::fs;
 use rusqlite::Connection;
 use tempfile::tempdir;
 use vault_local_store_sqlite::{
-    ExistingVaultPreflightOutcomeV1, SCHEMA_V1_SQL, StoreLocationPolicyV1, preflight_existing_v1,
+    ExistingVaultPreflightOutcomeV1, SCHEMA_V1_SQL, StoreLocationPolicyV1,
+    TrustedLocalAppDataRootV1, preflight_existing_v1,
 };
 
 #[test]
@@ -99,7 +100,8 @@ fn public_preflight_rejects_blob_and_numeric_storage_classes_at_runtime() {
         Malformed::Text,
     ] {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let connection = Connection::open(location.database_path()).unwrap();
         connection.execute_batch(SCHEMA_V1_SQL).unwrap();
