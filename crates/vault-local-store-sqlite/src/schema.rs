@@ -36,9 +36,20 @@ enum InitialFileState {
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct FileIdentity {
-    first: u64,
-    second: u64,
+    volume_or_device: u64,
+    identifier: [u8; 16],
 }
+
+impl FileIdentity {
+    const fn from_full_parts(volume_or_device: u64, identifier: [u8; 16]) -> Self {
+        Self {
+            volume_or_device,
+            identifier,
+        }
+    }
+}
+
+type IdentityProvider = fn(&File) -> Result<FileIdentity, StorageError>;
 
 #[derive(Clone, Copy)]
 struct TargetKindFacts {
@@ -634,6 +645,20 @@ fn acquire_target_ownership(
     allow_path_replacement: bool,
     pre_open_hook: Option<fn(&Path)>,
 ) -> Result<(InitialFileState, Option<TargetOwnershipGuard>), StorageError> {
+    acquire_target_ownership_with_identity_provider(
+        path,
+        allow_path_replacement,
+        pre_open_hook,
+        identity_from_file,
+    )
+}
+
+fn acquire_target_ownership_with_identity_provider(
+    path: &Path,
+    allow_path_replacement: bool,
+    pre_open_hook: Option<fn(&Path)>,
+    identity_provider: IdentityProvider,
+) -> Result<(InitialFileState, Option<TargetOwnershipGuard>), StorageError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
             validate_target_kind(target_kind_facts(&metadata))?;
@@ -648,7 +673,7 @@ fn acquire_target_ownership(
             if inspection_metadata.len() != 0 {
                 return Err(StorageError::new(StorageErrorCode::CorruptStorage));
             }
-            let pre_call_identity = identity_from_file(&inspection_file)?;
+            let pre_call_identity = identity_provider(&inspection_file)?;
             if let Some(hook) = pre_open_hook {
                 hook(path);
             }
@@ -657,7 +682,7 @@ fn acquire_target_ownership(
                 .metadata()
                 .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
             validate_target_kind(target_kind_facts(&opened_metadata))?;
-            let opened_identity = identity_from_file(&file)?;
+            let opened_identity = identity_provider(&file)?;
             if opened_identity != pre_call_identity || opened_metadata.len() != 0 {
                 return Err(StorageError::new(StorageErrorCode::CorruptStorage));
             }
@@ -679,7 +704,7 @@ fn acquire_target_ownership(
             if metadata.len() != 0 {
                 return Err(StorageError::new(StorageErrorCode::CorruptStorage));
             }
-            let identity = identity_from_file(&file)?;
+            let identity = identity_provider(&file)?;
             Ok((
                 InitialFileState::Absent,
                 Some(TargetOwnershipGuard {
@@ -715,7 +740,7 @@ fn open_inspection_file(path: &Path, allow_path_replacement: bool) -> Result<Fil
         .map_err(|_| StorageError::new(StorageErrorCode::Io))
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 fn open_inspection_file(path: &Path, _allow_path_replacement: bool) -> Result<File, StorageError> {
     use std::os::unix::fs::OpenOptionsExt;
 
@@ -724,6 +749,11 @@ fn open_inspection_file(path: &Path, _allow_path_replacement: bool) -> Result<Fi
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
         .map_err(|_| StorageError::new(StorageErrorCode::Io))
+}
+
+#[cfg(not(any(windows, unix)))]
+fn open_inspection_file(_path: &Path, _allow_path_replacement: bool) -> Result<File, StorageError> {
+    Err(StorageError::new(StorageErrorCode::UnsupportedPlatform))
 }
 
 #[cfg(windows)]
@@ -755,7 +785,7 @@ fn open_ownership_file(
         .map_err(|_| StorageError::new(StorageErrorCode::Io))
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 fn open_ownership_file(
     path: &Path,
     create_new: bool,
@@ -773,6 +803,15 @@ fn open_ownership_file(
     file.try_lock()
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
     Ok(file)
+}
+
+#[cfg(not(any(windows, unix)))]
+fn open_ownership_file(
+    _path: &Path,
+    _create_new: bool,
+    _allow_path_replacement: bool,
+) -> Result<File, StorageError> {
+    Err(StorageError::new(StorageErrorCode::UnsupportedPlatform))
 }
 
 fn sidecar_paths(database_path: &Path) -> [PathBuf; 3] {
@@ -894,7 +933,7 @@ fn target_kind_facts(metadata: &fs::Metadata) -> TargetKindFacts {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 fn target_kind_facts(metadata: &fs::Metadata) -> TargetKindFacts {
     TargetKindFacts {
         is_file: metadata.file_type().is_file(),
@@ -903,15 +942,21 @@ fn target_kind_facts(metadata: &fs::Metadata) -> TargetKindFacts {
     }
 }
 
+#[cfg(not(any(windows, unix)))]
+fn target_kind_facts(_metadata: &fs::Metadata) -> TargetKindFacts {
+    TargetKindFacts {
+        is_file: false,
+        is_symlink: false,
+        is_reparse: false,
+    }
+}
+
 #[cfg(windows)]
 fn identity_from_file(file: &File) -> Result<FileIdentity, StorageError> {
-    let information = winapi_util::file::information(file)
+    let information = vault_local_platform_windows::stable_file_identity_v1(file)
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-
-    Ok(FileIdentity {
-        first: information.volume_serial_number(),
-        second: information.file_index(),
-    })
+    let (volume_serial_number, file_id) = information.into_parts();
+    Ok(FileIdentity::from_full_parts(volume_serial_number, file_id))
 }
 
 #[cfg(unix)]
@@ -922,10 +967,9 @@ fn identity_from_file(file: &File) -> Result<FileIdentity, StorageError> {
         .metadata()
         .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
 
-    Ok(FileIdentity {
-        first: metadata.dev(),
-        second: metadata.ino(),
-    })
+    let mut identifier = [0_u8; 16];
+    identifier[..8].copy_from_slice(&metadata.ino().to_le_bytes());
+    Ok(FileIdentity::from_full_parts(metadata.dev(), identifier))
 }
 
 #[cfg(not(any(windows, unix)))]
@@ -1056,7 +1100,8 @@ mod tests {
     #[test]
     fn zero_byte_metadata_to_hard_link_substitution_is_rejected_before_sqlite_open() {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let external_path = location.database_path().with_extension("external-zero");
         fs::write(location.database_path(), []).unwrap();
@@ -1086,6 +1131,115 @@ mod tests {
         assert_eq!(fs::read(&external_path).unwrap(), b"");
     }
 
+    #[test]
+    fn full_identity_distinguishes_refslike_same_low_64_bits() {
+        let low = 0x1122_3344_5566_7788_u64.to_le_bytes();
+        let mut first_id = [0_u8; 16];
+        let mut second_id = [0_u8; 16];
+        first_id[..8].copy_from_slice(&low);
+        second_id[..8].copy_from_slice(&low);
+        first_id[8..].copy_from_slice(&1_u64.to_le_bytes());
+        second_id[8..].copy_from_slice(&2_u64.to_le_bytes());
+
+        assert!(
+            FileIdentity::from_full_parts(7, first_id)
+                != FileIdentity::from_full_parts(7, second_id)
+        );
+    }
+
+    fn unsupported_identity_provider(_file: &File) -> Result<FileIdentity, StorageError> {
+        Err(StorageError::new(StorageErrorCode::UnsupportedPlatform))
+    }
+
+    thread_local! {
+        static REFS_LIKE_IDENTITY_CALL: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    }
+
+    fn refslike_colliding_low64_provider(_file: &File) -> Result<FileIdentity, StorageError> {
+        let call = REFS_LIKE_IDENTITY_CALL.with(|counter| {
+            let call = counter.get();
+            counter.set(call + 1);
+            call
+        });
+        let mut identifier = [0_u8; 16];
+        identifier[..8].copy_from_slice(&0x1122_3344_5566_7788_u64.to_le_bytes());
+        identifier[8..].copy_from_slice(&u64::from(call + 1).to_le_bytes());
+        Ok(FileIdentity::from_full_parts(7, identifier))
+    }
+
+    #[test]
+    fn refslike_low64_collision_is_rejected_without_mutation() {
+        REFS_LIKE_IDENTITY_CALL.with(|counter| counter.set(0));
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("vault.sqlite3");
+        fs::write(&database_path, []).unwrap();
+
+        let error = match acquire_target_ownership_with_identity_provider(
+            &database_path,
+            false,
+            None,
+            refslike_colliding_low64_provider,
+        ) {
+            Ok(_) => panic!("ambiguous ReFS-like identity was accepted"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+        assert_eq!(fs::read(database_path).unwrap(), b"");
+    }
+
+    #[test]
+    fn unsupported_stable_identity_fails_closed_without_mutation() {
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("vault.sqlite3");
+        fs::write(&database_path, []).unwrap();
+
+        let error = match acquire_target_ownership_with_identity_provider(
+            &database_path,
+            false,
+            None,
+            unsupported_identity_provider,
+        ) {
+            Ok(_) => panic!("unsupported stable identity was accepted"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code(), StorageErrorCode::UnsupportedPlatform);
+        assert_eq!(fs::read(database_path).unwrap(), b"");
+    }
+
+    #[test]
+    fn nonempty_substituted_sentinel_is_never_mutated() {
+        let directory = tempdir().unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
+        let location = policy.location("vault.sqlite3").unwrap();
+        let external_path = location.database_path().with_extension("external-zero");
+        let sentinel = b"external-sentinel-must-survive";
+        fs::write(location.database_path(), []).unwrap();
+        fs::write(&external_path, sentinel).unwrap();
+
+        let bytes = bootstrap_bytes();
+        with_bootstrap(&bytes, |bootstrap| {
+            assert!(
+                initialize_with_observer(
+                    &location,
+                    bootstrap,
+                    InitObserver {
+                        failpoint: InitFailPoint::Never,
+                        hardening_step: 0,
+                        ddl_statement: 0,
+                        post_close_hook: None,
+                        pre_ownership_open_hook: Some(replace_zero_with_external_hard_link),
+                        allow_path_replacement: true,
+                    },
+                )
+                .is_err()
+            );
+        });
+        assert_eq!(fs::read(&external_path).unwrap(), sentinel);
+    }
+
     #[cfg(unix)]
     fn replace_zero_with_external_symlink(database_path: &Path) {
         let external_path = database_path.with_extension("external-symlink-target");
@@ -1097,7 +1251,8 @@ mod tests {
     #[test]
     fn zero_byte_metadata_to_symlink_or_reparse_substitution_is_rejected_by_ownership_open() {
         let directory = tempdir().unwrap();
-        let policy = StoreLocationPolicyV1::new(directory.path()).unwrap();
+        let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+        let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
         let location = policy.location("vault.sqlite3").unwrap();
         let external_path = location
             .database_path()

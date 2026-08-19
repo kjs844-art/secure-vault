@@ -5,7 +5,59 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StableFileIdentityV1 {
+    volume_serial_number: u64,
+    file_id: [u8; 16],
+}
+
+impl StableFileIdentityV1 {
+    pub const fn into_parts(self) -> (u64, [u8; 16]) {
+        (self.volume_serial_number, self.file_id)
+    }
+}
+
+#[cfg(windows)]
+pub fn stable_file_identity_v1(file: &File) -> std::io::Result<StableFileIdentityV1> {
+    use std::mem::size_of;
+    use std::os::windows::io::AsRawHandle;
+
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ID_INFO, FileIdInfo, GetFileInformationByHandleEx,
+    };
+
+    let mut information = FILE_ID_INFO::default();
+    // SAFETY: `file` owns a live handle for the complete call; `information` is an initialized,
+    // correctly aligned writable `FILE_ID_INFO`, and the buffer size exactly matches its type.
+    let succeeded = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle() as HANDLE,
+            FileIdInfo,
+            (&raw mut information).cast(),
+            size_of::<FILE_ID_INFO>() as u32,
+        )
+    };
+    if succeeded == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    Ok(StableFileIdentityV1 {
+        volume_serial_number: information.VolumeSerialNumber,
+        file_id: information.FileId.Identifier,
+    })
+}
+
+#[cfg(not(windows))]
+pub fn stable_file_identity_v1(_file: &File) -> std::io::Result<StableFileIdentityV1> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "stable Windows file identity is unavailable",
+    ))
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrustedLocalAppDataErrorV1 {
