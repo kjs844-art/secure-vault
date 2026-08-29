@@ -3,6 +3,7 @@ members = [
     "crates/vault-crypto",
     "crates/vault-local-core",
     "crates/vault-local-platform-windows",
+    "crates/vault-local-sqlite-vfs-windows",
     "crates/vault-local-store-sqlite",
 ]
 resolver = "3"

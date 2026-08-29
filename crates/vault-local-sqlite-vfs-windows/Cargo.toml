@@ -1,0 +1,32 @@
+[package]
+name = "vault-local-sqlite-vfs-windows"
+version = "0.0.1-alpha.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = []
+feasibility-probe = []
+
+[dependencies]
+rusqlite.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "vault-vfs-feasibility-child"
+path = "src/bin/vault-vfs-feasibility-child.rs"
+required-features = ["feasibility-probe"]

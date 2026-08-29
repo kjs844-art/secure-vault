@@ -830,6 +830,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vault-local-sqlite-vfs-windows"
+version = "0.0.1-alpha.1"
+dependencies = [
+ "rusqlite",
+ "tempfile",
+ "thiserror",
+ "windows-sys",
+]
+
+[[package]]
 name = "vault-local-store-sqlite"
 version = "0.0.1-alpha.1"
 dependencies = [
