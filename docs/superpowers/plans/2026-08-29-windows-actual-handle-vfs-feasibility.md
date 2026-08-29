@@ -17,6 +17,7 @@
 - The test target is Windows NT build `10.0.26200.0`, Rust `1.95.0 (59807616e 2026-04-14)`, host `x86_64-pc-windows-msvc`, `rusqlite` `0.40.2`, `libsqlite3-sys` `0.38.2`, and bundled SQLite `3.53.2`.
 - `vault-local-store-sqlite` retains `#![forbid(unsafe_code)]`. Every new unsafe Win32 call lives in the isolated VFS crate or its feasibility-only child/test harness.
 - The child closes the original `std::fs::File` after `CreateFileMappingW` and `MapViewOfFile`; only the writable mapping object and mapped view remain when the parent attempts acquisition.
+- One private synthetic geometry supplies the exact 25-byte A/B length to both `CreateFileMappingW` and `MapViewOfFile`; the last-byte mutation offset is 24 from that same successfully requested geometry. Whole-file zero-length mapping and metadata-derived pointer geometry are forbidden.
 - Synchronization uses fixed pipe frames. Timing sleeps, probabilistic races, retry-until-pass loops, and filesystem polling are forbidden. A 20-second timeout is only a hang guard.
 - A non-Windows host, Windows Application Control error `4551`, unexpected OS error, protocol mismatch, missing executable, or skipped explicit gate is `Inconclusive` or `UnsupportedPlatform`, never Go.
 - Go for this plan requires successful before/after control acquisitions plus rejection of the acquisition only while the mapping exists. It means only that the pre-existing-mapping primitive was rejected on the pinned host. It is not completion of the full Phase 0 gate or approval of VFS callbacks, WAL/SHM behavior, snapshot authentication, store integration, production readiness, or real Secret input.
@@ -402,7 +403,7 @@ Create `tests/actual_handle_feasibility.rs`:
 
 mod support;
 
-use std::fs;
+use std::{fs, io};
 
 use support::FramedChildV1;
 use tempfile::tempdir;
@@ -410,12 +411,50 @@ use vault_local_sqlite_vfs_windows::probe_protocol::{
     EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, SYNTHETIC_MAPPING_INITIAL_V1,
     SYNTHETIC_MAPPING_MUTATED_V1, SYNTHETIC_MAPPING_MUTATION_OFFSET_V1,
 };
-use vault_local_sqlite_vfs_windows::{
-    VfsProbeErrorCodeV1, acquire_main_read_guard_v1,
-};
+use vault_local_sqlite_vfs_windows::{VfsProbeErrorCodeV1, acquire_main_read_guard_v1};
 
 const INITIAL_LAST_BYTE: u8 = b'A';
 const MUTATED_LAST_BYTE: u8 = b'B';
+
+fn initial_io_marker_v1(operation: &str, error: &io::Error) -> String {
+    format!(
+        "INCONCLUSIVE_MAPPING_GATE:{operation}:os={:?}",
+        error.raw_os_error()
+    )
+}
+
+#[test]
+fn synthetic_mapping_values_change_only_the_last_byte_from_a_to_b() {
+    assert_eq!(
+        SYNTHETIC_MAPPING_INITIAL_V1.len(),
+        SYNTHETIC_MAPPING_MUTATED_V1.len()
+    );
+    assert_eq!(
+        &SYNTHETIC_MAPPING_INITIAL_V1[..SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
+        &SYNTHETIC_MAPPING_MUTATED_V1[..SYNTHETIC_MAPPING_MUTATION_OFFSET_V1]
+    );
+    assert_eq!(
+        SYNTHETIC_MAPPING_INITIAL_V1[SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
+        INITIAL_LAST_BYTE
+    );
+    assert_eq!(
+        SYNTHETIC_MAPPING_MUTATED_V1[SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
+        MUTATED_LAST_BYTE
+    );
+}
+
+#[test]
+fn initial_io_markers_keep_operation_and_raw_os_code() {
+    let error = io::Error::from_raw_os_error(5);
+    assert_eq!(
+        initial_io_marker_v1("tempdir", &error),
+        "INCONCLUSIVE_MAPPING_GATE:tempdir:os=Some(5)"
+    );
+    assert_eq!(
+        initial_io_marker_v1("fixture_write", &error),
+        "INCONCLUSIVE_MAPPING_GATE:fixture_write:os=Some(5)"
+    );
+}
 
 fn control_read_and_drop(path: &std::path::Path, phase: &str) -> u8 {
     let guard = acquire_main_read_guard_v1(path).unwrap_or_else(|error| {
@@ -439,14 +478,15 @@ fn control_read_and_drop(path: &std::path::Path, phase: &str) -> u8 {
 #[test]
 #[ignore = "explicit security feasibility gate; run before store integration"]
 fn preexisting_writable_mapping_must_block_guard_acquisition() {
-    let directory = tempdir().expect("synthetic temp directory");
+    let directory =
+        tempdir().unwrap_or_else(|error| panic!("{}", initial_io_marker_v1("tempdir", &error)));
     let path = directory.path().join("synthetic-mapping-probe.bin");
-    fs::write(&path, SYNTHETIC_MAPPING_INITIAL_V1).expect("synthetic probe file");
+    fs::write(&path, SYNTHETIC_MAPPING_INITIAL_V1)
+        .unwrap_or_else(|error| panic!("{}", initial_io_marker_v1("fixture_write", &error)));
 
     let pre_child = control_read_and_drop(&path, "pre_child");
     assert_eq!(
-        pre_child,
-        INITIAL_LAST_BYTE,
+        pre_child, INITIAL_LAST_BYTE,
         "INCONCLUSIVE_MAPPING_GATE:pre_child_control_byte"
     );
 
@@ -464,8 +504,7 @@ fn preexisting_writable_mapping_must_block_guard_acquisition() {
             child.finish_success();
             let post_child = control_read_and_drop(&path, "post_child");
             assert_eq!(
-                post_child,
-                INITIAL_LAST_BYTE,
+                post_child, INITIAL_LAST_BYTE,
                 "INCONCLUSIVE_MAPPING_GATE:post_child_control_byte"
             );
         }
@@ -570,7 +609,10 @@ pub const MUTATED_V1: &str = "V1 MUTATED";
 pub const EXIT_V1: &str = "V1 EXIT";
 pub const SYNTHETIC_MAPPING_INITIAL_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_A";
 pub const SYNTHETIC_MAPPING_MUTATED_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_B";
-pub const SYNTHETIC_MAPPING_MUTATION_OFFSET_V1: usize = SYNTHETIC_MAPPING_INITIAL_V1.len() - 1;
+pub const SYNTHETIC_MAPPING_LENGTH_V1: usize = SYNTHETIC_MAPPING_INITIAL_V1.len();
+pub const SYNTHETIC_MAPPING_MUTATION_OFFSET_V1: usize = SYNTHETIC_MAPPING_LENGTH_V1 - 1;
+
+const _: [(); SYNTHETIC_MAPPING_LENGTH_V1] = [(); SYNTHETIC_MAPPING_MUTATED_V1.len()];
 
 pub fn write_frame_v1(writer: &mut impl Write, frame: &str) -> Result<(), VfsProbeErrorV1> {
     if !matches!(frame, READY_V1 | MUTATE_V1 | MUTATED_V1 | EXIT_V1) {
@@ -603,8 +645,7 @@ pub fn read_frame_v1(reader: &mut impl BufRead) -> Result<String, VfsProbeErrorV
     if length > 0 && bytes[length - 1] == b'\r' {
         length -= 1;
     }
-    let frame = std::str::from_utf8(&bytes[..length])
-        .map_err(|_| VfsProbeErrorV1::protocol())?;
+    let frame = std::str::from_utf8(&bytes[..length]).map_err(|_| VfsProbeErrorV1::protocol())?;
     if !matches!(frame, READY_V1 | MUTATE_V1 | MUTATED_V1 | EXIT_V1) {
         return Err(VfsProbeErrorV1::protocol());
     }
@@ -612,7 +653,7 @@ pub fn read_frame_v1(reader: &mut impl BufRead) -> Result<String, VfsProbeErrorV
 }
 ```
 
-- [ ] **Step 5: Replace the mapping shell with one safe lifetime owner**
+- [ ] **Step 5: Replace the mapping shell with one bounded synthetic geometry and safe lifetime owner**
 
 Replace `src/windows_mapping_probe.rs`:
 
@@ -628,81 +669,128 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
 };
 use windows_sys::Win32::System::Memory::{
-    CreateFileMappingW, FILE_MAP_WRITE, FlushViewOfFile, MEMORY_MAPPED_VIEW_ADDRESS,
-    MapViewOfFile, PAGE_READWRITE, UnmapViewOfFile,
+    CreateFileMappingW, FILE_MAP_WRITE, FlushViewOfFile, MEMORY_MAPPED_VIEW_ADDRESS, MapViewOfFile,
+    PAGE_READWRITE, UnmapViewOfFile,
 };
 
 use crate::VfsProbeErrorV1;
+use crate::probe_protocol::{
+    SYNTHETIC_MAPPING_LENGTH_V1, SYNTHETIC_MAPPING_MUTATED_V1, SYNTHETIC_MAPPING_MUTATION_OFFSET_V1,
+};
+
+#[derive(Clone, Copy)]
+struct MappingGeometryV1 {
+    length: usize,
+    last_byte_offset: usize,
+    maximum_size_high: u32,
+    maximum_size_low: u32,
+}
+
+impl MappingGeometryV1 {
+    fn synthetic_v1() -> Self {
+        let length_u64 = SYNTHETIC_MAPPING_LENGTH_V1 as u64;
+        Self {
+            length: SYNTHETIC_MAPPING_LENGTH_V1,
+            last_byte_offset: SYNTHETIC_MAPPING_MUTATION_OFFSET_V1,
+            maximum_size_high: (length_u64 >> 32) as u32,
+            maximum_size_low: length_u64 as u32,
+        }
+    }
+}
+
+struct BoundedMappingV1 {
+    mapping: HANDLE,
+    view: MEMORY_MAPPED_VIEW_ADDRESS,
+    geometry: MappingGeometryV1,
+}
 
 pub struct WritableMappedViewV1 {
     mapping: HANDLE,
     view: MEMORY_MAPPED_VIEW_ADDRESS,
-    mapped_length: usize,
+    geometry: MappingGeometryV1,
 }
 
 impl WritableMappedViewV1 {
-    pub fn open_v1(path: &Path) -> Result<Self, VfsProbeErrorV1> {
+    pub fn open_synthetic_v1(path: &Path) -> Result<Self, VfsProbeErrorV1> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .open(path)
             .map_err(|error| VfsProbeErrorV1::from_io(&error))?;
-        let mapped_length = usize::try_from(
-            file.metadata()
-                .map_err(|error| VfsProbeErrorV1::from_io(&error))?
-                .len(),
-        )
-        .map_err(|_| VfsProbeErrorV1::protocol())?;
-        if mapped_length == 0 {
-            return Err(VfsProbeErrorV1::protocol());
-        }
-        let mapping = unsafe {
-            CreateFileMappingW(
-                file.as_raw_handle(),
-                null(),
-                PAGE_READWRITE,
-                0,
-                0,
-                null(),
-            )
-        };
-        if mapping.is_null() {
-            return Err(VfsProbeErrorV1::from_io(&std::io::Error::last_os_error()));
-        }
-        let view = unsafe { MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, 0) };
-        if view.Value.is_null() {
-            unsafe {
+        let bounded = create_bounded_mapping_v1(
+            file.as_raw_handle(),
+            MappingGeometryV1::synthetic_v1(),
+            |file, maximum_size_high, maximum_size_low| unsafe {
+                CreateFileMappingW(
+                    file,
+                    null(),
+                    PAGE_READWRITE,
+                    maximum_size_high,
+                    maximum_size_low,
+                    null(),
+                )
+            },
+            |mapping, bytes_to_map| unsafe {
+                MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, bytes_to_map)
+            },
+            |mapping| unsafe {
                 CloseHandle(mapping);
-            }
-            return Err(VfsProbeErrorV1::from_io(&std::io::Error::last_os_error()));
-        }
+            },
+        )?;
 
         // Core hostile condition: only the mapping object and mapped view remain.
         drop(file);
         Ok(Self {
-            mapping,
-            view,
-            mapped_length,
+            mapping: bounded.mapping,
+            view: bounded.view,
+            geometry: bounded.geometry,
         })
     }
 
-    pub fn write_last_byte_and_flush_v1(
-        &mut self,
-        value: u8,
-    ) -> Result<(), VfsProbeErrorV1> {
+    pub fn mutate_synthetic_a_to_b_and_flush_v1(&mut self) -> Result<(), VfsProbeErrorV1> {
         let last_byte = unsafe {
-            self.view.Value.cast::<u8>().add(self.mapped_length - 1)
+            self.view
+                .Value
+                .cast::<u8>()
+                .add(self.geometry.last_byte_offset)
         };
         unsafe {
-            last_byte.write(value);
+            last_byte.write(SYNTHETIC_MAPPING_MUTATED_V1[self.geometry.last_byte_offset]);
         }
-        let flushed = unsafe { FlushViewOfFile(last_byte.cast(), 1) };
+        let flushed = unsafe { FlushViewOfFile(self.view.Value, self.geometry.length) };
         if flushed == 0 {
             return Err(VfsProbeErrorV1::from_io(&std::io::Error::last_os_error()));
         }
         Ok(())
     }
+}
+
+fn create_bounded_mapping_v1(
+    file: HANDLE,
+    geometry: MappingGeometryV1,
+    create_mapping: impl FnOnce(HANDLE, u32, u32) -> HANDLE,
+    map_view: impl FnOnce(HANDLE, usize) -> MEMORY_MAPPED_VIEW_ADDRESS,
+    close_mapping: impl FnOnce(HANDLE),
+) -> Result<BoundedMappingV1, VfsProbeErrorV1> {
+    if geometry.length == 0 || geometry.last_byte_offset >= geometry.length {
+        return Err(VfsProbeErrorV1::protocol());
+    }
+    let mapping = create_mapping(file, geometry.maximum_size_high, geometry.maximum_size_low);
+    if mapping.is_null() {
+        return Err(VfsProbeErrorV1::from_io(&std::io::Error::last_os_error()));
+    }
+    let view = map_view(mapping, geometry.length);
+    if view.Value.is_null() {
+        let error = std::io::Error::last_os_error();
+        close_mapping(mapping);
+        return Err(VfsProbeErrorV1::from_io(&error));
+    }
+    Ok(BoundedMappingV1 {
+        mapping,
+        view,
+        geometry,
+    })
 }
 
 impl Drop for WritableMappedViewV1 {
@@ -711,6 +799,102 @@ impl Drop for WritableMappedViewV1 {
             UnmapViewOfFile(self.view);
             CloseHandle(self.mapping);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::ptr::null_mut;
+
+    use windows_sys::Win32::Foundation::SetLastError;
+
+    use crate::probe_protocol::{
+        SYNTHETIC_MAPPING_LENGTH_V1, SYNTHETIC_MAPPING_MUTATION_OFFSET_V1,
+    };
+
+    use super::{HANDLE, MEMORY_MAPPED_VIEW_ADDRESS, MappingGeometryV1, create_bounded_mapping_v1};
+
+    #[test]
+    fn exact_synthetic_length_reaches_both_mapping_stages_and_bounds_write_offset() {
+        let create_maximum = Cell::new(None);
+        let mapped_bytes = Cell::new(None);
+        let mut file_token = 0u8;
+        let mut mapping_token = 0u8;
+        let mut view_token = 0u8;
+        let file: HANDLE = std::ptr::from_mut(&mut file_token).cast();
+        let mapping: HANDLE = std::ptr::from_mut(&mut mapping_token).cast();
+        let view: *mut core::ffi::c_void = std::ptr::from_mut(&mut view_token).cast();
+        let geometry = MappingGeometryV1::synthetic_v1();
+
+        let result = create_bounded_mapping_v1(
+            file,
+            geometry,
+            |observed_file, maximum_high, maximum_low| {
+                assert_eq!(observed_file, file);
+                create_maximum.set(Some((maximum_high, maximum_low)));
+                mapping
+            },
+            |observed_mapping, bytes_to_map| {
+                assert_eq!(observed_mapping, mapping);
+                mapped_bytes.set(Some(bytes_to_map));
+                MEMORY_MAPPED_VIEW_ADDRESS { Value: view }
+            },
+            |_| panic!("successful bounded mapping must retain its mapping handle"),
+        );
+
+        let bounded = match result {
+            Ok(bounded) => bounded,
+            Err(error) => panic!("unexpected bounded-mapping error: {error:?}"),
+        };
+        let (maximum_high, maximum_low) = create_maximum
+            .get()
+            .expect("CreateFileMappingW geometry must be observed");
+        let reconstructed_maximum = (u64::from(maximum_high) << 32) | u64::from(maximum_low);
+
+        assert_eq!(SYNTHETIC_MAPPING_LENGTH_V1, 25);
+        assert_eq!(reconstructed_maximum, SYNTHETIC_MAPPING_LENGTH_V1 as u64);
+        assert_eq!(mapped_bytes.get(), Some(SYNTHETIC_MAPPING_LENGTH_V1));
+        assert_eq!(bounded.geometry.length, SYNTHETIC_MAPPING_LENGTH_V1);
+        assert_eq!(
+            bounded.geometry.last_byte_offset,
+            SYNTHETIC_MAPPING_MUTATION_OFFSET_V1
+        );
+        assert!(bounded.geometry.last_byte_offset < bounded.geometry.length);
+    }
+
+    #[test]
+    fn map_view_failure_preserves_original_os_code_before_cleanup() {
+        let cleanup_called = Cell::new(false);
+        let mut file_token = 0u8;
+        let mut mapping_token = 0u8;
+        let file: HANDLE = std::ptr::from_mut(&mut file_token).cast();
+        let mapping: HANDLE = std::ptr::from_mut(&mut mapping_token).cast();
+
+        let result = create_bounded_mapping_v1(
+            file,
+            MappingGeometryV1::synthetic_v1(),
+            |_, _, _| mapping,
+            |_, _| {
+                unsafe {
+                    SetLastError(5);
+                }
+                MEMORY_MAPPED_VIEW_ADDRESS { Value: null_mut() }
+            },
+            |_| {
+                cleanup_called.set(true);
+                unsafe {
+                    SetLastError(87);
+                }
+            },
+        );
+
+        let error = match result {
+            Ok(_) => panic!("expected a mapped-view failure"),
+            Err(error) => error,
+        };
+        assert!(cleanup_called.get());
+        assert_eq!(error.os_code(), Some(5));
     }
 }
 ```
@@ -742,11 +926,10 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
     use std::io::{BufReader, stdin, stdout};
     use std::path::PathBuf;
 
-    use vault_local_sqlite_vfs_windows::probe_protocol::{
-        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, SYNTHETIC_MAPPING_MUTATED_V1,
-        SYNTHETIC_MAPPING_MUTATION_OFFSET_V1, read_frame_v1, write_frame_v1,
-    };
     use vault_local_sqlite_vfs_windows::WritableMappedViewV1;
+    use vault_local_sqlite_vfs_windows::probe_protocol::{
+        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, read_frame_v1, write_frame_v1,
+    };
 
     let mut arguments = std::env::args_os();
     let _program = arguments.next();
@@ -758,7 +941,7 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
         return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol());
     }
 
-    let mut mapping = WritableMappedViewV1::open_v1(&path)?;
+    let mut mapping = WritableMappedViewV1::open_synthetic_v1(&path)?;
     let mut input = BufReader::new(stdin().lock());
     let mut output = stdout().lock();
     write_frame_v1(&mut output, READY_V1)?;
@@ -768,9 +951,7 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
         MUTATE_V1 => {}
         _ => return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol()),
     }
-    mapping.write_last_byte_and_flush_v1(
-        SYNTHETIC_MAPPING_MUTATED_V1[SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
-    )?;
+    mapping.mutate_synthetic_a_to_b_and_flush_v1()?;
     write_frame_v1(&mut output, MUTATED_V1)?;
     if read_frame_v1(&mut input)? != EXIT_V1 {
         return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol());
@@ -1062,12 +1243,13 @@ It does not complete the approved spec's multi-proof Phase 0 gate and does not p
 
 - Initial bytes: `DEMO_VALUE_ONLY_MAPPING_A`
 - Mutated bytes: `DEMO_VALUE_ONLY_MAPPING_B` (last byte changed from `A` to `B`)
+- Mapping geometry: exact length `25`, last-byte offset `24`, passed explicitly to both Win32 mapping stages
 - Real password, API key, Secret, recovery key, vault DB, WAL, and SHM were not used.
 
 ## Deterministic protocol
 
 1. The parent proves a pre-child control acquisition and read succeed, then drops that guard.
-2. The child opens the same synthetic file read/write and creates a writable mapped view.
+2. The child opens the same synthetic file read/write and requests an exact 25-byte mapping object and 25-byte writable mapped view.
 3. The child closes its original file handle while retaining the mapping object and view.
 4. The child emits `V1 READY` through stdout.
 5. Only after that frame, the parent attempts `acquire_main_read_guard_v1` with `FILE_SHARE_READ`.

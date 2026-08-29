@@ -8,7 +8,10 @@ pub const MUTATED_V1: &str = "V1 MUTATED";
 pub const EXIT_V1: &str = "V1 EXIT";
 pub const SYNTHETIC_MAPPING_INITIAL_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_A";
 pub const SYNTHETIC_MAPPING_MUTATED_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_B";
-pub const SYNTHETIC_MAPPING_MUTATION_OFFSET_V1: usize = SYNTHETIC_MAPPING_INITIAL_V1.len() - 1;
+pub const SYNTHETIC_MAPPING_LENGTH_V1: usize = SYNTHETIC_MAPPING_INITIAL_V1.len();
+pub const SYNTHETIC_MAPPING_MUTATION_OFFSET_V1: usize = SYNTHETIC_MAPPING_LENGTH_V1 - 1;
+
+const _: [(); SYNTHETIC_MAPPING_LENGTH_V1] = [(); SYNTHETIC_MAPPING_MUTATED_V1.len()];
 
 pub fn write_frame_v1(writer: &mut impl Write, frame: &str) -> Result<(), VfsProbeErrorV1> {
     if !matches!(frame, READY_V1 | MUTATE_V1 | MUTATED_V1 | EXIT_V1) {
