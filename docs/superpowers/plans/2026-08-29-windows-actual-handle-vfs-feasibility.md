@@ -407,15 +407,15 @@ use std::fs;
 use support::FramedChildV1;
 use tempfile::tempdir;
 use vault_local_sqlite_vfs_windows::probe_protocol::{
-    EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1,
+    EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, SYNTHETIC_MAPPING_INITIAL_V1,
+    SYNTHETIC_MAPPING_MUTATED_V1, SYNTHETIC_MAPPING_MUTATION_OFFSET_V1,
 };
 use vault_local_sqlite_vfs_windows::{
     VfsProbeErrorCodeV1, acquire_main_read_guard_v1,
 };
 
-const INITIAL: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_A";
-const INITIAL_FIRST_BYTE: u8 = b'D';
-const MUTATED_FIRST_BYTE: u8 = b'X';
+const INITIAL_LAST_BYTE: u8 = b'A';
+const MUTATED_LAST_BYTE: u8 = b'B';
 
 fn control_read_and_drop(path: &std::path::Path, phase: &str) -> u8 {
     let guard = acquire_main_read_guard_v1(path).unwrap_or_else(|error| {
@@ -425,13 +425,15 @@ fn control_read_and_drop(path: &std::path::Path, phase: &str) -> u8 {
             error.os_code()
         )
     });
-    guard.read_byte_at_v1(0).unwrap_or_else(|error| {
-        panic!(
-            "INCONCLUSIVE_MAPPING_GATE:{phase}_control_read:code={:?}:os={:?}",
-            error.code(),
-            error.os_code()
-        )
-    })
+    guard
+        .read_byte_at_v1(SYNTHETIC_MAPPING_MUTATION_OFFSET_V1 as u64)
+        .unwrap_or_else(|error| {
+            panic!(
+                "INCONCLUSIVE_MAPPING_GATE:{phase}_control_read:code={:?}:os={:?}",
+                error.code(),
+                error.os_code()
+            )
+        })
 }
 
 #[test]
@@ -439,12 +441,12 @@ fn control_read_and_drop(path: &std::path::Path, phase: &str) -> u8 {
 fn preexisting_writable_mapping_must_block_guard_acquisition() {
     let directory = tempdir().expect("synthetic temp directory");
     let path = directory.path().join("synthetic-mapping-probe.bin");
-    fs::write(&path, INITIAL).expect("synthetic probe file");
+    fs::write(&path, SYNTHETIC_MAPPING_INITIAL_V1).expect("synthetic probe file");
 
     let pre_child = control_read_and_drop(&path, "pre_child");
     assert_eq!(
         pre_child,
-        INITIAL_FIRST_BYTE,
+        INITIAL_LAST_BYTE,
         "INCONCLUSIVE_MAPPING_GATE:pre_child_control_byte"
     );
 
@@ -463,7 +465,7 @@ fn preexisting_writable_mapping_must_block_guard_acquisition() {
             let post_child = control_read_and_drop(&path, "post_child");
             assert_eq!(
                 post_child,
-                INITIAL_FIRST_BYTE,
+                INITIAL_LAST_BYTE,
                 "INCONCLUSIVE_MAPPING_GATE:post_child_control_byte"
             );
         }
@@ -479,17 +481,19 @@ fn preexisting_writable_mapping_must_block_guard_acquisition() {
         Ok(guard) => {
             child.send(MUTATE_V1);
             child.expect(MUTATED_V1);
-            let observed = guard.read_byte_at_v1(0).unwrap_or_else(|error| {
-                panic!(
-                    "INCONCLUSIVE_MAPPING_GATE:guarded_read:code={:?}:os={:?}",
-                    error.code(),
-                    error.os_code()
-                )
-            });
+            let observed = guard
+                .read_byte_at_v1(SYNTHETIC_MAPPING_MUTATION_OFFSET_V1 as u64)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "INCONCLUSIVE_MAPPING_GATE:guarded_read:code={:?}:os={:?}",
+                        error.code(),
+                        error.os_code()
+                    )
+                });
             child.send(EXIT_V1);
             child.finish_success();
             match observed {
-                MUTATED_FIRST_BYTE => {
+                MUTATED_LAST_BYTE => {
                     panic!("NO_GO_PREEXISTING_WRITABLE_MAPPING_ACCEPTED_AND_MUTATED")
                 }
                 _ => panic!("NO_GO_PREEXISTING_WRITABLE_MAPPING_ACCEPTED"),
@@ -564,6 +568,9 @@ pub const READY_V1: &str = "V1 READY";
 pub const MUTATE_V1: &str = "V1 MUTATE";
 pub const MUTATED_V1: &str = "V1 MUTATED";
 pub const EXIT_V1: &str = "V1 EXIT";
+pub const SYNTHETIC_MAPPING_INITIAL_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_A";
+pub const SYNTHETIC_MAPPING_MUTATED_V1: &[u8] = b"DEMO_VALUE_ONLY_MAPPING_B";
+pub const SYNTHETIC_MAPPING_MUTATION_OFFSET_V1: usize = SYNTHETIC_MAPPING_INITIAL_V1.len() - 1;
 
 pub fn write_frame_v1(writer: &mut impl Write, frame: &str) -> Result<(), VfsProbeErrorV1> {
     if !matches!(frame, READY_V1 | MUTATE_V1 | MUTATED_V1 | EXIT_V1) {
@@ -630,6 +637,7 @@ use crate::VfsProbeErrorV1;
 pub struct WritableMappedViewV1 {
     mapping: HANDLE,
     view: MEMORY_MAPPED_VIEW_ADDRESS,
+    mapped_length: usize,
 }
 
 impl WritableMappedViewV1 {
@@ -640,6 +648,15 @@ impl WritableMappedViewV1 {
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .open(path)
             .map_err(|error| VfsProbeErrorV1::from_io(&error))?;
+        let mapped_length = usize::try_from(
+            file.metadata()
+                .map_err(|error| VfsProbeErrorV1::from_io(&error))?
+                .len(),
+        )
+        .map_err(|_| VfsProbeErrorV1::protocol())?;
+        if mapped_length == 0 {
+            return Err(VfsProbeErrorV1::protocol());
+        }
         let mapping = unsafe {
             CreateFileMappingW(
                 file.as_raw_handle(),
@@ -663,17 +680,24 @@ impl WritableMappedViewV1 {
 
         // Core hostile condition: only the mapping object and mapped view remain.
         drop(file);
-        Ok(Self { mapping, view })
+        Ok(Self {
+            mapping,
+            view,
+            mapped_length,
+        })
     }
 
-    pub fn write_first_byte_and_flush_v1(
+    pub fn write_last_byte_and_flush_v1(
         &mut self,
         value: u8,
     ) -> Result<(), VfsProbeErrorV1> {
+        let last_byte = unsafe {
+            self.view.Value.cast::<u8>().add(self.mapped_length - 1)
+        };
         unsafe {
-            self.view.Value.cast::<u8>().write(value);
+            last_byte.write(value);
         }
-        let flushed = unsafe { FlushViewOfFile(self.view.Value, 1) };
+        let flushed = unsafe { FlushViewOfFile(last_byte.cast(), 1) };
         if flushed == 0 {
             return Err(VfsProbeErrorV1::from_io(&std::io::Error::last_os_error()));
         }
@@ -718,10 +742,11 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
     use std::io::{BufReader, stdin, stdout};
     use std::path::PathBuf;
 
-    use vault_local_sqlite_vfs_windows::WritableMappedViewV1;
     use vault_local_sqlite_vfs_windows::probe_protocol::{
-        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, read_frame_v1, write_frame_v1,
+        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, SYNTHETIC_MAPPING_MUTATED_V1,
+        SYNTHETIC_MAPPING_MUTATION_OFFSET_V1, read_frame_v1, write_frame_v1,
     };
+    use vault_local_sqlite_vfs_windows::WritableMappedViewV1;
 
     let mut arguments = std::env::args_os();
     let _program = arguments.next();
@@ -743,7 +768,9 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
         MUTATE_V1 => {}
         _ => return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol()),
     }
-    mapping.write_first_byte_and_flush_v1(b'X')?;
+    mapping.write_last_byte_and_flush_v1(
+        SYNTHETIC_MAPPING_MUTATED_V1[SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
+    )?;
     write_frame_v1(&mut output, MUTATED_V1)?;
     if read_frame_v1(&mut input)? != EXIT_V1 {
         return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol());
@@ -1034,7 +1061,7 @@ It does not complete the approved spec's multi-proof Phase 0 gate and does not p
 ## Synthetic-only fixture
 
 - Initial bytes: `DEMO_VALUE_ONLY_MAPPING_A`
-- Mutation bytes: first byte changed to `X`
+- Mutated bytes: `DEMO_VALUE_ONLY_MAPPING_B` (last byte changed from `A` to `B`)
 - Real password, API key, Secret, recovery key, vault DB, WAL, and SHM were not used.
 
 ## Deterministic protocol

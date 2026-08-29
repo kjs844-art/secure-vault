@@ -22,7 +22,8 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
 
     use vault_local_sqlite_vfs_windows::WritableMappedViewV1;
     use vault_local_sqlite_vfs_windows::probe_protocol::{
-        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, read_frame_v1, write_frame_v1,
+        EXIT_V1, MUTATE_V1, MUTATED_V1, READY_V1, SYNTHETIC_MAPPING_MUTATED_V1,
+        SYNTHETIC_MAPPING_MUTATION_OFFSET_V1, read_frame_v1, write_frame_v1,
     };
 
     let mut arguments = std::env::args_os();
@@ -45,7 +46,9 @@ fn run() -> Result<(), vault_local_sqlite_vfs_windows::VfsProbeErrorV1> {
         MUTATE_V1 => {}
         _ => return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol()),
     }
-    mapping.write_first_byte_and_flush_v1(b'X')?;
+    mapping.write_last_byte_and_flush_v1(
+        SYNTHETIC_MAPPING_MUTATED_V1[SYNTHETIC_MAPPING_MUTATION_OFFSET_V1],
+    )?;
     write_frame_v1(&mut output, MUTATED_V1)?;
     if read_frame_v1(&mut input)? != EXIT_V1 {
         return Err(vault_local_sqlite_vfs_windows::VfsProbeErrorV1::protocol());
