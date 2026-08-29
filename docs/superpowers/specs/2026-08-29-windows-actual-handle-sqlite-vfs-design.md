@@ -4,7 +4,9 @@ Status: approved design; implementation not started
 
 Approved threat scope: 2026-08-29
 
-Target baseline: `4138dd7217528458a881275a7349fd3430defef8`
+Security source baseline: `4138dd7217528458a881275a7349fd3430defef8`
+
+Implementation-planning baseline: `ce365736ddaf79b7ccdf6095eaf3ae99eca1d5d3` (the approved-spec commit and a documentation-only descendant of the source baseline)
 Product label: KeyAtlas (working title)
 
 ## 1. Decision
@@ -107,10 +109,10 @@ The implementation is acceptable only if all invariants hold.
 
 ### VFS and file-family invariants
 
-1. Before the first application SQL query, SQLite uses only VFS-owned actual handles for the accepted main/WAL/SHM family.
+1. Before the first application SQL query, SQLite uses only VFS-owned actual handles for accepted main/WAL files and VFS-owned private memory for SHM.
 2. A VFS-owned file object never silently reopens a path to satisfy later I/O.
-3. Existing external write/delete handles or writable mappings cause acquisition to fail before password KDF, record decryption, or writable open.
-4. After acquisition, a new external write/delete open or writable mapping cannot succeed for the bound family.
+3. Existing external write/delete handles or still-live writable mappings of main or a present WAL cause acquisition to fail before password KDF, record decryption, or writable open.
+4. After acquisition, a new external write/delete open against main or WAL cannot succeed, so no new writable mapping requiring such a handle can be created for the bound family.
 5. Main and WAL identity use the full Windows volume identifier plus 128-bit file identifier; path text and length are supporting evidence, not identity substitutes.
 6. During RO acquisition, an absent WAL is recorded in the epoch and any later appearance is a concurrent-change rejection. During authenticated RW promotion, the VFS alone may create an absent WAL with atomic create-new semantics; an attacker winning that race causes rejection.
 7. External SHM is never opened or trusted as authoritative input. Every SHM operation uses a VFS-owned bounded private mapping suitable for the single-process v1 client.
@@ -244,7 +246,7 @@ The public Windows v1 client is single-process for one vault because `StoreLockV
 
 Before the first database read, the connection enters exclusive locking mode and every SHM callback is satisfied by a VFS-owned, bounded private mapping that cannot be replaced by another process. If the pinned SQLite build cannot preserve documented WAL recovery, checkpoint, close, and restart semantics under this policy, the platform boundary returns `UnsupportedPlatform` and the implementation does not integrate with the store.
 
-An existing external `-shm` file is preserved on authentication or structural failure. It is not parsed as trusted application data, silently deleted, or used as proof of file-family identity.
+An existing external `-shm` file is preserved on authentication or structural failure. It is not parsed as trusted application data, silently deleted, or used as proof of file-family identity. Its existence, open handles, or mappings do not by themselves produce `Busy` because that external object is not a member of the accepted family; feasibility must instead prove that changing it cannot influence SQLite's private SHM state.
 
 The implementation plan must include a native feasibility spike proving committed crash-WAL recovery, checkpoint behavior, and close/restart behavior with this policy before product integration proceeds.
 
@@ -252,9 +254,9 @@ The implementation plan must include a native feasibility spike proving committe
 
 Before any store integration, an isolated native prototype must prove all of the following on the pinned Windows and SQLite versions:
 
-- a pre-existing external writable handle or writable mapping prevents the source from being accepted;
-- after family acquisition, a new external write/delete handle or writable mapping cannot be obtained;
-- traced SQLite file I/O reaches only the VFS-owned handle family and never reopens main, WAL, or SHM by pathname;
+- a pre-existing external writable handle or still-live writable mapping of main or a present WAL prevents the source from being accepted;
+- after family acquisition, a new external write/delete handle against main or WAL cannot be obtained and therefore cannot be used to create a new writable mapping;
+- traced SQLite file I/O reaches only VFS-owned main/WAL handles and private SHM, never reopening main, WAL, or external SHM by pathname;
 - private SHM plus exclusive locking correctly accepts a committed crash-WAL, rejects an uncommitted tail, checkpoints, closes, and restarts;
 - a race that creates an absent WAL before the VFS does is rejected without consuming attacker-controlled state.
 
@@ -281,7 +283,7 @@ Errors may include a stable phase and reason code. They may not include Secret m
 
 ## 11. Resource Bounds
 
-The design reuses the current `PreflightCapsV1` as the product-owned source of row and envelope limits. The VFS layer adds byte-accounting before SQLite can exceed the derived maximum database and WAL budget.
+The implementation introduces `PreflightCapsV1` as the product-owned consolidation of the existing row and envelope constants in `rows.rs` and the derived private limits in `preflight_query.rs`. The VFS layer adds byte-accounting before SQLite can exceed the derived maximum database and WAL budget.
 
 Required bounds:
 
