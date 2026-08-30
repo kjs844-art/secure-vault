@@ -164,6 +164,17 @@ An Application Control policy has blocked this file. (os error 4551)
 
 The block occurred before the library test executable ran. The ordinary suite did not reach `tests/actual_handle_feasibility.rs`, so this run provides no runtime evidence that the explicit hard gate was reported as ignored.
 
+### 2026-08-31 root-cause follow-up
+
+Read-only Code Integrity investigation identified the enforcing policy as Smart
+App Control `VerifiedAndReputableDesktop`. Event `3077` names the blocked test
+executable and policy GUID, and the event's SHA-256 flat hash exactly matches the
+retained unsigned executable. No Windows policy was changed and no test was
+rerun. See
+[`windows-smart-app-control-4551-root-cause.md`](windows-smart-app-control-4551-root-cause.md)
+for the evidence and supported next options. The authoritative checkpoint remains
+`Inconclusive`.
+
 ## Remaining RED gates
 
 - actual SQLite `xOpen/xRead/xWrite/xFileSize/xTruncate/xLock/xUnlock/xSync` callbacks
