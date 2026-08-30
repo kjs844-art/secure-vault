@@ -20,7 +20,7 @@
 | Rust 암호화 코어 | 구현·합성 테스트 완료 | 합성 마스터 비밀번호, Root Key 래핑, 항목별 암호화와 변조 거부를 검증했습니다. |
 | 자격 증명 데이터 모델 | 구현·합성 테스트 완료 | 서비스·계정·프로젝트·환경·MCP 연결 관계를 엄격한 형식으로 표현합니다. |
 | SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
-| SQLite 보안 문서·전체 검토(Task 8) | 진행 중, GitHub 푸시 보류 | Critical은 없었습니다. Important 3건 중 원격 드라이브·zero-byte 경로 바꿔치기 2건은 재리뷰를 통과했고, bounded preflight의 open→첫 쿼리 TOCTOU 1건은 Round 2 보강 중입니다. Windows Application Control 오류 4551 때문에 전체 workspace 통과도 아직 주장하지 않습니다. |
+| SQLite 보안 문서·전체 검토(Task 8) | 진행 중, Draft PR `#1`, 증거 기반 병합 차단 | Critical은 없었습니다. Important 3건 중 원격 드라이브·zero-byte 경로 바꿔치기 2건은 재리뷰를 통과했고, bounded preflight의 open→첫 쿼리 TOCTOU 1건은 Phase 0A 경계로 이어졌습니다. Windows Smart App Control 오류 4551 때문에 전체 workspace 통과도 아직 주장하지 않습니다. Phase 0A의 pinned-host mandatory ordinary suite가 exit `0`이 되거나 별도로 승인된 권위 검증 계약과 그 gate를 통과하기 전에는 Draft를 Ready로 전환하거나 `main`에 병합하지 않습니다. |
 | Windows actual-handle Phase 0A | 격리 probe 구현, 전체 판정 Inconclusive | 최종 후보의 단일 pre-existing writable-mapping 시험은 정확한 sharing violation 32를 관찰했지만, mandatory ordinary suite가 Application Control 오류 4551로 실행 전에 막혔습니다. primitive Go 관찰만 보존하며 전체 Phase 0A 통과·VFS/store 연결은 주장하지 않습니다. |
 | Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
@@ -109,6 +109,7 @@
 - 백업/내보내기/복구 훈련
 - 공급망·침투 테스트와 사고 대응 절차
 - Windows actual-handle Phase 0A의 mandatory ordinary suite exit 0 및 이후 별도 full Phase 0 승인
+- 위 Phase 0A 조건을 충족하거나 별도로 승인된 새 권위 검증 계약과 그 gate를 통과하기 전에는 Draft PR을 Ready로 전환하거나 `main`에 병합하지 않음
 
 ## 9. 작업 로그
 
@@ -118,3 +119,4 @@
 - 2026-08-20 03:55 KST — Task 7의 공개 preflight 타입 경계를 보강한 `416f53d`까지 독립 재검토를 통과해 GitHub에 비강제 푸시했습니다. 강제 종료 테스트 2개와 trybuild 경계 테스트가 통과했으며, 전체 패키지의 한 실행 파일은 계속 오류 4551로 실행 전 차단됐다고 기록했습니다.
 - 2026-08-20 05:29 KST — Task 8 전체 브랜치 리뷰에서 Critical은 없고 Important 3건이 확인됐습니다. 매핑 원격 드라이브 우회와 zero-byte 초기화 경로 바꿔치기는 수정 후 독립 재리뷰를 통과했습니다. bounded preflight는 1차 보강 뒤에도 SQLite open→첫 쿼리 사이의 더 좁은 TOCTOU가 남아 Round 2를 진행 중입니다. 합쳐진 브랜치의 preflight 24/24, 파일 소유권 10/10, 로컬 경로 정책 6/6, 포맷과 workspace Clippy는 통과했지만, 검증되지 않은 Task 8 변경은 GitHub에 푸시하지 않았습니다. 실제 Secret 입력 금지는 계속 유지합니다.
 - 2026-08-29 KST — Windows actual-handle Phase 0A 격리 probe를 `3f08237`→`fe86fe2`→`6f2cec4`→`e8b29cb`로 구현·보강했습니다. 최종 독립 RED 재검토는 Spec/Quality Approved, Critical 0, Important 0이었고, 단일 pre-existing writable-mapping hard gate는 exit 0으로 정확한 sharing violation 32를 관찰했습니다. 그러나 mandatory ordinary suite는 library test 실행 전에 Windows Application Control 오류 4551로 exit 101이었습니다. **Phase 0A did not produce an authoritative result; no guarantee inferred; integration stopped.** primitive Go 관찰은 좁은 증거로만 보존하며 full Phase 0/VFS/store/real-Secret gate는 닫힌 상태입니다.
+- 2026-08-31 KST — 읽기 전용 Code Integrity 조사로 `4551`의 직접 원인을 Smart App Control `VerifiedAndReputableDesktop`가 unsigned Rust test EXE를 차단한 것으로 확인했습니다. 이벤트 `3077/3089`, SHA-256 Flat Hash 일치, Authenticode `NotSigned`를 교차검증했고 정책은 변경하지 않았습니다. 원인 확인은 ordinary suite 통과가 아니므로 Phase 0A는 계속 Inconclusive입니다. 근거는 `docs/verification/windows-smart-app-control-4551-root-cause.md`에 기록했습니다. Draft PR `#1` 상태 자체를 영구적인 보안 통제로 간주하지 않으며, 위 증거 기반 gate를 통과하기 전에는 Ready 전환과 `main` 병합을 금지합니다.
