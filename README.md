@@ -59,6 +59,30 @@ tests/fixtures/synthetic/ 합성 테스트 데이터 전용
 
 GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 데이터의 백업 장소가 아닙니다. 현재 합성 전용 코어에도 실제 자격 증명을 입력하면 안 됩니다.
 
+## 로컬 검증 (Windows)
+
+아래 명령은 프로젝트 루트에서 실행합니다. Rust 도구 체인과 잠긴 의존성이 로컬에 준비되어 있어야 하며, 스크립트가 설치나 보안 정책 변경을 대신하지 않습니다.
+
+```powershell
+# Windows VFS 패키지의 일반 검사 (기본 feature + feasibility-probe 일반 테스트)
+powershell -NoProfile -File .\scripts\verify-local.ps1
+
+# 전체 Rust workspace 검사와 문서 예제 테스트
+powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace
+
+# 검증 스크립트 자체의 실패 전파/옵션/경로 회귀 테스트 (가짜 Cargo 사용)
+powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1
+
+# 테스트 대역 누락 시 실제 Cargo로 넘어가지 않는지 검사 (PowerShell 7)
+pwsh -NoProfile -File .\tests\verification\verify-fixture-isolation.Tests.ps1
+```
+
+`Focused`는 포맷 및 Windows VFS 패키지 검사, `Workspace`는 포맷·전체 Clippy·기본 테스트·문서 예제와 VFS feature 일반 테스트를 실행합니다. 빌드/테스트는 `--offline --locked`로 수행하며 첫 실패에서 멈추고 해당 종료 코드를 반환합니다. **명시적으로 무시된 보안 gate는 실행하지 않으며**, 성공해도 Phase 0A 판정과 실제 Secret 입력 금지는 바뀌지 않습니다. 스크립트 자체 테스트는 실제 Rust 검사를 대신하지 않습니다.
+
+작업 폴더가 이동해도 스크립트 위치에서 저장소 루트를 찾습니다. 다른 폴더에서는 스크립트의 전체 경로를 지정하세요. [2026-09-07 검증·작업 기록](docs/verification/2026-09-07-local-verification-maintenance.md)에서 실제 실행 범위와 남은 조건을 확인할 수 있습니다.
+
+검사 스크립트의 회귀 테스트는 `fixtures/cargo.cmd`만 사용하며, 파일이 없거나 다른 Cargo로 해석되면 실행 전에 실패합니다. 격리 검사는 소유한 임시 복사본과 실행 여부를 기록하는 대역만 사용하고 원래 Cargo 경로를 상속하지 않습니다. [대역 격리 보강 기록](docs/verification/2026-09-07-fixture-isolation.md)을 참고하세요. 이번 PowerShell 5.1 실행은 호스트 실행 정책에 차단되어 미검증이며, 정책을 변경하거나 우회하지 않았습니다.
+
 ## 문서
 
 - [MVP 범위](docs/MVP.md)

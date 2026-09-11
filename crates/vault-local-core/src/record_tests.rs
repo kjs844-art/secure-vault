@@ -1,10 +1,49 @@
-use vault_crypto::{MasterPassword, create_vault_v0alpha1};
+use vault_crypto::{MasterPassword, create_vault_v0alpha1, unlock_vault_v0alpha1};
 
 use super::{
     StoredPaddingBucketV0Alpha1, SyntheticRecordMutation, open_credential_record_v1,
     seal_synthetic_fixture_v1, select_bucket, synthetic_tamper_case_v1,
 };
+use crate::codec::preservation_tests::assert_item_preserved;
+use crate::synthetic::build_synthetic_fixture_v1;
 use crate::{LocalVaultError, LocalVaultErrorCode, SyntheticCredentialFixtureId};
+
+#[test]
+fn all_synthetic_fixtures_preserve_fields_after_session_reunlock() {
+    let password =
+        MasterPassword::from_utf8("DEMO_VALUE_ONLY_record_preservation_password".to_owned())
+            .unwrap();
+    let created = create_vault_v0alpha1(&password).unwrap();
+    let records: Vec<_> = [
+        SyntheticCredentialFixtureId::UnconnectedApiKey,
+        SyntheticCredentialFixtureId::SingleMcpConnection,
+        SyntheticCredentialFixtureId::MultipleConsumers,
+    ]
+    .into_iter()
+    .map(|fixture| {
+        let expected = build_synthetic_fixture_v1(fixture).unwrap();
+        let sealed = seal_synthetic_fixture_v1(&created.session, fixture).unwrap();
+        (expected, sealed)
+    })
+    .collect();
+
+    let password_envelope = created.password_envelope;
+    drop(created.session);
+    let reopened = unlock_vault_v0alpha1(&password, &password_envelope).unwrap();
+    for (expected, sealed) in records {
+        let envelope_before = sealed.envelope.clone();
+        let super::OpenCredentialOutcome::Current(opened) =
+            open_credential_record_v1(&reopened, &sealed).unwrap()
+        else {
+            panic!("a current synthetic fixture must reopen as the current schema");
+        };
+        assert_item_preserved(&expected, &opened.item);
+        assert!(
+            sealed.envelope == envelope_before,
+            "read must preserve ciphertext"
+        );
+    }
+}
 
 fn expect_local_error_code<T>(result: Result<T, LocalVaultError>) -> LocalVaultErrorCode {
     match result {

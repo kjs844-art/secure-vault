@@ -1,4 +1,5 @@
 #![cfg(windows)]
+#![cfg(feature = "feasibility-probe")]
 
 use std::io::{BufReader, Write};
 use std::os::windows::io::AsRawHandle;

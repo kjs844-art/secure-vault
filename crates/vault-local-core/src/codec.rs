@@ -1233,3 +1233,7 @@ fn require_test_prefix(bytes: &[u8], expected: &[u8]) -> Result<(), LocalVaultEr
 #[cfg(test)]
 #[path = "codec_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "codec_preservation_tests.rs"]
+pub(crate) mod preservation_tests;

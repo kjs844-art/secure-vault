@@ -1,4 +1,5 @@
 #![cfg(windows)]
+#![cfg(feature = "feasibility-probe")]
 
 mod support;
 

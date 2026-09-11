@@ -22,3 +22,17 @@ fictional service, account, and project names.
 
 Do not enter actual credentials into this alpha. GitHub backs up source code and
 design documents only; it is not a backup destination for vault data.
+
+## Field-preservation regression coverage
+
+Test-only comparators check all 67 fields across the item and its five nested
+model types, including optional values and ordered collections. Full and minimal
+codec roundtrips use distinct synthetic secrets and timestamps. Three negative
+controls confirm that the comparator rejects altered decoded values without
+printing those values.
+
+The three public synthetic fixtures are also compared after encryption, dropping
+the original session, and unlocking a new session. This is an in-memory record
+test, not a disk/process restart or a proof that all plaintext has left memory.
+See the [verification record](../../docs/verification/2026-09-07-record-preservation.md)
+for exact checks and remaining boundaries.

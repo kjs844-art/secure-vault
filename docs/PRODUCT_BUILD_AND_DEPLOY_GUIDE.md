@@ -20,8 +20,8 @@
 | Rust 암호화 코어 | 구현·합성 테스트 완료 | 합성 마스터 비밀번호, Root Key 래핑, 항목별 암호화와 변조 거부를 검증했습니다. |
 | 자격 증명 데이터 모델 | 구현·합성 테스트 완료 | 서비스·계정·프로젝트·환경·MCP 연결 관계를 엄격한 형식으로 표현합니다. |
 | SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
-| SQLite 보안 문서·전체 검토(Task 8) | 진행 중, Draft PR `#1`, 증거 기반 병합 차단 | Critical은 없었습니다. Important 3건 중 원격 드라이브·zero-byte 경로 바꿔치기 2건은 재리뷰를 통과했고, bounded preflight의 open→첫 쿼리 TOCTOU 1건은 Phase 0A 경계로 이어졌습니다. Windows Smart App Control 오류 4551 때문에 전체 workspace 통과도 아직 주장하지 않습니다. Phase 0A의 pinned-host mandatory ordinary suite가 exit `0`이 되거나 별도로 승인된 권위 검증 계약과 그 gate를 통과하기 전에는 Draft를 Ready로 전환하거나 `main`에 병합하지 않습니다. |
-| Windows actual-handle Phase 0A | 격리 probe 구현, 전체 판정 Inconclusive | 최종 후보의 단일 pre-existing writable-mapping 시험은 정확한 sharing violation 32를 관찰했지만, mandatory ordinary suite가 Application Control 오류 4551로 실행 전에 막혔습니다. primitive Go 관찰만 보존하며 전체 Phase 0A 통과·VFS/store 연결은 주장하지 않습니다. |
+| SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
+| Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
 | Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
@@ -29,6 +29,14 @@
 | 공개 배포·앱스토어 | 미구현 | 보안 감사·복구 훈련·정책 문서·스토어 계정 준비가 먼저입니다. |
 
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
+
+### 현재 작업 경로와 다시 검사하는 방법 (2026-09-07)
+
+코드는 `C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`에 있으며 작업 브랜치는 `codex/firstvibe-sqlite-store`입니다. `secure-vault` 폴더의 `main` 체크아웃과 구분해 사용합니다. 바탕화면 설명 문서는 같은 KeyAtlas 아래 `자료\KeyAtlas_보안_설계_패키지_2026-08-29`에 있습니다.
+
+작업 폴더에서 `powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 전체 일반 검사를 다시 수행할 수 있습니다. 검증 스크립트 자체 테스트는 `powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo를 사용하므로 실제 Rust 테스트 통과와 구분합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret과 ignored 보안 gate는 여전히 제외됩니다.
+
+[상세 변경 파일·검사 결과·남은 경계](verification/2026-09-07-local-verification-maintenance.md)를 함께 확인하세요.
 
 ## 3. 전체 아키텍처 그림
 
@@ -53,7 +61,7 @@
 
 ## 4. 배포까지의 권장 순서
 
-1. 합성 SQLite Task 1~8의 남은 전체 workspace 게이트를 허용된 빌드 환경에서 다시 완주하고, 현재 로컬 저장 경계를 최종 승인합니다.
+1. 일반 workspace 검증의 성공 기록과 별도로 Task 8·Windows 저장 경계의 권위 검증 조건을 검토하고 최종 승인합니다. 일반 검사만으로 보안 승인과 출시 준비를 완료 처리하지 않습니다.
 2. 복구 Key Slot·신뢰 기기·Android Keystore를 합성 데이터로 구현합니다.
 3. Android 고보증 클라이언트에서 금고 생성·잠금·복구 훈련을 완성합니다.
 4. Spring Boot API와 PostgreSQL에 암호문 동기화·체크포인트를 구현합니다.
@@ -120,3 +128,4 @@
 - 2026-08-20 05:29 KST — Task 8 전체 브랜치 리뷰에서 Critical은 없고 Important 3건이 확인됐습니다. 매핑 원격 드라이브 우회와 zero-byte 초기화 경로 바꿔치기는 수정 후 독립 재리뷰를 통과했습니다. bounded preflight는 1차 보강 뒤에도 SQLite open→첫 쿼리 사이의 더 좁은 TOCTOU가 남아 Round 2를 진행 중입니다. 합쳐진 브랜치의 preflight 24/24, 파일 소유권 10/10, 로컬 경로 정책 6/6, 포맷과 workspace Clippy는 통과했지만, 검증되지 않은 Task 8 변경은 GitHub에 푸시하지 않았습니다. 실제 Secret 입력 금지는 계속 유지합니다.
 - 2026-08-29 KST — Windows actual-handle Phase 0A 격리 probe를 `3f08237`→`fe86fe2`→`6f2cec4`→`e8b29cb`로 구현·보강했습니다. 최종 독립 RED 재검토는 Spec/Quality Approved, Critical 0, Important 0이었고, 단일 pre-existing writable-mapping hard gate는 exit 0으로 정확한 sharing violation 32를 관찰했습니다. 그러나 mandatory ordinary suite는 library test 실행 전에 Windows Application Control 오류 4551로 exit 101이었습니다. **Phase 0A did not produce an authoritative result; no guarantee inferred; integration stopped.** primitive Go 관찰은 좁은 증거로만 보존하며 full Phase 0/VFS/store/real-Secret gate는 닫힌 상태입니다.
 - 2026-08-31 KST — 읽기 전용 Code Integrity 조사로 `4551`의 직접 원인을 Smart App Control `VerifiedAndReputableDesktop`가 unsigned Rust test EXE를 차단한 것으로 확인했습니다. 이벤트 `3077/3089`, SHA-256 Flat Hash 일치, Authenticode `NotSigned`를 교차검증했고 정책은 변경하지 않았습니다. 원인 확인은 ordinary suite 통과가 아니므로 Phase 0A는 계속 Inconclusive입니다. 근거는 `docs/verification/windows-smart-app-control-4551-root-cause.md`에 기록했습니다. Draft PR `#1` 상태 자체를 영구적인 보안 통제로 간주하지 않으며, 위 증거 기반 gate를 통과하기 전에는 Ready 전환과 `main` 병합을 금지합니다.
+- 2026-09-07 KST — PersonalProJect 아래 실제 작업 폴더에서 기본/feature 검증 경로를 보강했습니다. `scripts/verify-local.ps1`과 실패 전파 회귀 검사 11개를 추가했고 PowerShell 5.1/7에서 통과했습니다. 전체 직접 실행 최종 exit 0(기본 168 passed/1 ignored, feature 일반 6 passed/1 ignored, 문서 예제 2 passed), 전체 Clippy·포맷도 통과했습니다. 원격 기능 브랜치의 기존 SHA `f85e547`은 읽기 전용 조회로 확인했지만 오늘 변경은 미커밋·미푸시입니다. 실제 Secret/Phase 0A 승인은 유지 보류합니다. RED·BLUE 및 바탕화면 13번 기록도 갱신했습니다. 다른 편집기의 저장 여부가 확인되지 않아 종료 예약은 만들지 않았고 후속 자동화를 PAUSED로 전환했습니다. 상세 증거는 [2026-09-07 작업 기록](verification/2026-09-07-local-verification-maintenance.md)을 확인하세요.
