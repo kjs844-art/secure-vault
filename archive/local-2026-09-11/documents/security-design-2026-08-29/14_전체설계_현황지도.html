@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<title>KeyAtlas | 전체 설계 · 현재 위치</title>
+<style>
+:root{--ink:#142837;--muted:#4e6373;--paper:#f2f5f8;--line:#d6e0e6;--green:#176748;--green-bg:#eaf5ee;--amber:#805006;--amber-bg:#fff3d8;--blue:#2c5681;--blue-bg:#ecf2f9}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Malgun Gothic","Segoe UI",sans-serif;line-height:1.65}main{max-width:1180px;margin:auto;padding:44px 30px 56px}h1,h2,h3,p{margin:0}h1{font-size:42px;letter-spacing:-2px;line-height:1.25;margin:10px 0 14px}h2{font-size:24px;letter-spacing:-.8px}h3{font-size:18px;line-height:1.5}p{margin-top:8px}small,.sub{color:var(--muted)}.eyebrow{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--blue)}.hero{display:grid;grid-template-columns:1fr 285px;gap:30px;align-items:center;margin-bottom:24px}.hero p{max-width:700px;font-size:17px}.now{background:var(--ink);color:white;padding:22px;border-radius:16px}.now span{display:block;color:#b2d7ca;font-size:12px;letter-spacing:1px}.now strong{display:block;font-size:22px;line-height:1.5;margin:7px 0}.now small{color:#d1dde6}.legend{display:flex;flex-wrap:wrap;gap:9px;margin:20px 0}.pill{display:inline-block;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:800;white-space:nowrap}.built{color:var(--green);background:var(--green-bg)}.pending{color:var(--amber);background:var(--amber-bg)}.planned{color:var(--blue);background:var(--blue-bg)}.panel{background:white;border:1px solid var(--line);border-radius:18px;margin-top:20px;padding:26px}.section-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:20px}.num{background:var(--ink);color:white;border-radius:8px;padding:3px 10px;font-size:14px;font-weight:800}.section-head p{font-size:14px;color:var(--muted);margin-top:3px}.warning{border-left:4px solid #b07813;background:var(--amber-bg);padding:13px 17px;border-radius:5px;font-size:14px}.target-grid{display:grid;grid-template-columns:minmax(0,1.3fr) 72px minmax(0,.85fr);align-items:center;gap:14px}.boundary{border:2px dashed #93abb8;border-radius:14px;padding:18px}.boundary-title{font-size:13px;font-weight:800;margin-bottom:13px}.clients{display:grid;grid-template-columns:1fr 1fr;gap:12px}.node{border:1px solid var(--line);padding:16px;border-radius:10px;background:#f8fafc}.node p{font-size:14px}.node .pill{margin-bottom:7px}.core{border:1px solid #a2cdb6;background:var(--green-bg);padding:15px;border-radius:10px;margin-top:15px;text-align:center}.core p{font-size:13px}.connector{text-align:center;font-size:12px;color:var(--muted);font-weight:700}.connector b{display:block;font-size:32px;color:#8d9fae}.down{text-align:center;color:#718795;padding:7px;font-size:13px}.server .node{background:var(--blue-bg);border-style:dashed}.caption{font-size:13px;color:var(--muted);margin-top:15px}.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.flow-box{background:var(--green-bg);border:1px solid #c2dccb;border-radius:10px;padding:15px}.flow-box strong{display:block}.flow-box p{font-size:13px}.flow-box .step{font-size:12px;font-weight:800;color:var(--green)}.result{margin-top:12px;padding:12px 15px;background:#f3f6f8;border-radius:8px;font-size:14px}.db-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.db-list{display:grid;gap:8px;margin-top:12px}.db-row{display:grid;grid-template-columns:105px 1fr;gap:10px;border:1px solid var(--line);border-radius:7px;padding:9px 12px;font-size:13px}.db-row code{font-weight:800}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px}th{text-align:left;background:#f1f5f8;color:var(--muted);font-size:12px}td,th{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{font-weight:800;min-width:110px}td:nth-child(2){min-width:140px}.roadmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.milestone{border:1px solid var(--line);padding:15px;border-radius:10px}.milestone.current{background:var(--amber-bg);border-color:#e4c174}.milestone b{font-size:12px;color:var(--blue)}.milestone h3{font-size:16px;margin-top:5px}.milestone p{font-size:13px;color:var(--muted)}.evidence{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}.metric{background:#f3f6f8;border-radius:9px;padding:14px}.metric strong{font-size:25px;display:block}.metric span{font-size:13px;color:var(--muted)}.paths{background:#112634;color:#e4edf3;padding:18px;border-radius:10px;font-family:Consolas,"Malgun Gothic",monospace;font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.8}.foot{font-size:12px;color:var(--muted);margin-top:18px}ul{padding-left:20px;margin:10px 0 0}li{margin:5px 0;font-size:14px}.scope{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px}.scope h3{font-size:16px}code{font-family:Consolas,monospace}a{color:var(--blue)}
+@media(max-width:800px){main{padding:24px 16px}.hero,.target-grid,.db-grid,.scope{grid-template-columns:1fr}.hero{gap:18px}h1{font-size:32px}.panel{padding:19px}.flow,.roadmap{grid-template-columns:1fr 1fr}.connector b{transform:rotate(90deg);line-height:1}.evidence{grid-template-columns:1fr}.clients{grid-template-columns:1fr}.now{padding:18px}}
+@media print{body{background:white}main{padding:0;max-width:none}.panel{break-inside:avoid;border-radius:0}.hero{break-inside:avoid}h1{font-size:32px}.foot{color:#333}*{print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<main>
+<header class="hero">
+<div><div class="eyebrow">KeyAtlas · working title / Architecture status map</div><h1>전체 설계, 그리고<br>우리가 서 있는 곳.</h1><p>어디서 발급한 비밀번호·API 키인지, 어디에 연결했는지<br>한곳에서 정리하고 안전하게 보관하는 개인 금고.</p><div class="legend"><span class="pill built">구현 있음 · 합성 데이터 전용</span><span class="pill pending">실험 / 승인 대기</span><span class="pill planned">설계만 있음</span></div></div>
+<aside class="now"><span>현재 위치 · 2026.09.07</span><strong>보안 코어 +<br>로컬 저장 기반</strong><small>가입해서 쓰는 웹·앱은 아직 없음.<br>실제 비밀번호/API 키 입력 금지.</small></aside>
+</header>
+<div class="warning"><strong>먼저 구분하기:</strong> 아래의 완성형 구조는 목표 설계야. 초록색도 “제품 출시 완료”가 아니라 “합성 데이터로 검사하는 코드가 있음”이라는 뜻이야.</div>
+
+<section class="panel" id="architecture">
+<div class="section-head"><span class="num">01</span><div><h2>목표 구조 — 화면부터 서버 DB까지</h2><p>프론트 = 누르는 화면 · 백엔드 = 로그인/동기화 서버 · DB = 저장소</p></div></div>
+<div class="target-grid">
+<div class="boundary"><div class="boundary-title">사용자 기기 안 · 잠금 해제 / 암호화 / 검색</div><div class="clients">
+<article class="node"><span class="pill planned">예정</span><h3>웹 프론트</h3><p>React + TypeScript<br>Rust/WASM 연결<br>로컬: 암호문 IndexedDB</p></article>
+<article class="node"><span class="pill planned">예정</span><h3>Android 앱</h3><p>Kotlin + Rust 연결<br>Keystore · 지문 승인<br>로컬: 암호문 저장</p></article>
+</div><div class="down">↓ 향후 연결 · 현재 UI 연동 없음 ↓</div><div class="core"><span class="pill built">Rust 코어 합성 구현</span><h3>기기에서 암호화·복호화</h3><p>서버에 원문과 복호화 키를 맡기지 않는 설계</p></div></div>
+<div class="connector">HTTPS<br>동기화 예정<b>→</b>금고 내용은<br>암호문으로</div>
+<div class="server"><article class="node"><span class="pill planned">예정</span><h3>Spring Boot API</h3><p>계정 로그인 · 세션<br>기기 목록 · 암호문 동기화<br>Free/Pro 이용 권한</p></article><div class="down">↓ 저장 · 조회 [예정]</div><article class="node"><span class="pill planned">예정</span><h3>PostgreSQL 서버 DB</h3><p>암호문 이벤트 / checkpoint<br>인증·운영 메타데이터<br>서버 스키마·DB 연결 미구축</p></article></div>
+</div>
+<p class="caption">로그인과 금고 잠금 해제는 별개. 지문은 기기 키 사용을 승인하며 서버로 보내지 않는다. 인증 정보·IP·접속 시각·암호문 크기 등 메타데이터는 서버에 보일 수 있다. 브라우저 배포/공급망 위험도 별도 검토가 필요하다.</p>
+</section>
+
+<section class="panel" id="current">
+<div class="section-head"><span class="num">02</span><div><h2>현재 실제로 동작하는 범위</h2><p>사용자 화면이 아니라, Rust 테스트와 합성 실행 예제에서 연결된 흐름</p></div></div>
+<div class="flow"><article class="flow-box"><span class="step">1 → 입력</span><strong>가짜 계정·가짜 키</strong><p>실제 개인정보 없이<br>합성 데이터로만 검사</p></article><article class="flow-box"><span class="step">2 → 모델</span><strong>vault-local-core</strong><p>서비스·계정·키·연결 관계<br>비밀 타입과 레코드 처리</p></article><article class="flow-box"><span class="step">3 → 암호화</span><strong>vault-crypto</strong><p>Argon2id<br>XChaCha20-Poly1305</p></article><article class="flow-box"><span class="step">4 → 저장</span><strong>로컬 SQLite</strong><p>암호문 레코드 저장<br>버전·충돌 보존</p></article></div>
+<div class="result">종료 → 재실행 → 비밀번호 확인 → 잠금 해제 흐름을 합성 테스트로 확인한 기반이 있음. <strong>웹/Android 연결, 실제 Secret 사용 승인은 아직.</strong></div>
+<p class="caption">MCP는 현재 “어떤 키를 어디에 연결했는지” 기록하는 RecordOnly 모델. 플러그인 실행이나 키 자동 수집 기능은 아니다. Google 로그인만으로 모든 외부 가입 사이트·키를 알아낼 수는 없다.</p>
+</section>
+
+<section class="panel" id="database">
+<div class="section-head"><span class="num">03</span><div><h2>DB를 혼동하지 않기</h2><p>현재 SQLite ≠ 미래 서버 PostgreSQL ≠ 웹용 IndexedDB</p></div></div>
+<div class="db-grid"><div><span class="pill built">현재 · 로컬 SQLite 실제 테이블</span><div class="db-list"><div class="db-row"><code>vault_state</code><span>금고 헤더 + 감싼 Root Key 정보</span></div><div class="db-row"><code>revisions</code><span>암호문 레코드의 불변 버전</span></div><div class="db-row"><code>heads</code><span>현재 버전 → revisions 참조</span></div><div class="db-row"><code>conflicts</code><span>충돌 후보/관찰 버전 → revisions 참조</span></div></div></div>
+<div><h3>저장 방식의 정확한 의미</h3><ul><li>레코드 내용을 암호화해서 BLOB으로 저장.</li><li>SQLite 파일 전체를 암호화하는 SQLCipher 구현은 아님.</li><li>버전·크기·불투명 ID 등 일부 메타데이터는 관찰 가능.</li><li>서버 PostgreSQL 스키마와 Android 저장 통합은 아직.</li><li>GitHub 소스 백업은 사용자 금고 백업/복원 기능과 다름.</li></ul></div></div>
+</section>
+
+<section class="panel" id="status">
+<div class="section-head"><span class="num">04</span><div><h2>전체 진행판</h2><p>진행률 % 대신, 실제 파일과 실행 가능 범위로 구분</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>영역</th><th>현재</th><th>앞으로 필요한 것</th></tr></thead><tbody>
+<tr><td>웹 화면</td><td><span class="pill planned">README만 있음</span></td><td>React 화면 · 잠금/검색 UX · WASM/IndexedDB 연결</td></tr>
+<tr><td>Android 앱</td><td><span class="pill planned">README만 있음</span></td><td>Kotlin · Rust 연결 · Keystore/지문 · 복구 UX</td></tr>
+<tr><td>Rust 코어</td><td><span class="pill built">합성 구현 있음</span></td><td>복구·기기 관리 · 클라이언트 통합 · 독립 보안 검토</td></tr>
+<tr><td>로컬 SQLite</td><td><span class="pill built">합성 구현 있음</span></td><td>저장 경계 승인 · 내보내기/복원 · 롤백 방어</td></tr>
+<tr><td>Windows VFS</td><td><span class="pill pending">격리 실험 단계</span></td><td>실제 핸들 권위 검증 · 정식 store 통합</td></tr>
+<tr><td>백엔드 / 서버 DB</td><td><span class="pill planned">설계 단계</span></td><td>Spring Boot API · PostgreSQL 구축 · 암호문 동기화</td></tr>
+<tr><td>로그인 / 복구</td><td><span class="pill planned">설계 단계</span></td><td>Google/패스키 · 복구 Key Slots · 기기 분실/폐기</td></tr>
+<tr><td>수익화 / 배포</td><td><span class="pill planned">미활성화</span></td><td>Free/Pro · 운영/법률 · 계정/도메인 · 스토어/결제</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="panel" id="roadmap">
+<div class="section-head"><span class="num">05</span><div><h2>다음 순서</h2><p>기존 제작·배포 계획을 단계별로 묶은 지도 · 이번 요청은 설명/문서화만</p></div></div>
+<div class="roadmap"><article class="milestone current"><b>① 지금 다음 작업</b><h3>저장 경계 검증</h3><p>Windows Phase 0A의 미결 조건과 승인 기준 정리</p></article><article class="milestone"><b>② 기기 안에서</b><h3>복구 + Android</h3><p>복구 Key Slots·신뢰 기기·합성 생성/잠금/복구</p></article><article class="milestone"><b>③ 기기 사이에서</b><h3>서버 + 동기화</h3><p>인증·암호문 동기화·PostgreSQL·checkpoint</p></article><article class="milestone"><b>④ 사용 화면</b><h3>합성 웹 프리뷰</h3><p>React UX·보안 코어 연결·가짜 데이터 흐름</p></article><article class="milestone"><b>⑤ 출시 전 관문</b><h3>독립 보안 검토</h3><p>암호·공급망 검토·백업/복원 훈련</p></article><article class="milestone"><b>⑥ 별도 승인 후</b><h3>제한적 실제 베타</h3><p>실제 Secret 사용은 이때 별도 결정</p></article><article class="milestone"><b>⑦ 서비스 출시</b><h3>운영 + Free/Pro</h3><p>법률·계정·결제·공개 배포·앱스토어</p></article><article class="milestone"><b>병행 가능한 별도 범위</b><h3>가짜 데이터 UI 시안</h3><p>승인 시 앞 단계와 병행 가능. 실제 금고 연결과는 별개</p></article></div>
+</section>
+
+<section class="panel" id="evidence">
+<div class="section-head"><span class="num">06</span><div><h2>무엇을 확인했고, 무엇이 남았나</h2><p>아래 숫자는 2026-09-07 앞선 실행 기록. 이 지도 작성 중 새로 실행한 테스트가 아님.</p></div></div>
+<div class="evidence"><div class="metric"><strong>168 통과</strong><span>기본 workspace · 1 ignored</span></div><div class="metric"><strong>6 통과</strong><span>VFS feature 일반 검사 · 1 ignored</span></div><div class="metric"><strong>2 통과</strong><span>doctest · format/Clippy exit 0</span></div></div>
+<div class="warning"><strong>REAL_SECRET_GATE = CLOSED</strong><br>일반 테스트 성공 ≠ 보안 승인. Windows Phase 0A는 과거 Inconclusive 판정 유지, 명시적 ignored gate 재실행 없음. 유효한 과거 DB 롤백 탐지와 복구·기기 폐기·백업 훈련도 남아 있음.</div>
+<div class="scope"><div><h3>이번에 확인한 것</h3><p>소스·스키마·기존 설계·검증 기록을 대조해 구현/실험/예정을 분리. 저장소 기준 상태를 문서화.</p></div><div><h3>이번에 하지 않은 것</h3><p>제품 코드 변경, 서버 실행, DB 생성, 실제 키 입력, 커밋/푸시, 공개 배포. 전체 보안 인증이나 라이브 서비스 검증도 아님.</p></div></div>
+</section>
+
+<section class="panel" id="files">
+<div class="section-head"><span class="num">07</span><div><h2>코드는 어디에 있나</h2><p>현재 작업 브랜치: codex/firstvibe-sqlite-store · HEAD f85e547 + 미커밋 변경</p></div></div>
+<div class="paths">C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design
+├─ apps/          웹·Android 계획 README
+├─ services/api/  서버 계획 README
+├─ crates/        실제 Rust 구현 5개
+├─ contracts/     저장 형식·로컬 DB 스키마
+├─ scripts/       로컬 검증 진입점
+├─ tests/         검증 스크립트 회귀 테스트
+└─ docs/          설계·로드맵·보안·검증 기록</div>
+<p class="caption">상세 근거: docs/ARCHITECTURE_STATUS_MAP.md · docs/SECURITY_ARCHITECTURE.md · docs/PRODUCT_BUILD_AND_DEPLOY_GUIDE.md · docs/verification/2026-09-07-local-verification-maintenance.md</p>
+</section>
+<footer class="foot">KeyAtlas (working title) · 2026-09-07 로컬 소스 확인 기준 · 정적 설명 자료 / 제품 화면 아님 · 외부 스크립트·폰트·네트워크 요청 없음</footer>
+</main>
+</body>
+</html>

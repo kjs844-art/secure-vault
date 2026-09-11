@@ -1,0 +1,246 @@
+{
+  "snapshot_date": "2026-09-11",
+  "repository": "https://github.com/kjs844-art/secure-vault",
+  "branch": "codex/firstvibe-backup-local-20260911",
+  "base_commit": "d92346eb3ab0d85e1f1013864d5fba47664afbcb",
+  "purpose": "Historical local source and documentation backup; not a release or real-secret readiness approval.",
+  "source_file_count": 39,
+  "total_source_bytes": 515405,
+  "hash_algorithm": "SHA-256",
+  "files": [
+    {
+      "source": "C:\\Users\\USER\\Documents\\ChatGPT\\KeyAtlas\\app.js",
+      "archived_path": "web-prototype/app.js",
+      "bytes": 16077,
+      "sha256": "adb25d965ccd6e4d3775a7d065eeefeb1b9e123482c7953727a9ac727af915eb"
+    },
+    {
+      "source": "C:\\Users\\USER\\Documents\\ChatGPT\\KeyAtlas\\index.html",
+      "archived_path": "web-prototype/index.html",
+      "bytes": 10999,
+      "sha256": "ad3c361bd9285fcc265bb474dedd7f9ebbbc368d3e26d48f8592ab0ce6fefa0b"
+    },
+    {
+      "source": "C:\\Users\\USER\\Documents\\ChatGPT\\KeyAtlas\\styles.css",
+      "archived_path": "web-prototype/styles.css",
+      "bytes": 27113,
+      "sha256": "6c2316ebb5615b4ce0d3b717d79fe83f9d2bbabe036dbfe71947a5910fb0d6a5"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\00_먼저보기.md",
+      "archived_path": "documents/security-design-2026-08-29/00_먼저보기.md",
+      "bytes": 5436,
+      "sha256": "6398dc06b52ffeb7896435ddf4d434d5d411865045df73c90856580c9644085a"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\01_작업경로_Git_현재상태.md",
+      "archived_path": "documents/security-design-2026-08-29/01_작업경로_Git_현재상태.md",
+      "bytes": 7050,
+      "sha256": "ea60d72eb5ba36bc64d8edefdad587b65a3a3ae713348279269ec0d36a1d4304"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\02_전체_구축_로드맵.md",
+      "archived_path": "documents/security-design-2026-08-29/02_전체_구축_로드맵.md",
+      "bytes": 3727,
+      "sha256": "9294345924bddedd7c3c52296815c03e98cfdb57c559a8c8938c36094e134e2c"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\03_1번_위협범위_RED중심_설계안.md",
+      "archived_path": "documents/security-design-2026-08-29/03_1번_위협범위_RED중심_설계안.md",
+      "bytes": 8691,
+      "sha256": "4292b9c0809c71bdfbb3b7446ba6b7c611168dfff34ac20c99339589f6af8c2b"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\04_Windows_VFS_코드_구축계획.md",
+      "archived_path": "documents/security-design-2026-08-29/04_Windows_VFS_코드_구축계획.md",
+      "bytes": 8280,
+      "sha256": "27cdb081d6eef8196617c75e06618e01bdd7e1f1b2dd19bc3ed23322506126c1"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\05_Aardvark_CodexSecurity_신청준비.md",
+      "archived_path": "documents/security-design-2026-08-29/05_Aardvark_CodexSecurity_신청준비.md",
+      "bytes": 5103,
+      "sha256": "ceb63ac33709763daca897e72b893bf8385f68916b1434bb0059dddbe3358699"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\06_RED_TEAM_중심_작업기록.md",
+      "archived_path": "documents/security-design-2026-08-29/06_RED_TEAM_중심_작업기록.md",
+      "bytes": 25662,
+      "sha256": "94755b9babac88efb986f6ce97ac365ea699448858391ae2e67450b70d8db1cd"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\07_BLUE_TEAM_방어요약.md",
+      "archived_path": "documents/security-design-2026-08-29/07_BLUE_TEAM_방어요약.md",
+      "bytes": 3458,
+      "sha256": "b89ea7bda7ed4f4ad666bd033db3daee2a185188d1884591c1c20d2eac0c6fbd"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\08_Daybreak_독립_RED_검토요약.md",
+      "archived_path": "documents/security-design-2026-08-29/08_Daybreak_독립_RED_검토요약.md",
+      "bytes": 7415,
+      "sha256": "e8f5deeb21ec59e8530c1fa28c783ec0a77678ad1f4c190a4192332fa78b1654"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\09_구현_파일구조와_변경기록.md",
+      "archived_path": "documents/security-design-2026-08-29/09_구현_파일구조와_변경기록.md",
+      "bytes": 20978,
+      "sha256": "04a2ca55d626f56e779dfa6f59a606e2be1b0d84fabd74c1503834818d4fb256"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\10_4551_이후_다음선택_가이드.md",
+      "archived_path": "documents/security-design-2026-08-29/10_4551_이후_다음선택_가이드.md",
+      "bytes": 7574,
+      "sha256": "aac4608f2a7e01b5c5b5b31d28a4812838a64d63c505658faa9e697e88e127bc"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\11_보조_Windows_CI_비활성_초안.md",
+      "archived_path": "documents/security-design-2026-08-29/11_보조_Windows_CI_비활성_초안.md",
+      "bytes": 5886,
+      "sha256": "85a1d35ad802a36aa386a7bbd3cae062d97bcc3147ee6e1fb12588f5338e6c4b"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\12_2026-08-31_1시간_작업_및_종료기록.md",
+      "archived_path": "documents/security-design-2026-08-29/12_2026-08-31_1시간_작업_및_종료기록.md",
+      "bytes": 7682,
+      "sha256": "557219707af5208223f71dfa0dbda9efcbaf1f6a1b7f28f1d6d3b9fc505727fb"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\13_2026-09-07_작업결과.md",
+      "archived_path": "documents/security-design-2026-08-29/13_2026-09-07_작업결과.md",
+      "bytes": 3877,
+      "sha256": "f701ec469d07acc176922e8474b1642d8d322d41475836ee331a30ef257b03bf"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\14_전체설계_현황지도.html",
+      "archived_path": "documents/security-design-2026-08-29/14_전체설계_현황지도.html",
+      "bytes": 17057,
+      "sha256": "61b58fae743f82452f29d63f9bc601c240af031b3a14e8526a5e481308f6c64e"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\Aardvark_신청화면_참고.png",
+      "archived_path": "documents/security-design-2026-08-29/Aardvark_신청화면_참고.png",
+      "bytes": 33151,
+      "sha256": "b4202fd0786936b858fe5dc561868df1f304334c276996174e791ac1789e08cd"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\이전_RED_BLUE_기록\\KeyAtlas_BLUE_TEAM_SECURITY_NOTES.md",
+      "archived_path": "documents/security-design-2026-08-29/이전_RED_BLUE_기록/KeyAtlas_BLUE_TEAM_SECURITY_NOTES.md",
+      "bytes": 9123,
+      "sha256": "b8ff7397f49d50bab75a8800158f32d29125285f2f9f349f278c1d1589d12844"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\이전_RED_BLUE_기록\\KeyAtlas_RED_TEAM_SECURITY_NOTES.md",
+      "archived_path": "documents/security-design-2026-08-29/이전_RED_BLUE_기록/KeyAtlas_RED_TEAM_SECURITY_NOTES.md",
+      "bytes": 19346,
+      "sha256": "1a97160a470fb3d39c4c769bb93d44f74a4d2072ada01222d67c382e70d54123"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\00_프로젝트_README.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/00_프로젝트_README.md",
+      "bytes": 5718,
+      "sha256": "b8837906fd3c7e515945c06f9cde81d7709565fde8cc7e76e98f9e706a90c5bb"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\01_PRODUCT_BUILD_AND_DEPLOY_GUIDE.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/01_PRODUCT_BUILD_AND_DEPLOY_GUIDE.md",
+      "bytes": 10910,
+      "sha256": "206a6bf6e9f05b5ab9ca36831590d75601c821946c3e0147313e3001a2b62618"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\02_MVP.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/02_MVP.md",
+      "bytes": 4575,
+      "sha256": "e9f45567bb9001ff7c4a0c2e97744707d703911a9ff886bf58e803d6fe4ef88b"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\03_SECURITY_ARCHITECTURE.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/03_SECURITY_ARCHITECTURE.md",
+      "bytes": 7020,
+      "sha256": "2626866d9807bbcdc18b3e48212f1d551dccda595baa24db53439ecb5b275759"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\04_THREAT_MODEL.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/04_THREAT_MODEL.md",
+      "bytes": 5623,
+      "sha256": "990ff64480f7f25e5acdd7d952db933b0328ccaccc44681fa32bd7bf0687e02d"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\05_SQLITE_검증기록.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/05_SQLITE_검증기록.md",
+      "bytes": 6308,
+      "sha256": "e800621b43baa0a017329af10a571fdf8594ca7c475c6a08c9dab46ead92477f"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\06_ADR_Zero_Knowledge.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/06_ADR_Zero_Knowledge.md",
+      "bytes": 1096,
+      "sha256": "5376b4e238cff8f694e24f231d16a468590dfa36c81b60c757151a1a57416b87"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\07_ADR_Crypto_Suite.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/07_ADR_Crypto_Suite.md",
+      "bytes": 5194,
+      "sha256": "68a63109025a15f86a65de02689c36a314494f0196f4c771d00784340f5b0ef3"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\08_ADR_Recovery_Policy.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/08_ADR_Recovery_Policy.md",
+      "bytes": 4942,
+      "sha256": "e046c3ae6320d663eb68873acb4b523257fb8b832c10bec6072d34f4b2e65c72"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\09_SQLITE_상세설계.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/09_SQLITE_상세설계.md",
+      "bytes": 39228,
+      "sha256": "c64b03615583b14bd9c5c96f5510ff00a1aa4e8f776d5b39d148e96426997b25"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\10_SQLITE_구현계획.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/10_SQLITE_구현계획.md",
+      "bytes": 57084,
+      "sha256": "7097c426e53a14a8eacd1901c59feb7085c9a33638f0c26bb624a9b1899e6770"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\11_SQLITE_CRATE_README.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/11_SQLITE_CRATE_README.md",
+      "bytes": 2855,
+      "sha256": "73b5269e497b8919a9989a4a31dff8783ad53c6eea9c573f2e8eeef5d5563cf2"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\12_WINDOWS_ACTUAL_HANDLE_VFS_정식설계.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/12_WINDOWS_ACTUAL_HANDLE_VFS_정식설계.md",
+      "bytes": 28534,
+      "sha256": "f3822857dcc8e3662a73d291e9d0a2a04bfc3b9250c3e6eae56a90adc1806b11"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\13_WINDOWS_VFS_PHASE0A_구현계획.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/13_WINDOWS_VFS_PHASE0A_구현계획.md",
+      "bytes": 56397,
+      "sha256": "e8632fe30ab85f334e0f607f34939972a21b18c12c14b7e864ca6cead455d2e2"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\14_WINDOWS_VFS_PHASE0A_검증결과.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/14_WINDOWS_VFS_PHASE0A_검증결과.md",
+      "bytes": 9250,
+      "sha256": "4937afb09a18b9591bf51b43cbf744c214d85b885d6cb027e5a5b2e0d805c524"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\자료\\KeyAtlas_보안_설계_패키지_2026-08-29\\프로젝트_참고문서\\15_WINDOWS_SMART_APP_CONTROL_4551_원인분석.md",
+      "archived_path": "documents/security-design-2026-08-29/프로젝트_참고문서/15_WINDOWS_SMART_APP_CONTROL_4551_원인분석.md",
+      "bytes": 2389,
+      "sha256": "a2784ed39d2dab02b63f2721c700558c4f485a0bfa932a32a88fcf2edbb761fd"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas\\KeyAtlas_새위치_안내.md",
+      "archived_path": "documents/KeyAtlas_새위치_안내.md",
+      "bytes": 1958,
+      "sha256": "f1b2d7582ce4a8fa3a5167b7e14645b7009c76f4335679a7bc7ccae323f8a71c"
+    },
+    {
+      "source": "C:\\Users\\USER\\Desktop\\PersonalProJect\\KeyAtlas_전체설계_현황지도.md",
+      "archived_path": "documents/KeyAtlas_전체설계_현황지도.md",
+      "bytes": 12639,
+      "sha256": "af1ff5a82d22ef45e8d05938df4f2ff90b8ab294ed69a381558cc383e6dab79c"
+    }
+  ]
+}
