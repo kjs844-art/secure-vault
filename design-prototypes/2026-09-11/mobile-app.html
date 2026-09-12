@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="theme-color" content="#f4f3ef">
+  <title>KeyAtlas — Mobile study</title>
+  <link rel="stylesheet" href="orbit-globe.css">
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:#202324;background:#eae9e4;font-synthesis:none;--paper:#f8f7f3;--ink:#202324;--muted:#777974;--line:#dedfd8;--blue:#264ae8;--soft:#eceee7}
+    *{box-sizing:border-box}body{margin:0}button,input,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{color:inherit;cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:4px}button{border:0}a{color:inherit}button:disabled{cursor:default}svg{display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}svg.icon{width:22px;height:22px;flex-shrink:0}[hidden]{display:none!important}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.site-head{max-width:1360px;margin:0 auto;padding:26px 54px;display:flex;justify-content:space-between;align-items:center}.back{display:inline-flex;align-items:center;gap:9px;min-height:44px;text-decoration:none;font-size:13px}.edition{font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.11em;color:#70746c}.study{max-width:1150px;margin:16px auto 50px;display:grid;grid-template-columns:1fr 430px;align-items:center;gap:100px;padding:0 30px}.annotation{padding-bottom:40px}.eyebrow{font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#6e716a}.annotation h1{font-size:58px;font-weight:490;line-height:1.18;letter-spacing:-.065em;margin:29px 0}.annotation .summary{font-size:16px;line-height:1.9;letter-spacing:-.025em;color:#666b63;max-width:350px;word-break:keep-all}.concept-rule{height:1px;width:70px;background:#555c50;margin:38px 0 24px}.annotation dl{margin:0}.annotation dl div{display:grid;grid-template-columns:83px 1fr;gap:14px;font-size:12px;line-height:1.7;margin:12px 0}.annotation dt{color:#757a70}.annotation dd{margin:0;max-width:280px;color:#343d31;word-break:keep-all}.switcher{display:flex;margin-top:32px;gap:5px}.switcher button{padding:0 15px;min-height:44px;background:transparent;border:1px solid #cdd0c5;border-radius:2px;font-size:12px}.switcher button[aria-pressed="true"]{background:#252d24;color:#fafbf8;border-color:#252d24}.device{position:relative;background:var(--paper);width:100%;height:844px;border:1px solid #ccd0c7;border-radius:36px;overflow:hidden;box-shadow:0 25px 80px #18251a15,0 3px 8px #18251a08;display:flex;flex-direction:column;isolation:isolate}.device-top{display:flex;justify-content:space-between;gap:9px;align-items:center;font-size:10px;letter-spacing:.025em;color:#797d72;padding:23px 26px 13px;min-height:48px}.device-top span:last-child{font:10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace}.app-area{position:relative;min-height:0;display:flex;flex:1;flex-direction:column}.intro{height:100%;display:flex;flex-direction:column;overflow:auto}.intro-brand{margin:16px 29px 0;display:flex;align-items:center;gap:8px;font-size:19px;font-weight:550;letter-spacing:-.07em}.brand-mark{width:24px;height:25px;position:relative;display:inline-grid;place-items:center}.brand-mark:before,.brand-mark:after{content:"";position:absolute;width:12px;height:21px;border:1.6px solid currentColor;border-radius:50%;transform:rotate(29deg)}.brand-mark:after{transform:rotate(-29deg)}.intro-copy{margin:39px 29px 0}.intro-copy .eyebrow{font-size:10px;color:#7d8277}.intro-copy h2{font-size:36px;line-height:1.22;letter-spacing:-.075em;font-weight:490;margin:14px 0 0}.intro-scene{position:relative;min-height:284px;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}.intro-scene [data-orbit-globe]{width:350px;height:350px;max-width:100%;position:relative}.intro-caption{position:absolute;bottom:10px;left:29px;font:9px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.07em;color:#7b8274}.intro-footer{padding:15px 29px 34px}.intro-footer p{font-size:13px;line-height:1.8;color:#787c72;margin:0 0 20px;letter-spacing:-.025em;word-break:keep-all}.primary{width:100%;min-height:54px;padding:0 17px;display:flex;align-items:center;justify-content:space-between;background:var(--ink);color:#fff;border-radius:3px;font-size:14px}.primary .icon{width:18px}.intro-footer small{display:block;text-align:center;font-size:10px;color:#82877b;line-height:1.7;margin-top:13px}.vault{flex:1;min-height:0;display:flex;flex-direction:column}.app-header{padding:13px 26px 12px;display:flex;align-items:center;justify-content:space-between}.wordmark{font-size:19px;font-weight:550;letter-spacing:-.065em}.quiet-button{background:none;min-width:44px;min-height:44px;display:grid;place-items:center;border-radius:50%}.quiet-button:hover{background:var(--soft)}.avatar{width:34px;height:34px;display:grid;place-items:center;border:1px solid #ced1c8;border-radius:50%;font-size:11px}.content-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c8cbc1 transparent;padding:5px 26px 24px}.view-title{display:flex;justify-content:space-between;align-items:end;margin:11px 0 22px}.view-title p{font-size:11px;color:var(--muted);margin:0 0 8px}.view-title h2{font-weight:500;font-size:32px;line-height:1.15;letter-spacing:-.07em;margin:0}.view-title .count{font-size:12px;color:#7c8176;padding-bottom:4px}.search{height:49px;display:flex;align-items:center;gap:10px;background:#eeeee8;border-radius:3px;padding:0 14px}.search .icon{width:17px;height:17px;color:#7a8074}.search input{width:100%;min-width:0;border:0;background:transparent;outline-offset:4px;font-size:13px;color:var(--ink)}.search input::placeholder{color:#898c84}.filters{display:flex;gap:17px;padding:15px 0 10px;border-bottom:1px solid var(--line)}.filters button{padding:0;background:none;min-height:44px;color:#92958c;font-size:12px;border-bottom:1.5px solid transparent;border-radius:0}.filters button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--ink)}.filters button small{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;margin-left:4px}.list-label{font:9px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.08em;color:#95998e;margin:19px 0 1px}.credential{background:none;width:100%;text-align:left;padding:20px 0;min-height:80px;display:flex;align-items:center;gap:13px;border-bottom:1px solid #e4e5de}.credential:hover{background:#eff0e960}.service-mark{width:41px;height:41px;flex-shrink:0;display:grid;place-items:center;font-size:17px;font-weight:500;color:#30392c;background:#e9ece3;border-radius:50%;letter-spacing:-.06em}.service-mark[data-service="anthropic"]{background:#ecdcd0;color:#74543d;font-family:Georgia,serif;font-size:25px}.service-mark[data-service="google"]{background:#e5eaf5;color:#345ba0}.service-mark[data-service="github"]{background:#e5e5e4;color:#414544;font-size:12px;font-weight:600;letter-spacing:-.06em}.service-mark[data-service="mcp"]{background:#ecebdc;color:#6d6942;font-size:15px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.entry-copy{min-width:0;flex:1}.entry-title{display:block;font-size:14px;font-weight:500;letter-spacing:-.02em}.entry-meta{display:block;font-size:11px;line-height:1.7;color:#85897f;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.credential .icon{width:15px;height:15px;color:#b0b4a8}.local-note{font-size:10px;line-height:1.8;color:#92978c;margin:22px 0 0;word-break:keep-all}.empty{font-size:13px;color:#777e70;line-height:1.8;padding:32px 0}.bottom-nav{border-top:1px solid var(--line);padding:10px 18px 18px;display:grid;grid-template-columns:repeat(3,1fr);background:#f8f7f3fa}.bottom-nav button{background:none;min-height:49px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:10px;color:#9b9f93}.bottom-nav button .icon{width:20px;height:20px}.bottom-nav button[aria-current="page"]{color:#272e23}.bottom-nav button[aria-current="page"]::after{content:"";width:3px;height:3px;background:#303c29;border-radius:50%;position:absolute;bottom:10px}.home-lead{font-size:27px;font-weight:480;line-height:1.35;letter-spacing:-.055em;margin:32px 0 13px}.home-desc{font-size:13px;line-height:1.8;color:#818778;word-break:keep-all;margin:0 0 25px}.home-row{width:100%;background:transparent;border-top:1px solid var(--line);min-height:76px;display:flex;align-items:center;justify-content:space-between;padding:13px 0;text-align:left}.home-row strong{font-size:13px;font-weight:500;display:block}.home-row small{font-size:11px;color:#89907f;display:block;margin-top:8px}.home-row .icon{width:16px;color:#a7ac9e}.connection-summary{font-size:13px;color:#7e8574;line-height:1.8;margin:0 0 28px;word-break:keep-all}.connection{padding:17px 0 20px;border-bottom:1px solid var(--line)}.connection h3{font-size:14px;font-weight:500;margin:0 0 13px}.connection-path{font-size:11px;color:#7e8674;line-height:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.connection-path b{font-weight:400;color:#34452d;background:#e9ede3;padding:2px 7px;border-radius:2px}.connection-path i{font-style:normal;color:#9ba18e}.connection .path-note{font-size:10px;color:#9a9f91;margin:12px 0 0}.sheet{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-end;background:#252c2460}.sheet-panel{background:#f9f8f4;border-radius:25px 25px 0 0;width:100%;max-height:92%;overflow:auto;padding:12px 26px 29px;box-shadow:0 -10px 60px #14200f12;animation:sheet-in .28s ease}.sheet-handle{width:34px;height:3px;border-radius:3px;background:#cfd2c6;margin:0 auto 13px}.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.sheet-head .eyebrow{font-size:9px}.sheet-title{display:flex;gap:14px;align-items:center;margin:0 0 25px}.sheet-title h2{font-size:24px;font-weight:500;letter-spacing:-.05em;margin:0 0 5px}.sheet-title p{font-size:11px;color:#8c9284;margin:0}.detail-meta{margin:0 0 24px}.detail-meta div{padding:12px 0;display:flex;gap:12px;justify-content:space-between;border-bottom:1px solid var(--line);font-size:11px;line-height:1.6}.detail-meta dt{color:#8b9182;flex-shrink:0}.detail-meta dd{margin:0;text-align:right;color:#4a5442;overflow-wrap:anywhere}.secret-box{border:1px solid #d9ddcf;border-radius:3px;padding:14px;margin:0 0 18px}.secret-label{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:#89917d;margin-bottom:12px}.secret-label span:last-child{font:9px ui-monospace,SFMono-Regular,Consolas,monospace}.secret-text{font:12px/1.8 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em;color:#4b5840;display:block;overflow-wrap:anywhere;min-height:40px}.reveal-button{margin-top:8px;font-size:11px;min-height:44px;padding:0;background:none;display:flex;align-items:center;gap:8px}.reveal-button .icon{width:16px;height:16px}.detail-connection h3{font-size:11px;font-weight:500;margin:0 0 10px}.consumer{display:inline-block;font-size:10px;background:#e9ede2;color:#68725b;padding:7px 10px;border-radius:2px;margin:0 5px 6px 0}.sheet-note{font-size:10px;line-height:1.8;color:#939b88;margin:15px 0 0;word-break:keep-all}.toast{position:absolute;z-index:40;bottom:90px;left:22px;right:22px;padding:14px 16px;background:#273023;color:#f3f4ee;font-size:11px;line-height:1.7;border-radius:3px;box-shadow:0 6px 22px #0f1e1420;pointer-events:none}.below-note{max-width:430px;margin:17px 0 0 auto;font-size:10px;line-height:1.8;color:#7e8575;text-align:center}.footer{max-width:1250px;margin:0 auto;padding:0 34px 24px;display:flex;justify-content:space-between;font-size:10px;color:#8b9083;letter-spacing:.025em}.mobile-switch{display:none}.home-stat{font:70px/.95 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-weight:300;letter-spacing:-.08em;margin:30px 0 5px;color:#35442a}.home-stat-label{font-size:11px;color:#8a927e;margin-bottom:30px}.home-topline{display:flex;justify-content:space-between;align-items:center}.home-topline .eyebrow{font-size:9px}.subtle-link{padding:0;background:transparent;text-decoration:underline;text-underline-offset:4px;font-size:10px;color:#727c66;min-height:44px}.home-note{font-size:10px;color:#929a86;margin-top:23px;line-height:1.8}@keyframes sheet-in{from{transform:translateY(25px);opacity:.4}to{transform:translateY(0);opacity:1}}
+    .icon{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+    [data-orbit-globe] svg{fill:initial;stroke:none;stroke-width:initial;stroke-linecap:initial;stroke-linejoin:initial}
+    @media(max-width:1100px){.study{gap:45px;max-width:970px}.annotation h1{font-size:49px}.site-head{padding-inline:34px}}
+    @media(max-width:760px){html,body{background:var(--paper)}.site-head{padding:8px 18px;min-height:50px;border-bottom:1px solid var(--line)}.site-head .edition{display:none}.back{font-size:11px;min-height:34px}.back .icon{width:16px;height:16px}.mobile-switch{display:flex;gap:12px}.mobile-switch button{background:none;padding:0;min-height:34px;font-size:10px;color:#a0a596}.mobile-switch button[aria-pressed="true"]{color:#36442c}.study{display:block;padding:0;margin:0;max-width:none}.annotation{display:none}.device{height:calc(100svh - 52px);min-height:650px;border:0;border-radius:0;box-shadow:none;max-width:480px;margin:0 auto}.device-top{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:6px;min-height:32px}.intro-copy{margin-top:28px}.intro-copy h2{font-size:35px}.intro-scene{min-height:245px}.intro-scene [data-orbit-globe]{width:340px;height:320px}.intro-footer{padding-bottom:max(22px,env(safe-area-inset-bottom))}.bottom-nav{padding-bottom:max(16px,env(safe-area-inset-bottom))}.below-note,.footer{display:none}.sheet-panel{padding-bottom:max(29px,env(safe-area-inset-bottom))}}
+    @media(max-width:760px){.back,.mobile-switch button{min-height:44px}.device{height:calc(100svh - 61px)}}
+    @media(max-width:370px){.device-top,.app-header{padding-left:20px;padding-right:20px}.content-scroll{padding-left:20px;padding-right:20px}.intro-copy h2{font-size:31px}.intro-footer,.intro-copy{margin-left:0;margin-right:0;padding-left:23px;padding-right:23px}.intro-scene [data-orbit-globe]{width:305px}.filters{gap:14px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3.5 10 8.5-7 8.5 7v10H15v-6H9v6H3.5z"/></symbol>
+    <symbol id="i-vault" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v2m0 4v2m-4-4h2m4 0h2"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 7 2-2a5 5 0 0 1 7 7l-2 2M14 17l-2 2a5 5 0 0 1-7-7l2-2m2 5 6-6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/></symbol>
+  </defs></svg>
+  <header class="site-head">
+    <a class="back" href="index.html"><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg>웹 시안으로</a>
+    <span class="edition">KEYATLAS / MOBILE INTERFACE STUDY</span>
+    <div class="mobile-switch" aria-label="모바일 시안 화면"><button type="button" data-screen="intro" aria-pressed="true">인트로</button><button type="button" data-screen="vault" aria-pressed="false">앱 화면</button></div>
+  </header>
+  <main class="study">
+    <aside class="annotation">
+      <p class="eyebrow">04 / THE PERSONAL ATLAS</p>
+      <h1>한 손 안의<br>연결 지도.</h1>
+      <p class="summary">여러 곳에 흩어진 계정과 키.<br>어디서 발급받고, 어디에 연결했는지.<br>기억해야 할 것들을 한곳에.</p>
+      <div class="concept-rule"></div>
+      <dl>
+        <div><dt>첫인상</dt><dd>공간감 있는 지구와 금속성 잠금 장치.<br>한 번의 움직임으로 브랜드를 기억하도록.</dd></div>
+        <div><dt>실사용</dt><dd>금고에 들어오면 움직임은 뒤로.<br>검색, 키, 사용처가 바로 보이는 화면.</dd></div>
+        <div><dt>플랫폼</dt><dd>모바일 앱을 위한 별도 화면 구성.<br>현재는 브라우저에서 보는 인터랙션 시안.</dd></div>
+      </dl>
+      <div class="switcher" aria-label="시안 화면 선택"><button type="button" data-screen="intro" aria-pressed="true">인트로 / 잠금</button><button type="button" data-screen="vault" aria-pressed="false">금고 / 사용처</button></div>
+    </aside>
+    <section aria-label="KeyAtlas 모바일 앱 디자인 시안">
+      <div class="device">
+        <div class="device-top"><span>디자인 시안 · 인증/저장 미연결</span><span>DEMO ONLY</span></div>
+        <div class="app-area">
+          <section id="intro" class="intro" aria-label="앱 시작 화면">
+            <div class="intro-brand"><span class="brand-mark" aria-hidden="true"></span>KeyAtlas</div>
+            <div class="intro-copy"><span class="eyebrow">YOUR KEYS. YOUR WORLD.</span><h2>중요한 것들의,<br>안전한 자리.</h2></div>
+            <div class="intro-scene"><div data-orbit-globe aria-label="중앙 잠금 장치를 둘러싼 연결 지구 애니메이션"></div><span class="intro-caption">A PRIVATE PLACE<br>FOR YOUR CONNECTED LIFE.</span></div>
+            <div class="intro-footer"><p>계정, API 키, 그리고 연결된 도구.<br>당신의 디지털 생활을 하나의 지도로.</p><button type="button" class="primary" id="enter-vault"><span>금고 화면 보기</span><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><small>합성 데이터로 미리 봅니다. 실제 잠금 해제가 아닙니다.</small></div>
+          </section>
+          <section id="vault" class="vault" aria-label="금고 앱 화면" hidden>
+            <header class="app-header"><span class="wordmark">KeyAtlas</span><button type="button" class="quiet-button" id="demo-account" aria-label="데모 계정 안내"><span class="avatar" aria-hidden="true">KA</span></button></header>
+            <div class="content-scroll" id="app-scroll">
+              <section id="vault-view" aria-label="내 금고">
+                <div class="view-title"><div><p>나의 워크스페이스</p><h2 id="vault-heading" tabindex="-1">내 금고</h2></div><span class="count">5 items</span></div>
+                <label class="search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="sr-only">서비스, 계정, 연결된 도구 검색</span><input id="vault-search" type="search" placeholder="서비스, 계정 또는 연결된 도구" autocomplete="off" spellcheck="false"></label>
+                <div class="filters" aria-label="저장 항목 종류"><button type="button" data-filter="all" aria-pressed="true">전체 <small>5</small></button><button type="button" data-filter="api" aria-pressed="false">API <small>3</small></button><button type="button" data-filter="login" aria-pressed="false">로그인 <small>1</small></button><button type="button" data-filter="mcp" aria-pressed="false">MCP <small>1</small></button></div>
+                <p class="list-label" id="list-label">ALL ITEMS / SYNTHETIC DATA</p>
+                <div id="credential-list"></div>
+                <p class="empty" id="empty-state" role="status" hidden>일치하는 항목이 없어요.<br>서비스 이름이나 연결된 도구로 찾아보세요.</p>
+                <p class="local-note">여기에 표시된 계정과 키는 모두 합성 예시입니다.<br>실제 비밀정보를 입력하거나 저장할 수 없습니다.</p>
+              </section>
+              <section id="home-view" aria-label="워크스페이스 홈" hidden>
+                <div class="home-topline"><p class="eyebrow">PERSONAL WORKSPACE / DEMO</p><button type="button" class="subtle-link" data-screen="intro">인트로 보기</button></div>
+                <h2 class="home-lead">흩어져 있어도,<br>잊어버리지 않도록.</h2><p class="home-desc">키 이름만으로는 기억하기 어려우니까.<br>발급받은 곳과 연결한 곳을 함께 기록해요.</p>
+                <div class="home-stat">05</div><div class="home-stat-label">이 시안에 담긴 합성 항목</div>
+                <button type="button" class="home-row" data-nav="vault"><span><strong>내 금고 열기</strong><small>API 키 3 · 로그인 1 · MCP 1</small></span><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+                <button type="button" class="home-row" data-nav="connections"><span><strong>연결된 도구 살펴보기</strong><small>발급 서비스 → 사용처</small></span><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+                <p class="home-note">연결 정보는 미리 작성한 예시입니다.<br>서비스를 자동으로 조회하거나 키 사용을 추적하지 않습니다.</p>
+              </section>
+              <section id="connections-view" aria-label="키 연결 정보" hidden>
+                <div class="view-title"><div><p>발급처에서 사용처까지</p><h2>연결 지도</h2></div><svg class="icon" aria-hidden="true"><use href="#i-link"/></svg></div>
+                <p class="connection-summary">같은 서비스의 키라도 쓰는 곳은 다르니까.<br>연결 관계를 키별로 나눠서 봅니다.</p>
+                <div id="connection-list"></div>
+                <p class="local-note">표시된 관계는 합성 예시입니다.<br>실제 외부 서비스와 통신하지 않습니다.</p>
+              </section>
+            </div>
+            <nav class="bottom-nav" aria-label="앱 기본 탐색"><button type="button" data-nav="home"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg><span>홈</span></button><button type="button" data-nav="vault" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-vault"/></svg><span>금고</span></button><button type="button" data-nav="connections"><svg class="icon" aria-hidden="true"><use href="#i-link"/></svg><span>연결</span></button></nav>
+          </section>
+          <div class="sheet" id="detail-sheet" hidden><section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title" tabindex="-1"><div class="sheet-handle" aria-hidden="true"></div><div class="sheet-head"><span class="eyebrow">VAULT ITEM / DEMO</span><button type="button" class="quiet-button" id="close-sheet" aria-label="항목 상세 닫기"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="sheet-title"><span class="service-mark" id="detail-mark" aria-hidden="true"></span><div><h2 id="detail-title"></h2><p id="detail-type"></p></div></div><dl class="detail-meta"><div><dt>발급 / 가입 서비스</dt><dd id="detail-issuer"></dd></div><div><dt>계정</dt><dd id="detail-account"></dd></div><div><dt>내가 붙인 이름</dt><dd id="detail-name"></dd></div></dl><div class="secret-box"><div class="secret-label"><span id="secret-label">합성 API 키</span><span>NOT A REAL SECRET</span></div><code id="secret-value" class="secret-text" aria-live="polite">•••• •••• •••• ••••</code><button type="button" id="reveal-secret" class="reveal-button" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg><span>합성 예시 보기</span></button></div><div class="detail-connection"><h3>연결된 도구 / 사용처</h3><div id="detail-consumers"></div></div><p class="sheet-note">표시 전 재인증은 향후 구현할 기능입니다. 이 시안은 인증 없이 미리 정한 합성 문자열만 보여줍니다. 실제 키의 조회·복사·저장은 연결하지 않았습니다.</p></section></div>
+          <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+        </div>
+      </div>
+      <p class="below-note">브라우저용 디자인 프로토타입 · 네이티브 앱 구현 / 실제 금고 연결 전</p>
+    </section>
+  </main>
+  <footer class="footer"><span>KeyAtlas · Working title</span><span>Interaction study / 2026.09</span></footer>
+  <script type="module" src="orbit-globe.js"></script>
+  <script>
+    (() => {
+      'use strict';
+      const items = [
+        { id:'openai', title:'OpenAI', mark:'O', type:'api', typeLabel:'API key', issuer:'OpenAI', account:'demo@keyatlas.example', name:'개인 프로젝트', consumers:['Manus','개인 웹 프로젝트'], secret:'demo_openai_SYNTHETIC_ONLY_0001' },
+        { id:'anthropic', title:'Anthropic', mark:'A', type:'api', typeLabel:'API key', issuer:'Anthropic', account:'demo@keyatlas.example', name:'글쓰기 실험', consumers:['Claude Code','글쓰기 워크플로'], secret:'demo_anthropic_SYNTHETIC_ONLY_0002' },
+        { id:'google', title:'Google AI Studio', mark:'G', type:'api', typeLabel:'API key', issuer:'Google AI Studio', account:'demo@keyatlas.example', name:'이미지 실험실', consumers:['이미지 실험 앱'], secret:'demo_google_SYNTHETIC_ONLY_0003' },
+        { id:'github', title:'GitHub', mark:'GH', type:'login', typeLabel:'로그인', issuer:'GitHub', account:'demo-user.example', name:'개발용 계정', consumers:['개인 개발 환경'], secret:'demo_password_SYNTHETIC_ONLY_0004' },
+        { id:'mcp', title:'Notebook MCP', mark:'/>', type:'mcp', typeLabel:'MCP 연결', issuer:'예시 Notebook MCP', account:'로컬 데모 워크스페이스', name:'리서치 노트', consumers:['데스크톱 AI 도구'], secret:'demo_mcp_token_SYNTHETIC_ONLY_0005' }
+      ];
+      const byId = id => document.getElementById(id);
+      const list = byId('credential-list');
+      const views = { home:byId('home-view'), vault:byId('vault-view'), connections:byId('connections-view') };
+      let filter = 'all';
+      let selected = null;
+      let previousFocus = null;
+      let toastTimer;
+      function icon(name) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        svg.classList.add('icon');
+        svg.setAttribute('aria-hidden','true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg','use');
+        use.setAttribute('href','#i-' + name);
+        svg.append(use);
+        return svg;
+      }
+      function setScreen(screen) {
+        closeSheet(false);
+        const isIntro = screen === 'intro';
+        byId('intro').hidden = !isIntro;
+        byId('vault').hidden = isIntro;
+        document.querySelectorAll('[data-screen]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.screen === screen)));
+        if (!isIntro) setView('vault');
+      }
+      function setView(view) {
+        Object.entries(views).forEach(([name,element]) => { element.hidden = name !== view; });
+        document.querySelectorAll('.bottom-nav [data-nav]').forEach(button => {
+          if (button.dataset.nav === view) button.setAttribute('aria-current','page');
+          else button.removeAttribute('aria-current');
+        });
+        byId('app-scroll').scrollTop = 0;
+      }
+      function renderList() {
+        const query = byId('vault-search').value.trim().toLocaleLowerCase();
+        const visible = items.filter(item => (filter === 'all' || item.type === filter) && [item.title,item.account,item.name,...item.consumers].join(' ').toLocaleLowerCase().includes(query));
+        list.replaceChildren();
+        visible.forEach(item => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'credential';
+          button.setAttribute('aria-label',item.title + ', ' + item.typeLabel + ', 상세 보기');
+          const mark = document.createElement('span');
+          mark.className = 'service-mark'; mark.dataset.service = item.id; mark.textContent = item.mark; mark.setAttribute('aria-hidden','true');
+          const copy = document.createElement('span'); copy.className = 'entry-copy';
+          const title = document.createElement('span'); title.className = 'entry-title'; title.textContent = item.title;
+          const meta = document.createElement('span'); meta.className = 'entry-meta'; meta.textContent = item.typeLabel + ' · ' + item.consumers[0] + (item.consumers.length > 1 ? ' 외 ' + (item.consumers.length - 1) + '곳' : '');
+          copy.append(title,meta); button.append(mark,copy,icon('chevron'));
+          button.addEventListener('click',() => openSheet(item,button)); list.append(button);
+        });
+        byId('empty-state').hidden = visible.length !== 0;
+        byId('list-label').textContent = (query || filter !== 'all' ? visible.length + ' ITEMS' : 'ALL ITEMS') + ' / SYNTHETIC DATA';
+      }
+      function renderConnections() {
+        items.filter(item => item.type !== 'login').forEach(item => {
+          const block = document.createElement('article'); block.className = 'connection';
+          const title = document.createElement('h3'); title.textContent = item.name;
+          const path = document.createElement('div'); path.className = 'connection-path';
+          const issuer = document.createElement('span'); issuer.textContent = item.issuer;
+          const arrow = document.createElement('i'); arrow.textContent = '→'; arrow.setAttribute('aria-hidden','true');
+          const sr = document.createElement('span'); sr.className = 'sr-only'; sr.textContent = '에서 발급, 연결된 곳:';
+          path.append(issuer,arrow,sr);
+          item.consumers.forEach(name => { const consumer = document.createElement('b'); consumer.textContent = name; path.append(consumer); });
+          const note = document.createElement('p'); note.className = 'path-note'; note.textContent = '합성 연결 예시 · 실제 사용 여부 미조회';
+          block.append(title,path,note); byId('connection-list').append(block);
+        });
+      }
+      function openSheet(item,trigger) {
+        selected = item; previousFocus = trigger;
+        byId('detail-title').textContent = item.title;
+        byId('detail-mark').textContent = item.mark;
+        byId('detail-mark').dataset.service = item.id;
+        byId('detail-type').textContent = item.typeLabel + ' · 합성 예시';
+        byId('detail-issuer').textContent = item.issuer;
+        byId('detail-account').textContent = item.account;
+        byId('detail-name').textContent = item.name;
+        byId('secret-label').textContent = item.type === 'login' ? '합성 비밀번호' : item.type === 'mcp' ? '합성 MCP 토큰' : '합성 API 키';
+        byId('secret-value').textContent = '•••• •••• •••• ••••';
+        byId('reveal-secret').setAttribute('aria-pressed','false');
+        byId('reveal-secret').querySelector('span').textContent = '합성 예시 보기';
+        byId('detail-consumers').replaceChildren();
+        item.consumers.forEach(name => { const consumer = document.createElement('span'); consumer.className = 'consumer'; consumer.textContent = name; byId('detail-consumers').append(consumer); });
+        byId('detail-sheet').hidden = false;
+        byId('vault').inert = true;
+        document.querySelector('.sheet-panel').scrollTop = 0;
+        byId('close-sheet').focus({preventScroll:true});
+      }
+      function closeSheet(restoreFocus = true) {
+        byId('detail-sheet').hidden = true;
+        byId('vault').inert = false;
+        byId('secret-value').textContent = '•••• •••• •••• ••••';
+        selected = null;
+        if (restoreFocus && previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
+        previousFocus = null;
+      }
+      function toast(text) {
+        clearTimeout(toastTimer);
+        byId('toast').textContent = text; byId('toast').hidden = false;
+        toastTimer = setTimeout(() => { byId('toast').hidden = true; },4500);
+      }
+      document.querySelectorAll('[data-screen]').forEach(button => button.addEventListener('click',() => setScreen(button.dataset.screen)));
+      document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click',() => setView(button.dataset.nav)));
+      document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click',() => {
+        filter = button.dataset.filter;
+        document.querySelectorAll('[data-filter]').forEach(other => other.setAttribute('aria-pressed',String(other === button)));
+        renderList();
+      }));
+      byId('enter-vault').addEventListener('click',() => { setScreen('vault'); byId('vault-heading').focus({preventScroll:true}); });
+      byId('vault-search').addEventListener('input',renderList);
+      byId('demo-account').addEventListener('click',() => toast('데모 워크스페이스입니다. 계정 로그인과 인증은 연결하지 않았어요.'));
+      byId('close-sheet').addEventListener('click',() => closeSheet());
+      byId('detail-sheet').addEventListener('click',event => { if (event.target === byId('detail-sheet')) closeSheet(); });
+      byId('reveal-secret').addEventListener('click',() => {
+        if (!selected) return;
+        const revealed = byId('reveal-secret').getAttribute('aria-pressed') === 'true';
+        byId('secret-value').textContent = revealed ? '•••• •••• •••• ••••' : selected.secret;
+        byId('reveal-secret').setAttribute('aria-pressed',String(!revealed));
+        byId('reveal-secret').querySelector('span').textContent = revealed ? '합성 예시 보기' : '합성 예시 숨기기';
+      });
+      document.addEventListener('keydown',event => {
+        if (byId('detail-sheet').hidden) return;
+        if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
+        if (event.key === 'Tab') {
+          const focusable = Array.from(byId('detail-sheet').querySelectorAll('button:not([disabled]),a[href],input,[tabindex="0"]'));
+          const first = focusable[0], last = focusable[focusable.length - 1];
+          if (event.shiftKey && (document.activeElement === first || !byId('detail-sheet').contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && (document.activeElement === last || !byId('detail-sheet').contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+        }
+      });
+      renderList();
+      renderConnections();
+    })();
+  </script>
+</body>
+</html>
