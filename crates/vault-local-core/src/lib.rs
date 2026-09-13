@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+mod catalog;
 mod codec;
 mod error;
 mod ids;
@@ -13,6 +14,10 @@ mod record;
 mod secret;
 mod synthetic;
 
+pub use catalog::{
+    CatalogConnectionTypeV1, CatalogConnectionViewV1, CatalogCredentialStatusV1,
+    CatalogCredentialTypeV1, CredentialCatalogProjectionV1,
+};
 pub use error::{LocalVaultError, LocalVaultErrorCode};
 pub use ids::{RecordIdV1, RevisionIdV1};
 pub use persistence::{

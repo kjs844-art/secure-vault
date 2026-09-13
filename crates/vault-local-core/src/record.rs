@@ -5,6 +5,7 @@ use vault_crypto::{
 };
 
 use crate::LocalVaultError;
+use crate::catalog::CredentialCatalogProjectionV1;
 #[cfg(test)]
 use crate::codec::encode_synthetic_future_item_v2;
 use crate::codec::{DecodedItem, decode_item, encode_current_item};
@@ -34,6 +35,8 @@ pub struct SealedCredentialRecordV0Alpha1 {
 }
 
 pub struct OpenedCredentialV1 {
+    record_id: RecordIdV1,
+    revision_id: RevisionIdV1,
     item: CredentialItemV1,
 }
 
@@ -47,6 +50,10 @@ pub enum OpenCredentialOutcome {
 }
 
 impl OpenedCredentialV1 {
+    pub fn into_catalog_projection_v1(self) -> CredentialCatalogProjectionV1 {
+        CredentialCatalogProjectionV1::from_item(self.record_id, self.revision_id, self.item)
+    }
+
     pub fn item_name(&self) -> &str {
         &self.item.item_name
     }
@@ -112,9 +119,11 @@ pub fn open_credential_record_v1(
     };
 
     match decode_item(&plaintext, record.locator.revision_id)? {
-        DecodedItem::Current(item) => {
-            Ok(OpenCredentialOutcome::Current(OpenedCredentialV1 { item }))
-        }
+        DecodedItem::Current(item) => Ok(OpenCredentialOutcome::Current(OpenedCredentialV1 {
+            record_id: record.locator.record_id,
+            revision_id: record.locator.revision_id,
+            item,
+        })),
         DecodedItem::UpgradeRequired { version: _ } => Ok(OpenCredentialOutcome::UpgradeRequired),
     }
 }

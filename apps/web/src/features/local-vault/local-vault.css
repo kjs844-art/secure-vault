@@ -1,0 +1,13 @@
+.vault-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vault-actions button:disabled { opacity: 0.5; cursor: wait; }
+.vault-actions button:focus-visible, .local-vault a:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.demo-warning { border-left: 4px solid #a96416; padding: 12px; background: #fff8e9; line-height: 1.6; }
+.vault-status { margin: 20px 0 12px; line-height: 1.7; }
+.local-vault small { line-height: 1.6; color: #52616d; }
+.relationship-list { list-style: none; padding: 0; display: grid; gap: 16px; }
+.relationship-list > li { border: 1px solid #dce2e8; border-radius: 10px; padding: 20px; }
+.relationship-list h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
+.relationship-service { color: #425d6a; font-weight: 600; }
+.relationship-list ul { list-style: none; padding-left: 12px; border-left: 2px solid #b3c4cf; }
+.relationship-list ul li { padding: 8px; overflow-wrap: anywhere; }
+.consumer-type { display: inline-block; font-size: 0.85rem; padding: 3px 8px; margin-left: 12px; background: #edf2f5; border-radius: 6px; }
