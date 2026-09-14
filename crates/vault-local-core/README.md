@@ -27,7 +27,7 @@ design documents only; it is not a backup destination for vault data.
 
 Test-only comparators check all 67 fields across the item and its five nested
 model types, including optional values and ordered collections. Full and minimal
-codec roundtrips use distinct synthetic secrets and timestamps. Three negative
+codec roundtrips use distinct synthetic secrets and timestamps. Four negative
 controls confirm that the comparator rejects altered decoded values without
 printing those values.
 
@@ -36,3 +36,9 @@ the original session, and unlocking a new session. This is an in-memory record
 test, not a disk/process restart or a proof that all plaintext has left memory.
 See the [verification record](../../docs/verification/2026-09-07-record-preservation.md)
 for exact checks and remaining boundaries.
+
+A fully populated test-only record now also preserves every field (including
+rotation state and MCP bindings) across three successive unlocks after a rejected
+password attempt. The public writer still accepts only the three synthetic
+fixtures; this does not implement a rotation workflow or prove disk durability.
+See the [follow-up verification](../../docs/verification/2026-09-14-populated-record-preservation.md).

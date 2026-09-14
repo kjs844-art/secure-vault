@@ -248,7 +248,7 @@ fn assert_rotation_preserved(expected: &RotationStateV1, actual: &RotationStateV
     );
 }
 
-fn synthetic_preservation_item() -> Result<CredentialItemV1, LocalVaultError> {
+pub(crate) fn synthetic_preservation_item() -> Result<CredentialItemV1, LocalVaultError> {
     let mut item = synthetic_fully_populated_item()?;
     item.item_name = "DEMO_VALUE_ONLY_보존_🔐".to_owned();
     item.notes = Some("DEMO_VALUE_ONLY_첫째 줄\nDEMO_VALUE_ONLY_둘째 줄 🧪".to_owned());
@@ -336,5 +336,15 @@ fn preservation_oracle_detects_changed_synthetic_binding_target() {
         .as_mut()
         .unwrap_or_else(|| panic!("ConnectionV1.mcp_integration"));
     integration.credential_field_bindings[0].field_id = expected.secret_fields[1].field_id;
+    assert_item_preserved(&expected, &actual);
+}
+
+#[test]
+#[should_panic(expected = "CredentialItemV1.rotation_state")]
+fn preservation_oracle_detects_missing_rotation_state() {
+    let expected = synthetic_preservation_item()
+        .unwrap_or_else(|_| panic!("CredentialItemV1.synthetic_fixture"));
+    let mut actual = roundtrip_item(&expected);
+    actual.rotation_state = None;
     assert_item_preserved(&expected, &actual);
 }
