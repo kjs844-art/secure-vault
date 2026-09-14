@@ -45,8 +45,29 @@
 - 변경 파일 4개 대상 제한된 자격증명 패턴 검사: 일치 0, 종료 코드 0. 모든 종류의 비밀값 부재를 증명하는 완전한 스캐너는 아니다.
 - 자체 diff 검토: 변경은 테스트 2개, test-only helper 가시성, README와 이 기록에 한정된다. 독립 agent 리뷰는 이번에 수행하지 않았다.
 
+## 후속 전체 회귀 검사와 PR (2026-09-14)
+
+- Draft PR: [#2](https://github.com/kjs844-art/secure-vault/pull/2).
+- Base: `codex/firstvibe-sqlite-store`, head: `codex/firstvibe-record-preservation-followup`.
+- GitHub 사전 확인: OPEN, Draft, MERGEABLE. 자동 CI 결과 목록은 비어 있었다. MERGEABLE은 테스트 통과나 리뷰 승인을 뜻하지 않는다.
+- `scripts/verify-local.ps1 -Scope Workspace` 실행 결과는 **실패/미완료(종료 코드 101)**다. 아래 OS 실행 차단 때문에 전체 통과로 보고하지 않는다.
+
+| 검사 | 결과 |
+|---|---|
+| `cargo fmt --all -- --check` | 종료 코드 0 |
+| `cargo clippy --offline --locked --workspace --all-targets --all-features -- -D warnings` | 종료 코드 0 |
+| `cargo test --offline --locked --workspace --tests -- --test-threads=1` | 종료 코드 101: SQLite `bounds` 실행 전 Windows 앱 제어 정책 차단, os error 4551 |
+| 별도 `cargo test --offline --locked -p vault-local-sqlite-vfs-windows --features feasibility-probe -- --test-threads=1` | 종료 코드 101: lib 테스트 실행 파일도 동일 정책에 의해 실행 전 차단 |
+| 별도 `cargo test --offline --locked --workspace --doc` | 종료 코드 0: SQLite compile-fail doctest 2개 통과, 나머지 crate는 0개 |
+
+차단 전 암호화 모듈, 코어 24개와 통합 5개, Windows 플랫폼 2개, 플랫폼 계약 2개가 통과했다. SQLite 단위 검사는 44개 통과/실패 0/ignored 1이었다. ignored 항목은 부모 crash 테스트가 호출하는 자식 진입점이다. 부모의 initial commit 및 stale conflict 프로세스 종료 원자성 테스트는 통과했다.
+
+`bounds.rs`는 실행되지 않았다. 그 뒤의 `commit_cas`, `future_and_corruption`, `lock_and_flags`, `plaintext_scan`, `preflight`, `restart_roundtrip`, `schema_contract`, `secret_traits` 통합 검사도 이번 전체 실행에서는 도달하지 못했다. 예전 통과 기록을 이번 결과로 대체하지 않는다.
+
+보안 정책 해제, 예외 추가, 바이너리 이름 변경, 차단 우회는 하지 않았다. 문서·PR은 이 상태를 명시하며 Draft를 유지한다. 독립 리뷰도 아직 수행되지 않았다.
+
 ## 미검증·출시 제한
 
-전체 워크스페이스 재검사, 실제 Windows 핸들 검증, SQLite/WAL 내구성, 강제 종료 복구, 메모리 완전 삭제, 실제 서비스 로그인·결제·배포, 독립 제품 보안 감사는 이번 완료 범위에 포함하지 않는다.
+전체 회귀 통과는 OS 실행 차단 해소 후 재확인이 필요하다. 실제 Windows 핸들 실험, 운영 환경 SQLite/WAL 내구성, 메모리 완전 삭제, 실제 서비스 로그인·결제·배포, 독립 제품 보안 감사는 완료 범위가 아니다. 기존 합성 프로세스 종료 테스트 통과를 운영 환경 전반의 장애 복구 보장으로 확대하지 않는다.
 
 `REAL_SECRET_GATE=CLOSED`, `PHASE_0A_VERDICT=UNCHANGED`.
