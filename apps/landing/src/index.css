@@ -59,7 +59,7 @@ a:hover { color: var(--ink); }
 
 .mark {
   font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 3.2px;
-  color: var(--gold-hi);
+  color: var(--ink);
 }
 .bar-nav { display: flex; gap: 26px; margin-left: 18px; font-size: 13px; color: var(--ink-2); }
 .bar-nav a { transition: color 0.25s; }
@@ -130,7 +130,7 @@ a:hover { color: var(--ink); }
 .chapter-inner.in > :nth-child(4) { transition-delay: 0.28s; }
 
 .eyebrow {
-  margin: 0 0 22px; font-family: var(--display); font-size: 11px; letter-spacing: 3px; color: var(--gold);
+  margin: 0 0 22px; font-family: var(--display); font-size: 11px; letter-spacing: 3px; color: var(--gold-lo);
 }
 h1 {
   margin: 0; font-family: var(--sans); font-weight: 600;
