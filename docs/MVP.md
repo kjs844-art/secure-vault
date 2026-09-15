@@ -8,7 +8,7 @@ OpenAI, Claude, Manus, Grok, Meta, Supabase 등 여러 개발·AI 서비스를 �
 
 ## 현재 구현 상태
 
-현재 구현된 범위는 합성 데이터 전용 `v0alpha1` 로컬 암호화 코어와 암호문 SQLite 영속 저장 slice입니다. 이것은 사용할 수 있는 비밀번호 관리자가 아닙니다.
+현재 구현된 범위는 합성 데이터 전용 `v0alpha1` 로컬 암호화 코어, 암호문 SQLite 영속 저장 slice, 별도의 웹 Worker/WASM·IndexedDB 합성 데모입니다. 이것은 사용할 수 있는 비밀번호 관리자가 아닙니다.
 
 - 합성 비밀번호로 Vault Root Key를 생성·래핑하고 다시 잠금 해제
 - 타입이 고정된 `CredentialItemV1`과 세 가지 합성 관계 fixture
@@ -24,7 +24,9 @@ OpenAI, Claude, Manus, Grok, Meta, Supabase 등 여러 개발·AI 서비스를 �
 
 **실제 비밀번호, API 키, Secret, 복구 코드 또는 사용자 데이터를 입력하거나 가져오는 것은 금지합니다.**
 
-실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합, Web/Android UI, 지원되는 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
+웹 데모에는 합성 목록·로컬 검색·자동 잠금·합성 백업/복원 화면이 있습니다. [현재 통합 증거](verification/2026-09-15-backup-session-integration.md)는 실제 브라우저 복원을 포함하지만, 디스크 다운로드/네이티브 파일 선택 왕복은 미검증입니다. 이 데모는 아래의 제품 MVP 완료를 의미하지 않습니다.
+
+실제 자격 증명 입력·가져오기, 제품용 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
 
 실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 
