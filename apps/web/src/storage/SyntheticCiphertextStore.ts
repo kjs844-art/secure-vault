@@ -5,6 +5,9 @@ export const MAX_SYNTHETIC_ARCHIVE_BYTES = 512 * 1024;
 const DATABASE_VERSION = 1;
 const OBJECT_STORE_NAME = "bundle";
 const BUNDLE_KEY = "archive";
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
+)!.get!;
 
 export type SyntheticStorageErrorCode =
   | "unavailable"
@@ -42,29 +45,50 @@ export interface SyntheticCiphertextStore {
   createIfAbsent(bytes: Uint8Array): Promise<"created" | "exists">;
 }
 
+export interface SyntheticMutableCiphertextStore extends SyntheticCiphertextStore {
+  /**
+   * Internal opaque-byte capability for a caller that authenticates its archive.
+   * This checks concurrent changes, not authenticity, origin or rollback history.
+   * A missing archive is never created by this operation.
+   */
+  compareAndSwapArchive(
+    expected: Uint8Array,
+    next: Uint8Array,
+  ): Promise<"updated" | "conflict" | "missing">;
+}
+
 function fixedError(error: unknown): SyntheticStorageError {
-  if (error instanceof SyntheticStorageError) return error;
-  // Do not expose browser error messages: they may contain data or identifiers.
-  const name = error instanceof Error || error instanceof DOMException ? error.name : "";
-  if (name === "VersionError") return new SyntheticStorageError("incompatible");
-  if (name === "QuotaExceededError") return new SyntheticStorageError("quota");
-  if (name === "AbortError") return new SyntheticStorageError("aborted");
-  if (name === "SecurityError" || name === "InvalidStateError") {
-    return new SyntheticStorageError("unavailable");
+  try {
+    if (error instanceof SyntheticStorageError) return error;
+    // Do not expose browser error messages: they may contain data or identifiers.
+    const name = error instanceof Error || error instanceof DOMException ? error.name : "";
+    if (name === "VersionError") return new SyntheticStorageError("incompatible");
+    if (name === "QuotaExceededError") return new SyntheticStorageError("quota");
+    if (name === "AbortError") return new SyntheticStorageError("aborted");
+    if (name === "SecurityError" || name === "InvalidStateError") {
+      return new SyntheticStorageError("unavailable");
+    }
+  } catch {
+    // Even inspecting an unknown thrown value can throw (for example a getter).
   }
   return new SyntheticStorageError("failed");
 }
 
 function copyBytes(value: unknown, code: "corrupt" | "invalid-bytes"): Uint8Array {
-  if (
-    !(value instanceof Uint8Array) ||
-    Object.getPrototypeOf(value) !== Uint8Array.prototype ||
-    value.byteLength < 1 ||
-    value.byteLength > MAX_SYNTHETIC_ARCHIVE_BYTES
-  ) {
+  try {
+    if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) {
+      throw new SyntheticStorageError(code);
+    }
+    // An own byteLength property can lie; inspect the native view's real length.
+    const length = typedArrayByteLength.call(value) as number;
+    if (length < 1 || length > MAX_SYNTHETIC_ARCHIVE_BYTES) {
+      throw new SyntheticStorageError(code);
+    }
+    return new Uint8Array(value);
+  } catch {
+    // Reject detached/forged views or throwing inspection without leaking data.
     throw new SyntheticStorageError(code);
   }
-  return new Uint8Array(value);
 }
 
 function openDatabase(factory: IDBFactory | undefined): Promise<IDBDatabase> {
@@ -125,8 +149,19 @@ function openDatabase(factory: IDBFactory | undefined): Promise<IDBDatabase> {
   });
 }
 
-type Operation = { kind: "read" } | { kind: "create"; bytes: Uint8Array };
-type OperationResult = Uint8Array | null | "created" | "exists";
+type Operation =
+  | { kind: "read" }
+  | { kind: "create"; bytes: Uint8Array }
+  | { kind: "compare-and-swap"; expected: Uint8Array; next: Uint8Array };
+type OperationResult = Uint8Array | null | "created" | "exists" | "updated" | "conflict" | "missing";
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
 
 async function transact(
   factory: IDBFactory | undefined,
@@ -197,6 +232,10 @@ async function transact(
             result = null;
             return;
           }
+          if (operation.kind === "compare-and-swap") {
+            result = "missing";
+            return;
+          }
           try {
             // add, not put: an existing archive must never be overwritten.
             const addRequest = store.add(operation.bytes, BUNDLE_KEY);
@@ -208,12 +247,29 @@ async function transact(
           return;
         }
 
-        const readRequest = store.get(BUNDLE_KEY);
+        let readRequest: IDBRequest;
+        try {
+          readRequest = store.get(BUNDLE_KEY);
+        } catch (error) {
+          fail(error);
+          return;
+        }
         readRequest.onerror = () => { failure = fixedError(readRequest.error); };
         readRequest.onsuccess = () => {
           try {
             const bytes = copyBytes(readRequest.result, "corrupt");
-            result = operation.kind === "read" ? bytes : "exists";
+            if (operation.kind === "read") {
+              result = bytes;
+            } else if (operation.kind === "create") {
+              result = "exists";
+            } else if (!equalBytes(bytes, operation.expected)) {
+              result = "conflict";
+            } else {
+              // Validation, comparison and replacement share this transaction.
+              const putRequest = store.put(operation.next, BUNDLE_KEY);
+              putRequest.onerror = () => { failure = fixedError(putRequest.error); };
+              putRequest.onsuccess = () => { result = "updated"; };
+            }
           } catch (error) {
             fail(error);
           }
@@ -225,7 +281,7 @@ async function transact(
   });
 }
 
-export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticCiphertextStore {
+export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticMutableCiphertextStore {
   const resolveFactory = () => {
     try {
       return factory ?? globalThis.indexedDB;
@@ -241,6 +297,14 @@ export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticC
       // Snapshot and validate synchronously before any asynchronous database work.
       const snapshot = copyBytes(bytes, "invalid-bytes");
       return await transact(resolveFactory(), { kind: "create", bytes: snapshot }) as "created" | "exists";
+    },
+    async compareAndSwapArchive(expected, next) {
+      // Snapshot both inputs before resolving/opening the database or awaiting.
+      const expectedSnapshot = copyBytes(expected, "invalid-bytes");
+      const nextSnapshot = copyBytes(next, "invalid-bytes");
+      return await transact(resolveFactory(), {
+        kind: "compare-and-swap", expected: expectedSnapshot, next: nextSnapshot,
+      }) as "updated" | "conflict" | "missing";
     },
   };
 }

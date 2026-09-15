@@ -42,3 +42,40 @@ From `apps/web`:
 npm test -- src/bridge/WasmCatalogAdapter.test.ts
 npm run typecheck
 ```
+
+## Synthetic local tool dispatcher
+
+`syntheticToolProtocol.ts` validates decoded JavaScript objects for exactly
+`search_catalog`, `filter_catalog`, and `lock_vault`. It is not a JSON parser,
+remote MCP endpoint, authentication boundary, or authorization token.
+Unknown/extra/inherited/accessor fields are rejected, own scalar fields are
+snapshotted once, and errors never include input values or thrown messages.
+Queries are bounded to 128 UTF-8 bytes; both result operations default to 500
+rows and accept an integer `maxResults` between 0 and 500 inclusive.
+
+```text
+local UI command -> validated action -> SyntheticVaultTools
+                                      |               |
+                         private UI state         fixed receipt
+                         local display rows       ok + action OR error + code
+```
+
+`SyntheticVaultTools` reuses `searchLocalCatalog` and owns an effect-bound local
+view for the current `SyntheticVaultSession` generation. Constructor calls do
+not subscribe or read data. Unbound operations are denied. Lock, session changes,
+unbind, and a newer request invalidate pending work and remove owned results.
+The lock operation never unlocks and does not wait behind search work. React
+mounts the panel only for an open generation, clearing its query on lock/reopen.
+
+The `state.entries` property is private local display data, **not** a tool reply.
+`executeTool()` returns only `SyntheticToolReceiptV1`: no rows, names, queries,
+IDs, counts, or match/no-match flags. A receipt does not grant permission to add
+an external transport. Neither this panel nor dispatcher is connected to an AI,
+analytics, storage, provider console, clipboard, or the legacy fixture-only
+`toAiSafeInventory` mapper. The private-AI-projection approval gate is unchanged.
+Do not serialize the controller or its state into any such route.
+
+Object proxies and application callbacks can reenter same-origin code, so the
+dispatcher checks the current generation after parsing and before/after result
+notifications. This is lifecycle robustness, not isolation against a compromised
+JS realm. Lock cannot erase strings or snapshots already retained by a caller.

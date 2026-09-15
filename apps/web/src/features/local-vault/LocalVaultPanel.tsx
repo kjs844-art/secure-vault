@@ -4,6 +4,7 @@ import { SyntheticVaultSession } from "./SyntheticVaultSession";
 import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
 import { bindVaultAutoLock } from "./bindVaultAutoLock";
 import { LocalCatalogSearch } from "./LocalCatalogSearch";
+import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -47,7 +48,8 @@ export function LocalVaultPanel() {
         <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠길 수 있습니다.</small>
       </section>
 
-      {state.phase === "open" && <LocalCatalogSearch key={session.viewGeneration} entries={state.entries} />}
+      {state.phase === "open" && <LocalCatalogSearch key={`catalog-${session.viewGeneration}`} entries={state.entries} />}
+      {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">
         <h2 id="local-explanation-heading">로컬 저장은 ‘이 브라우저 안 서랍’이에요</h2>
         <p>같은 주소·같은 브라우저 프로필에서 다시 찾을 수 있도록 저장하는 뜻입니다. 다른 PC나 휴대폰에서는 자동으로 보이지 않습니다.</p>

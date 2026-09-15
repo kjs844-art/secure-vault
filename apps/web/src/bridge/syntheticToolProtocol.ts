@@ -70,10 +70,12 @@ export function parseSyntheticToolAction(input: unknown): ParsedSyntheticToolAct
         || maxResults < 0 || maxResults > SYNTHETIC_TOOL_MAX_RESULTS) return fail("LIMIT_EXCEEDED");
     if (op === "search_catalog") {
       const query = fields.query;
-      if (typeof query !== "string" || !wellFormed(query)) return fail("INVALID_PAYLOAD");
-      // Cheap bound before encoding; the actual protocol bound is UTF-8 bytes.
-      if (query.length > SYNTHETIC_TOOL_QUERY_MAX_BYTES
-          || encoder.encode(query).byteLength > SYNTHETIC_TOOL_QUERY_MAX_BYTES) return fail("LIMIT_EXCEEDED");
+      if (typeof query !== "string") return fail("INVALID_PAYLOAD");
+      // Bound work before scanning or allocating. The protocol limit is UTF-8
+      // bytes; UTF-16 length is only a cheap first rejection for long input.
+      if (query.length > SYNTHETIC_TOOL_QUERY_MAX_BYTES) return fail("LIMIT_EXCEEDED");
+      if (!wellFormed(query)) return fail("INVALID_PAYLOAD");
+      if (encoder.encode(query).byteLength > SYNTHETIC_TOOL_QUERY_MAX_BYTES) return fail("LIMIT_EXCEEDED");
       return Object.freeze({ ok: true, action: Object.freeze({ op, query, maxResults }) });
     }
     const filter = fields.filter;
