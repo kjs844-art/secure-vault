@@ -34,6 +34,45 @@ function setup() {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("BrowserSyntheticVaultWorker", () => {
+  it("dispatches a copied closed append selection and returns only copied ciphertext", async () => {
+    const { client, workers } = setup();
+    const input = new Uint8Array([1, 2]);
+    const selection = { profileId: 1, credentialId: 0, connectionIds: [2, 0] } as const;
+    const pending = client.append(input, selection);
+    const request = workers[0]!.postMessage.mock.calls[0]![0] as {
+      op: string; bytes: Uint8Array; selection: typeof selection;
+    };
+    expect(request).toEqual({ op: "append", bytes: input, selection });
+    expect(request.bytes).not.toBe(input);
+    expect(request.selection).not.toBe(selection);
+    expect(request.selection.connectionIds).not.toBe(selection.connectionIds);
+    const candidate = new Uint8Array([1, 2, 3]);
+    workers[0]!.reply({ ok: true, kind: "archive", bytes: candidate });
+    const output = await pending;
+    expect(output).toEqual(candidate);
+    expect(output).not.toBe(candidate);
+    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects invalid append selection before starting the worker", async () => {
+    const { client, factory } = setup();
+    await expect(client.append(new Uint8Array([1]), {
+      profileId: 0.5, credentialId: 0, connectionIds: [],
+    } as never)).rejects.toHaveProperty("code", "INVALID_ARCHIVE");
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it("cancelled append cannot return a late archive or catalog", async () => {
+    const { client, workers } = setup();
+    const pending = client.append(new Uint8Array([1]), { profileId: 0, credentialId: 0, connectionIds: [] });
+    const rejected = expect(pending).rejects.toHaveProperty("code", "CANCELLED");
+    const late = workers[0]!.onmessage!;
+    client.cancel();
+    late({ data: { ok: true, kind: "archive", bytes: new Uint8Array([9]) } } as MessageEvent<unknown>);
+    await rejected;
+    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+
   it("creates nothing until called, returns an owned archive copy, then terminates", async () => {
     const { client, workers, factory } = setup();
     expect(factory).not.toHaveBeenCalled();

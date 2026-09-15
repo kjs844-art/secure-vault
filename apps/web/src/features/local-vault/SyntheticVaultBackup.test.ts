@@ -225,7 +225,26 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(worker.open).not.toHaveBeenCalled();
   });
 
-  it.each([0, 2, 0xffff_ffff])("refuses unsupported archive version %i without storage or validation", async (version) => {
+  it.each([[1, 3], [2, 3], [2, 4], [2, 128]])(
+    "delegates supported archive v%i count %i to full validation and preserves its exact bytes", async (version, count) => {
+      const bytes = withHeader(version, count);
+      const expected = bytes.slice();
+      const { backup, store, worker } = fixture();
+      await backup.restoreArchive(bytes);
+      const exported = await backup.exportArchive();
+      expect(exported).toEqual(expected);
+      expect(exported.buffer).not.toBe(bytes.buffer);
+      expect(bytes).toEqual(expected);
+      expect(await store.read()).toEqual(expected);
+      expect(worker.open).toHaveBeenCalledTimes(2);
+      for (const [validated] of worker.open.mock.calls) {
+        expect(validated).toEqual(expected);
+        expect(validated.buffer).not.toBe(bytes.buffer);
+      }
+    },
+  );
+
+  it.each([0, 3, 0xffff_ffff])("refuses unsupported archive version %i without storage or validation", async (version) => {
     const { backup, store, worker } = fixture();
     await expect(backup.restoreArchive(withHeader(version))).rejects.toMatchObject({ code: "UNSUPPORTED_VERSION" });
     expect(store.read).not.toHaveBeenCalled();
@@ -240,6 +259,30 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(worker.open).not.toHaveBeenCalled();
   });
 
+  it.each([0, 1, 2, 129, 0xffff_ffff])("refuses invalid v2 record count %i before storage or validation", async (count) => {
+    const { backup, store, worker } = fixture();
+    const bytes = withHeader(2, count);
+    const expected = bytes.slice();
+    await expect(backup.restoreArchive(bytes)).rejects.toMatchObject({ code: "INVALID_BACKUP" });
+    expect(bytes).toEqual(expected);
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it.each(["export", "restore"] as const)("requires full validation for v2 %s and preserves bytes on validation failure", async (operation) => {
+    const bytes = withHeader(2, 4);
+    const expected = bytes.slice();
+    const { backup, store, worker } = fixture(operation === "export" ? bytes : null);
+    worker.open.mockRejectedValueOnce(new CatalogAdapterError("INVALID_ARCHIVE"));
+    await expect(operation === "export" ? backup.exportArchive() : backup.restoreArchive(bytes))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(bytes).toEqual(expected);
+    expect(await store.read()).toEqual(operation === "export" ? expected : null);
+  });
+
   it("rejects oversized input before copying into storage or invoking the worker", async () => {
     const { backup, store, worker } = fixture();
     await expect(backup.restoreArchive(fakeArchive(MAX_SYNTHETIC_ARCHIVE_BYTES + 1)))
@@ -251,7 +294,9 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 
   it.each([
     ["bad header", new Uint8Array(32), "INVALID_BACKUP"],
-    ["future version", withHeader(2), "UNSUPPORTED_VERSION"],
+    ["future version", withHeader(3), "UNSUPPORTED_VERSION"],
+    ["v2 low count", withHeader(2, 2), "INVALID_BACKUP"],
+    ["v2 excessive count", withHeader(2, 129), "INVALID_BACKUP"],
     ["oversized", fakeArchive(MAX_SYNTHETIC_ARCHIVE_BYTES + 1), "LIMIT_EXCEEDED"],
     ["subclass", new ArchiveSubclass(fakeArchive()), "INVALID_BACKUP"],
   ] as const)("refuses to export %s saved bytes without rewriting them", async (_label, bytes, code) => {
@@ -264,7 +309,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
 
-  it.each([fakeArchive(), new Uint8Array(), withHeader(9)])(
+  it.each([fakeArchive(), new Uint8Array(), withHeader(2, 4), withHeader(2, 129), withHeader(9)])(
     "preserves any preexisting bytes and refuses restore before worker validation", async (existing) => {
       const expected = new Uint8Array(existing);
       const { backup, store, worker } = fixture(existing);
@@ -520,12 +565,12 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 });
 
 describe("SyntheticVaultBackup with fake IndexedDB and fake validation (not real WASM proof)", () => {
-  it("round-trips exact bytes across separate database factories and new store instances", async () => {
+  it.each([[1, 3], [2, 4]])("round-trips v%i count %i exact bytes across separate database factories and new store instances", async (version, count) => {
     const sourceFactory = new IDBFactory();
     const destinationFactory = new IDBFactory();
     const source = createSyntheticCiphertextStore(sourceFactory);
     const destination = createSyntheticCiphertextStore(destinationFactory);
-    const bytes = fakeArchive();
+    const bytes = withHeader(version, count);
     await source.createIfAbsent(bytes);
     const exported = await new SyntheticVaultBackup(source, fakeWorker()).exportArchive();
     await new SyntheticVaultBackup(destination, fakeWorker()).restoreArchive(exported);

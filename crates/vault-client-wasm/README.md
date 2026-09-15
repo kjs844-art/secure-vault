@@ -8,12 +8,26 @@ state. `lock()` drops that snapshot; `free()` releases the generated handle.
 There is no exported secret getter, record ID, revision ID, real-user credential
 form, network call, or JavaScript vault constructor.
 
-The `synthetic-demo` feature adds `syntheticCatalog()`, `createSyntheticArchive()`
-and `openSyntheticArchive(bytes)`. They use fixed synthetic fixtures, real Rust
-encryption and authenticated projection. The default build excludes all three.
+The `synthetic-demo` feature adds `syntheticCatalog()`, `createSyntheticArchive()`,
+`openSyntheticArchive(bytes)` and `appendSyntheticRegistration(bytes, profileId,
+credentialId, connectionIds)`. They use fixed synthetic fixtures, real Rust
+encryption and authenticated projection. The default build excludes all four.
 The bounded archive parser accepts encrypted bytes, but cannot prove synthetic
 origin. The public fixed demo password provides no real-secret confidentiality;
 there is no real-user initialization/unlock flow.
+
+Creation retains the exact-three-record v1 frame. Append authenticates every
+existing record, rejects duplicate identities, preserves the old password and
+record ciphertext bytes, and returns a v2 frame with 3–128 records. Both versions
+retain the 512 KiB archive and 65,536-byte envelope caps. Returned bytes do not
+mean storage has committed; the caller owns the explicit durable write.
+
+Registration accepts only two compiled profiles (0 Workshop, 1 Cloud Lab), one
+fixed synthetic API credential (0), and at most three distinct connection IDs
+(0 MCP, 1 CLI, 2 CI), preserving their selected order. The JavaScript connection
+argument is a `Float64Array`: numeric values are checked in Rust before u32
+conversion, so fractions, NaN, infinities and wrapping values are rejected.
+No arbitrary user text, secret, key export or storage write enters this export.
 
 ## Build and check on Windows
 

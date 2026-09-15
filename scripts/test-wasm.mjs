@@ -6,6 +6,7 @@ const folder = demo ? 'vault-wasm-demo' : 'vault-wasm';
 let checks = 0;
 let archiveRejections = 0;
 let catalogsVerified = 0;
+let registrationsVerified = 0;
 
 function check(condition) {
   checks++;
@@ -93,11 +94,12 @@ function verifyCatalog(catalog, previousRows) {
 // They do not import credentials or interact with any third-party target.
 function splitFrame(archive) {
   const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-  check(view.getUint32(8, true) === 1);
-  check(view.getUint32(12, true) === 3);
+  const version = view.getUint32(8, true);
+  const count = view.getUint32(12, true);
+  check(version === 1 ? count === 3 : version === 2 && count >= 3 && count <= 128);
   const envelopes = [];
   let offset = 16;
-  for (let index = 0; index < 4; index++) {
+  for (let index = 0; index < count + 1; index++) {
     const length = view.getUint32(offset, true);
     offset += 4;
     check(length > 0 && length <= 65_536 && offset + length <= archive.length);
@@ -108,11 +110,13 @@ function splitFrame(archive) {
   return envelopes;
 }
 
-function frameFrom(archive, envelopes) {
+function frameFrom(archive, envelopes, version = new DataView(archive.buffer, archive.byteOffset).getUint32(8, true)) {
   const length = 16 + envelopes.reduce((total, envelope) => total + 4 + envelope.length, 0);
   const framed = new Uint8Array(length);
   framed.set(archive.subarray(0, 16));
   const view = new DataView(framed.buffer);
+  view.setUint32(8, version, true);
+  view.setUint32(12, envelopes.length - 1, true);
   let offset = 16;
   for (const envelope of envelopes) {
     view.setUint32(offset, envelope.length, true);
@@ -129,6 +133,40 @@ function withU32(archive, offset, value) {
   return altered;
 }
 
+function verifyRegistrationCatalog(catalog, originalRows, registrations) {
+  try {
+    check(catalog.length() === 3 + registrations.length);
+    for (let ref = 0; ref < 3; ref++) {
+      const row = rowGetters.map((name) => catalog[name](ref));
+      for (let index = 0; index < catalog.connectionCount(ref); index++) {
+        row.push(catalog.connectionLabel(ref, index), catalog.connectionType(ref, index));
+      }
+      check(row.length === originalRows[ref].length);
+      check(row.every((value, index) => value === originalRows[ref][index]));
+    }
+    registrations.forEach(({ profile, connections }, index) => {
+      const ref = 3 + index;
+      check(catalog.providerName(ref) === ['Example AI Workshop', 'Example Cloud Lab'][profile]);
+      check(catalog.itemName(ref) === ['Example Workshop Registered API Key', 'Example Cloud Lab Registered API Key'][profile]);
+      check(catalog.credentialType(ref) === 'api_key' && catalog.status(ref) === 'active');
+      check(catalog.secretFieldCount(ref) === 1);
+      check(catalog.connectionCount(ref) === connections.length);
+      check(catalog.mcpConnectionCount(ref) === Number(connections.includes(0)));
+      connections.forEach((id, connectionIndex) => {
+        check(catalog.connectionLabel(ref, connectionIndex) === ['Example MCP', 'Example CLI', 'Example CI'][id]);
+        check(catalog.connectionType(ref, connectionIndex) === ['mcp_server', 'cli', 'ci_cd'][id]);
+      });
+    });
+    catalog.lock();
+    expectCode(() => catalog.length(), 'LOCKED');
+    for (const name of rowGetters) expectCode(() => catalog[name](3), 'LOCKED');
+    catalogsVerified++;
+  } finally {
+    catalog.lock();
+    catalog.free();
+  }
+}
+
 async function run() {
   const base = new URL('../apps/web/src/generated/' + folder + '/', import.meta.url);
   const api = await import(new URL('vault_client_wasm.js', base).href);
@@ -136,7 +174,7 @@ async function run() {
   const wasmExports = api.initSync({ module: bytes });
   check(typeof api.WasmCatalogV1 === 'function');
   check(typeof api.WasmCatalogV1.from_snapshot === 'undefined');
-  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive']) {
+  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive', 'appendSyntheticRegistration']) {
     check(typeof api[name] === (demo ? 'function' : 'undefined'));
     check(typeof wasmExports[name] === (demo ? 'function' : 'undefined'));
   }
@@ -167,6 +205,7 @@ async function run() {
   function reject(input, code) {
     const before = input.slice();
     expectCode(() => api.openSyntheticArchive(input), code);
+    expectCode(() => api.appendSyntheticRegistration(input, 0, 0, new Float64Array()), code);
     check(Buffer.from(input).equals(Buffer.from(before)));
     archiveRejections++;
   }
@@ -181,7 +220,7 @@ async function run() {
   badMagic[0] ^= 1;
   reject(badMagic, 'INVALID_ARCHIVE');
   reject(withU32(archive, 8, 0), 'INVALID_ARCHIVE');
-  reject(withU32(archive, 8, 2), 'UPGRADE_REQUIRED');
+  reject(withU32(archive, 8, 3), 'UPGRADE_REQUIRED');
   reject(withU32(archive, 12, 2), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 0), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 65_537), 'LIMITS_EXCEEDED');
@@ -200,19 +239,78 @@ async function run() {
   reject(badLastRecord, 'AUTHENTICATION_FAILED');
   reject(frameFrom(archive, [envelopes[0], envelopes[1], envelopes[1], envelopes[3]]), 'INVALID_ARCHIVE');
   check(Buffer.from(archive).equals(Buffer.from(original)));
+
+  let current = archive;
+  const registrations = [];
+  for (const selection of [{ profile: 0, connections: [] }, { profile: 1, connections: [0] },
+    { profile: 0, connections: [2, 0, 1] }]) {
+    const before = current.slice();
+    const previousEnvelopes = splitFrame(current);
+    const next = api.appendSyntheticRegistration(current, selection.profile, 0, new Float64Array(selection.connections));
+    check(next instanceof Uint8Array && next.length <= 512 * 1_024);
+    check(new DataView(next.buffer, next.byteOffset).getUint32(8, true) === 2);
+    check(Buffer.from(current).equals(Buffer.from(before)));
+    const nextEnvelopes = splitFrame(next);
+    check(nextEnvelopes.length === previousEnvelopes.length + 1);
+    previousEnvelopes.forEach((envelope, index) => {
+      check(Buffer.from(envelope).equals(Buffer.from(nextEnvelopes[index])));
+    });
+    for (const plaintext of ['DEMO_VALUE_ONLY_API_KEY_0001', 'DEMO_VALUE_ONLY_wasm_catalog',
+      'Example Workshop Registered API Key', 'Example Cloud Lab Registered API Key']) {
+      check(!Buffer.from(next).includes(Buffer.from(plaintext)));
+    }
+    registrations.push(selection);
+    verifyRegistrationCatalog(api.openSyntheticArchive(next), rows, registrations);
+    current = next;
+    registrationsVerified++;
+  }
+
+  function rejectSelection(profile, credential, connections, code = 'INVALID_ARCHIVE') {
+    const before = current.slice();
+    expectCode(() => api.appendSyntheticRegistration(current, profile, credential, new Float64Array(connections)), code);
+    check(Buffer.from(current).equals(Buffer.from(before)));
+    archiveRejections++;
+  }
+  for (const invalid of [-1, 0.5, 2 ** 32, NaN, Infinity, -Infinity]) {
+    rejectSelection(invalid, 0, []);
+    rejectSelection(0, invalid, []);
+    rejectSelection(0, 0, [invalid]);
+  }
+  rejectSelection(2, 0, []);
+  rejectSelection(0, 1, []);
+  rejectSelection(0, 0, [3]);
+  rejectSelection(0, 0, [0, 0]);
+  rejectSelection(0, 0, [0, 1, 2, 0], 'LIMITS_EXCEEDED');
+  reject(withU32(current, 8, 1), 'INVALID_ARCHIVE');
+  reject(withU32(current, 8, 3), 'UPGRADE_REQUIRED');
+  reject(withU32(current, 12, 2), 'INVALID_ARCHIVE');
+  reject(withU32(current, 12, 129), 'LIMITS_EXCEEDED');
+  const corruptV2 = current.slice();
+  corruptV2[corruptV2.length - 1] ^= 1;
+  reject(corruptV2, 'AUTHENTICATION_FAILED');
+  const v2Envelopes = splitFrame(current);
+  reject(frameFrom(current, [...v2Envelopes.slice(0, -1), v2Envelopes[1]]), 'INVALID_ARCHIVE');
+  reject(frameFrom(current, [...v2Envelopes.slice(0, -1), futureEnvelope]), 'UPGRADE_REQUIRED');
+  // A count-at-cap frame is rejected before append KDF/record work; native Rust
+  // tests additionally exercise a fully authenticated 127 -> 128 transition.
+  const capped = frameFrom(current, [envelopes[0], ...Array(128).fill(envelopes[1])], 2);
+  const cappedBefore = capped.slice();
+  expectCode(() => api.appendSyntheticRegistration(capped, 0, 0, new Float64Array()), 'LIMITS_EXCEEDED');
+  check(Buffer.from(capped).equals(Buffer.from(cappedBefore)));
+  archiveRejections++;
 }
 
 try {
   await run();
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: true,
-    checks, catalogsVerified, archiveRejections,
+    checks, catalogsVerified, archiveRejections, registrationsVerified,
   }));
 } catch {
   // Do not print thrown values, assertion operands, rows, archive bytes or keys.
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: false,
-    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections,
+    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified,
   }));
   process.exitCode = 1;
 }

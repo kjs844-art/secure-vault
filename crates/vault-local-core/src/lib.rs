@@ -11,6 +11,7 @@ mod ids;
 mod model;
 mod persistence;
 mod record;
+mod registration;
 mod secret;
 mod synthetic;
 
@@ -32,6 +33,7 @@ pub use record::{
     SealedCredentialRecordV0Alpha1, StoredPaddingBucketV0Alpha1, open_credential_record_v1,
     seal_synthetic_fixture_v1,
 };
+pub use registration::{SyntheticRegistrationSelectionV1, seal_synthetic_registration_v1};
 pub use synthetic::SyntheticCredentialFixtureId;
 
 #[cfg(test)]

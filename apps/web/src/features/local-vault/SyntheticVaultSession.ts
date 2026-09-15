@@ -6,12 +6,24 @@ import {
 import {
   SyntheticStorageError,
   type SyntheticCiphertextStore,
+  type SyntheticMutableCiphertextStore,
 } from "../../storage/SyntheticCiphertextStore";
+import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
 
 export interface SyntheticVaultWorker {
   create(): Promise<Uint8Array>;
   open(bytes: Uint8Array): Promise<readonly LocalCatalogEntryV1[]>;
   cancel(): void;
+}
+
+export interface SyntheticRegistrationWorker extends SyntheticVaultWorker {
+  append(bytes: Uint8Array, selection: SyntheticRegistrationSelection): Promise<Uint8Array>;
+}
+
+class RegistrationStateError extends Error {
+  constructor(readonly code: "REGISTRATION_UNAVAILABLE" | "STORAGE_CONFLICT" | "STORAGE_MISSING") {
+    super(code);
+  }
 }
 
 export interface SyntheticVaultSessionState {
@@ -33,6 +45,7 @@ function emptyState(phase: "locked" | "busy" | "empty" | "error", errorCode: str
 
 function fixedErrorCode(error: unknown): string {
   try {
+    if (error instanceof RegistrationStateError) return error.code;
     if (error instanceof CatalogAdapterError) {
       const code = error.code;
       if (CATALOG_ERROR_CODES.has(code)) return code;
@@ -71,13 +84,16 @@ function snapshotEntries(entries: readonly LocalCatalogEntryV1[]): readonly Loca
  * never repopulate this session. JS strings retained by callers cannot be erased.
  */
 export class SyntheticVaultSession {
-  readonly #store: SyntheticCiphertextStore;
-  readonly #worker: SyntheticVaultWorker;
+  readonly #store: SyntheticCiphertextStore & Partial<SyntheticMutableCiphertextStore>;
+  readonly #worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker>;
   readonly #listeners = new Set<() => void>();
   #generation = 0;
   #state: SyntheticVaultSessionState = emptyState("locked");
 
-  constructor(store: SyntheticCiphertextStore, worker: SyntheticVaultWorker) {
+  constructor(
+    store: SyntheticCiphertextStore & Partial<SyntheticMutableCiphertextStore>,
+    worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker>,
+  ) {
     this.#store = store;
     this.#worker = worker;
   }
@@ -96,6 +112,54 @@ export class SyntheticVaultSession {
 
   async create(): Promise<void> { await this.#run(true); }
   async open(): Promise<void> { await this.#run(false); }
+
+  /** No implicit unlock, retry or create. Only the reread/authenticated saved result is shown. */
+  async register(input: unknown): Promise<void> {
+    if (this.#state.phase !== "open") return;
+    const generation = ++this.#generation;
+    this.#state = emptyState("busy");
+    try {
+      this.#worker.cancel();
+      this.#notify();
+      if (!this.#isCurrent(generation)) return;
+      const selection = parseSyntheticRegistration(input);
+      if (!this.#isCurrent(generation)) return;
+      if (!this.#store.compareAndSwapArchive || !this.#worker.append) {
+        throw new RegistrationStateError("REGISTRATION_UNAVAILABLE");
+      }
+      const before = await this.#store.read();
+      if (!this.#isCurrent(generation)) return;
+      if (before === null) throw new RegistrationStateError("STORAGE_MISSING");
+      // Rust authenticates every existing envelope before producing an append candidate.
+      const candidate = await this.#worker.append(before, selection);
+      if (!this.#isCurrent(generation)) return;
+      const committed = await this.#store.compareAndSwapArchive(before, candidate);
+      if (!this.#isCurrent(generation)) return;
+      if (committed !== "updated") {
+        throw new RegistrationStateError(committed === "missing" ? "STORAGE_MISSING" : "STORAGE_CONFLICT");
+      }
+      const saved = await this.#store.read();
+      if (!this.#isCurrent(generation)) return;
+      if (saved === null) throw new RegistrationStateError("STORAGE_MISSING");
+      // A later writer may already have changed storage. Do not confirm our candidate
+      // based on a different archive or silently retry an ambiguous commit.
+      if (saved.length !== candidate.length || saved.some((byte, index) => byte !== candidate[index])) {
+        throw new RegistrationStateError("STORAGE_CONFLICT");
+      }
+      const entries = await this.#worker.open(saved);
+      if (!this.#isCurrent(generation)) return;
+      const snapshot = snapshotEntries(entries);
+      if (!this.#isCurrent(generation)) return;
+      this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
+      this.#notify();
+    } catch (error: unknown) {
+      if (!this.#isCurrent(generation)) return;
+      const code = fixedErrorCode(error);
+      if (!this.#isCurrent(generation)) return;
+      this.#state = emptyState("error", code);
+      this.#notify();
+    }
+  }
 
   lock(): void {
     this.#generation += 1;

@@ -22,7 +22,9 @@
 | SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
 | SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
-| Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
+| Web 합성 금고 화면 | 로컬 구현·일부 실제 브라우저 검증 | React에서 합성 목록/검색/자동 잠금/IndexedDB 재열기/백업 연습을 제공합니다. 사용자 디자인과 등록 폼은 진행 전이며 운영 서비스가 아닙니다. |
+| Web 합성 등록 저장 경로 | 내부 API 구현 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 계정/프로젝트/환경 표시와 등록 UI는 다음 단계입니다. |
+| Android 화면 | 미구현 | 웹 구현이 Android 앱 구현을 의미하지 않습니다. 생체 인증·Keystore·앱 수명 주기 검증이 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
 | 결제·Free/Pro | 정책 설계만 완료 | 공개 베타와 보안 게이트 전에는 결제 SDK나 실제 상품을 연결하지 않습니다. |
@@ -30,15 +32,28 @@
 
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
 
-### 현재 작업 경로와 다시 검사하는 방법 (2026-09-07)
+### 현재 작업 경로와 다시 검사하는 방법 (2026-09-15)
 
-코드는 `C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`에 있으며 작업 브랜치는 `codex/firstvibe-sqlite-store`입니다. `secure-vault` 폴더의 `main` 체크아웃과 구분해 사용합니다. 바탕화면 설명 문서는 같은 KeyAtlas 아래 `자료\KeyAtlas_보안_설계_패키지_2026-08-29`에 있습니다.
+현재 기능 작업은 `C:\Users\USER\Documents\ChatGPT\KeyAtlas\secure-vault-session-hardening`,
+브랜치는 `codex/firstvibe-local-session-hardening`입니다. 상위 KeyAtlas 폴더와 다른
+AI의 worktree를 구분해 사용합니다. 예전 SQLite 설계 작업 경로는
+`C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`이며
+그 경로/브랜치를 현재 웹 구현 위치로 오인하지 않습니다.
+
+웹은 저장소 루트에서 `.\scripts\build-wasm.ps1 -SyntheticDemo -Release` 후
+`npm.cmd run typecheck --prefix apps/web`, `npm.cmd test --prefix apps/web -- --maxWorkers=1`,
+`npm.cmd run build --prefix apps/web`로 확인합니다. 생성 WASM과 node_modules는
+Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 다시 준비해야 합니다.
 
 작업 폴더에서 `powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 전체 일반 검사를 다시 수행할 수 있습니다. 검증 스크립트 자체 테스트는 `powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo를 사용하므로 실제 Rust 테스트 통과와 구분합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret과 ignored 보안 gate는 여전히 제외됩니다.
 
 [상세 변경 파일·검사 결과·남은 경계](verification/2026-09-07-local-verification-maintenance.md)를 함께 확인하세요.
 
 ## 3. 전체 아키텍처 그림
+
+아래는 목표 구조입니다. 현재 웹은 React → Worker → Rust/WASM → 브라우저 IndexedDB로
+동작하며 서버 동기화는 연결하지 않았습니다. 네이티브 SQLite 구현과 웹 IndexedDB는
+별도 저장 경로입니다.
 
 ```text
 [React 웹 / Android 앱]
@@ -120,6 +135,8 @@
 - 위 Phase 0A 조건을 충족하거나 별도로 승인된 새 권위 검증 계약과 그 gate를 통과하기 전에는 Draft PR을 Ready로 전환하거나 `main`에 병합하지 않음
 
 ## 9. 작업 로그
+
+- 2026-09-15 16:49 KST — 합성 등록 내부 경로를 구현했습니다. 닫힌 Rust 프로필 선택, 기존 암호문 보존 archive v2 append, Worker/세션 CAS 및 저장본 재인증, v1/v2 백업을 연결했습니다. 최종 웹 601/601, WASM native 18/18, 최종 core 집중 4/4, 실제 WASM demo 624 checks/default 11 checks, Clippy·포맷·타입 검사·빌드가 통과했습니다. 초기 debug 통합 테스트 timeout은 다중 KDF 작업에 맞춘 90초 제한과 debug 재검증 후 release 전체 검증으로 처리했습니다. 등록 UI·계정/프로젝트/환경 projection은 미연결이며 다음 작업으로 남깁니다. 디자인·운영 서비스·실제 Secret 게이트는 유지합니다. [등록 저장 경로 기록](verification/2026-09-15-synthetic-registration-storage.md).
 
 - 2026-09-15 16시대 KST — Comet 격리 탭에서 로컬 도구 검색·분류·잠금·재열기·탭 숨김을 확인했습니다. 콘솔에서 찾은 중복 React key를 수정하고 두 차례 재열기 회귀에서 경고/오류 0건을 확인했습니다. 등록의 전제인 IndexedDB 암호문 CAS와 저장소 83 tests를 추가했으며 최종 웹 523/523 tests·타입 검사·빌드가 통과했습니다. 사용자 요청에 따라 가입 계정/소셜 로그인 관리 목표, Claude Code 디자인 담당과 검증된 단위별 Git PUSH 방침을 문서화했습니다. 이번 변경을 기능 브랜치의 새 체크포인트로 업로드하며 main/배포/실제 Secret 게이트는 유지합니다. [CAS 기록](verification/2026-09-15-ciphertext-cas.md), [디자인 인계](handoff/CLAUDE_CODE_DESIGN_HANDOFF.md).
 

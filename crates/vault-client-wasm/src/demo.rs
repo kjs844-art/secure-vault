@@ -30,6 +30,62 @@ pub fn open_synthetic_archive(bytes: &[u8]) -> Result<WasmCatalogV1, JsValue> {
         .map_err(archive_js_error)
 }
 
+/// Append only a closed Rust-owned synthetic profile/credential/connection set.
+/// f64 preserves JS numeric values until validated, avoiding u32 coercion aliases.
+/// Returns a v2 ciphertext archive; no key, plaintext credential or storage write.
+#[wasm_bindgen(js_name = appendSyntheticRegistration)]
+pub fn append_synthetic_registration(
+    bytes: &[u8],
+    profile_id: f64,
+    credential_id: f64,
+    connection_ids: &[f64],
+) -> Result<Vec<u8>, JsValue> {
+    if connection_ids.len() > 3 {
+        return Err(archive_js_error(archive::ArchiveError::LimitsExceeded));
+    }
+    let profile_id = selection_id(profile_id).map_err(archive_js_error)?;
+    let credential_id = selection_id(credential_id).map_err(archive_js_error)?;
+    let connection_ids = connection_ids
+        .iter()
+        .copied()
+        .map(selection_id)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(archive_js_error)?;
+    archive::append_registration(bytes, profile_id, credential_id, &connection_ids)
+        .map_err(archive_js_error)
+}
+
+fn selection_id(value: f64) -> Result<u32, archive::ArchiveError> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > f64::from(u32::MAX) {
+        return Err(archive::ArchiveError::InvalidArchive);
+    }
+    Ok(value as u32)
+}
+
 fn archive_js_error(error: archive::ArchiveError) -> JsValue {
     JsValue::from_str(error.code())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn js_selection_numbers_do_not_wrap_truncate_or_accept_non_finite_values() {
+        for invalid in [
+            -1.0,
+            0.5,
+            4_294_967_296.0,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ] {
+            assert_eq!(
+                selection_id(invalid),
+                Err(archive::ArchiveError::InvalidArchive)
+            );
+        }
+        assert_eq!(selection_id(0.0), Ok(0));
+        assert_eq!(selection_id(f64::from(u32::MAX)), Ok(u32::MAX));
+    }
 }

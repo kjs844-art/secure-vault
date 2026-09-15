@@ -16,7 +16,10 @@ mod archive;
 #[cfg(feature = "synthetic-demo")]
 mod demo;
 #[cfg(feature = "synthetic-demo")]
-pub use demo::{create_synthetic_archive, open_synthetic_archive, synthetic_catalog};
+pub use demo::{
+    append_synthetic_registration, create_synthetic_archive, open_synthetic_archive,
+    synthetic_catalog,
+};
 
 /// Owns one catalog. Every getter checks this object's lock state.
 /// References are local to this object and never authorize secret operations.

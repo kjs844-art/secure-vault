@@ -17,12 +17,15 @@ use vault_crypto::{
 };
 use vault_local_core::{
     CredentialStorageAuthenticatorV1, LocalVaultErrorCode, OwnedRehydratedCredentialOutcomeV1,
-    SyntheticCredentialFixtureId, seal_synthetic_fixture_v1,
+    SyntheticCredentialFixtureId, SyntheticRegistrationSelectionV1, seal_synthetic_fixture_v1,
+    seal_synthetic_registration_v1,
 };
 
 const ARCHIVE_MAGIC: &[u8; 8] = b"KATLDEMO";
 const ARCHIVE_VERSION: u32 = 1;
+const MUTABLE_ARCHIVE_VERSION: u32 = 2;
 const RECORD_COUNT: usize = 3;
+const MAX_RECORD_COUNT: usize = 128;
 const HEADER_BYTES: usize = 16;
 const MAX_ENVELOPE_BYTES: usize = 65_536;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1_024;
@@ -51,7 +54,7 @@ impl ArchiveError {
 
 struct ParsedArchive<'a> {
     password_envelope: &'a [u8],
-    records: [&'a [u8]; RECORD_COUNT],
+    records: Vec<&'a [u8]>,
 }
 
 pub(crate) fn create_archive() -> Result<Vec<u8>, ArchiveError> {
@@ -67,7 +70,7 @@ pub(crate) fn create_catalog() -> Result<ClientCatalogSnapshotV1, ArchiveError> 
 }
 
 pub(crate) fn open_archive(input: &[u8]) -> Result<ClientCatalogSnapshotV1, ArchiveError> {
-    // Lengths, full framing and all four envelope shapes are checked before
+    // Lengths, full framing and every envelope shape are checked before
     // password KDF work. Parsing borrows the bounded input without copying it.
     let parsed = parse_archive(input)?;
     inspect_envelopes(&parsed)?;
@@ -75,6 +78,36 @@ pub(crate) fn open_archive(input: &[u8]) -> Result<ClientCatalogSnapshotV1, Arch
     let session = unlock_vault_v0alpha1(&password, parsed.password_envelope)
         .map_err(|error| map_crypto_error(error.code()))?;
     project_records(&session, parsed.records)
+}
+
+/// Append one closed synthetic selection after authenticating the entire input.
+/// All original encrypted envelopes are borrowed unchanged into a v2 frame.
+/// This returns ciphertext only and has no storage or origin/rollback authority.
+pub(crate) fn append_registration(
+    input: &[u8],
+    profile_id: u32,
+    credential_id: u32,
+    connection_ids: &[u32],
+) -> Result<Vec<u8>, ArchiveError> {
+    let selection =
+        SyntheticRegistrationSelectionV1::from_ids(profile_id, credential_id, connection_ids)
+            .map_err(|error| map_local_error(error.code()))?;
+    let parsed = parse_archive(input)?;
+    inspect_envelopes(&parsed)?;
+    if parsed.records.len() >= MAX_RECORD_COUNT {
+        return Err(ArchiveError::LimitsExceeded);
+    }
+    let password = demo_password()?;
+    let session = unlock_vault_v0alpha1(&password, parsed.password_envelope)
+        .map_err(|error| map_crypto_error(error.code()))?;
+    // Reject every corrupt/future payload and duplicate identity before sealing.
+    drop(project_records(&session, parsed.records.iter().copied())?);
+    let sealed = seal_synthetic_registration_v1(&session, &selection)
+        .map_err(|error| map_local_error(error.code()))?;
+    let projection = sealed.persistence_projection_v1();
+    let mut records = parsed.records;
+    records.push(projection.envelope());
+    encode_archive_version(MUTABLE_ARCHIVE_VERSION, parsed.password_envelope, &records)
 }
 
 fn demo_password() -> Result<MasterPassword, ArchiveError> {
@@ -129,11 +162,18 @@ fn project_records<'a>(
 }
 
 fn encode_archive(password_envelope: &[u8], records: &[Vec<u8>]) -> Result<Vec<u8>, ArchiveError> {
-    if records.len() != RECORD_COUNT {
-        return Err(ArchiveError::InvalidArchive);
-    }
+    let records: Vec<&[u8]> = records.iter().map(Vec::as_slice).collect();
+    encode_archive_version(ARCHIVE_VERSION, password_envelope, &records)
+}
+
+fn encode_archive_version(
+    version: u32,
+    password_envelope: &[u8],
+    records: &[&[u8]],
+) -> Result<Vec<u8>, ArchiveError> {
+    check_record_count(version, records.len())?;
     let mut size = HEADER_BYTES;
-    for envelope in std::iter::once(password_envelope).chain(records.iter().map(Vec::as_slice)) {
+    for envelope in std::iter::once(password_envelope).chain(records.iter().copied()) {
         check_envelope_length(envelope.len())?;
         size = size
             .checked_add(4)
@@ -145,9 +185,9 @@ fn encode_archive(password_envelope: &[u8], records: &[Vec<u8>]) -> Result<Vec<u
     }
     let mut archive = Vec::with_capacity(size);
     archive.extend_from_slice(ARCHIVE_MAGIC);
-    archive.extend_from_slice(&ARCHIVE_VERSION.to_le_bytes());
-    archive.extend_from_slice(&(RECORD_COUNT as u32).to_le_bytes());
-    for envelope in std::iter::once(password_envelope).chain(records.iter().map(Vec::as_slice)) {
+    archive.extend_from_slice(&version.to_le_bytes());
+    archive.extend_from_slice(&(records.len() as u32).to_le_bytes());
+    for envelope in std::iter::once(password_envelope).chain(records.iter().copied()) {
         let length = u32::try_from(envelope.len()).map_err(|_| ArchiveError::LimitsExceeded)?;
         archive.extend_from_slice(&length.to_le_bytes());
         archive.extend_from_slice(envelope);
@@ -163,18 +203,18 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
     if cursor.take(ARCHIVE_MAGIC.len())? != ARCHIVE_MAGIC {
         return Err(ArchiveError::InvalidArchive);
     }
-    match cursor.u32()? {
-        ARCHIVE_VERSION => {}
-        version if version > ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
+    let version = cursor.u32()?;
+    match version {
+        ARCHIVE_VERSION | MUTABLE_ARCHIVE_VERSION => {}
+        version if version > MUTABLE_ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
         _ => return Err(ArchiveError::InvalidArchive),
     }
-    if cursor.u32()? != RECORD_COUNT as u32 {
-        return Err(ArchiveError::InvalidArchive);
-    }
+    let record_count = usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?;
+    check_record_count(version, record_count)?;
     let password_envelope = cursor.envelope()?;
-    let mut records = [&[][..]; RECORD_COUNT];
-    for record in &mut records {
-        *record = cursor.envelope()?;
+    let mut records = Vec::with_capacity(record_count);
+    for _ in 0..record_count {
+        records.push(cursor.envelope()?);
     }
     if cursor.position != input.len() {
         return Err(ArchiveError::InvalidArchive);
@@ -183,6 +223,18 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
         password_envelope,
         records,
     })
+}
+
+fn check_record_count(version: u32, count: usize) -> Result<(), ArchiveError> {
+    match version {
+        ARCHIVE_VERSION if count == RECORD_COUNT => Ok(()),
+        ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
+        MUTABLE_ARCHIVE_VERSION if count > MAX_RECORD_COUNT => Err(ArchiveError::LimitsExceeded),
+        MUTABLE_ARCHIVE_VERSION if count >= RECORD_COUNT => Ok(()),
+        MUTABLE_ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
+        version if version > MUTABLE_ARCHIVE_VERSION => Err(ArchiveError::UpgradeRequired),
+        _ => Err(ArchiveError::InvalidArchive),
+    }
 }
 
 fn inspect_envelopes(parsed: &ParsedArchive<'_>) -> Result<(), ArchiveError> {
@@ -195,7 +247,7 @@ fn inspect_envelopes(parsed: &ParsedArchive<'_>) -> Result<(), ArchiveError> {
             return Err(ArchiveError::UpgradeRequired);
         }
     }
-    for envelope in parsed.records {
+    for envelope in &parsed.records {
         match inspect_record_envelope_for_storage_v1(envelope)
             .map_err(|error| map_crypto_error(error.code()))?
         {
@@ -297,6 +349,8 @@ mod tests {
         };
         assert_eq!(error, expected);
         assert!(bytes == before, "rejected archive bytes changed");
+        assert_eq!(append_registration(bytes, 0, 0, &[]).err(), Some(expected));
+        assert!(bytes == before, "rejected append input bytes changed");
     }
 
     fn fixture_parts() -> (Vec<u8>, Vec<Vec<u8>>) {
@@ -363,7 +417,7 @@ mod tests {
     #[test]
     fn future_archive_version_is_preserved_not_reinitialized() {
         let mut future = fixture().to_vec();
-        future[8..12].copy_from_slice(&2_u32.to_le_bytes());
+        future[8..12].copy_from_slice(&3_u32.to_le_bytes());
         assert_rejected_unchanged(&future, ArchiveError::UpgradeRequired);
     }
 
@@ -418,5 +472,169 @@ mod tests {
         records[1] = records[0].clone();
         let duplicate = encode_archive(&password, &records).unwrap();
         assert_rejected_unchanged(&duplicate, ArchiveError::InvalidArchive);
+    }
+
+    fn assert_preserved_prefix(previous: &[u8], appended: &[u8]) {
+        let old = parse_archive(previous).unwrap();
+        let new = parse_archive(appended).unwrap();
+        assert!(
+            old.password_envelope == new.password_envelope,
+            "password ciphertext changed"
+        );
+        assert_eq!(new.records.len(), old.records.len() + 1);
+        for (before, after) in old.records.iter().zip(&new.records) {
+            assert!(before == after, "existing record ciphertext changed");
+        }
+        assert_eq!(u32::from_le_bytes(appended[8..12].try_into().unwrap()), 2);
+    }
+
+    #[test]
+    fn create_stays_v1_and_append_zero_one_three_connections_emits_v2() {
+        assert_eq!(u32::from_le_bytes(fixture()[8..12].try_into().unwrap()), 1);
+        let original = fixture().to_vec();
+        for connections in [&[][..], &[0][..], &[2, 0, 1][..]] {
+            let appended = append_registration(fixture(), 0, 0, connections).unwrap();
+            assert_preserved_prefix(fixture(), &appended);
+            let catalog = open_archive(&appended).unwrap();
+            assert_eq!(catalog.len(), 4);
+            let added = catalog.entry(3).unwrap();
+            assert!(added.provider_name() == "Example AI Workshop");
+            assert_eq!(added.connection_count(), connections.len());
+            assert_eq!(added.secret_field_count(), 1);
+            for (index, id) in connections.iter().enumerate() {
+                let label = match id {
+                    0 => "Example MCP",
+                    1 => "Example CLI",
+                    _ => "Example CI",
+                };
+                assert!(added.connection(index).unwrap().label() == label);
+            }
+            assert!(fixture() == original, "successful append mutated input");
+        }
+    }
+
+    #[test]
+    fn repeated_v2_append_preserves_every_prior_envelope_and_authenticates_both_profiles() {
+        let first = append_registration(fixture(), 0, 0, &[0]).unwrap();
+        let before = first.clone();
+        let second = append_registration(&first, 1, 0, &[1, 2]).unwrap();
+        assert_preserved_prefix(&first, &second);
+        assert!(first == before, "repeated append mutated its input");
+        let catalog = open_archive(&second).unwrap();
+        assert_eq!(catalog.len(), 5);
+        assert!(catalog.entry(3).unwrap().provider_name() == "Example AI Workshop");
+        assert!(catalog.entry(4).unwrap().provider_name() == "Example Cloud Lab");
+        assert_eq!(catalog.entry(4).unwrap().connection_count(), 2);
+        for plaintext in [
+            b"DEMO_VALUE_ONLY_API_KEY_0001".as_slice(),
+            DEMO_PASSWORD.as_bytes(),
+        ] {
+            assert!(
+                !second
+                    .windows(plaintext.len())
+                    .any(|window| window == plaintext)
+            );
+        }
+    }
+
+    #[test]
+    fn closed_selection_rejections_leave_original_ciphertext_unchanged() {
+        let original = fixture().to_vec();
+        for (profile, credential, connections, expected) in [
+            (2, 0, &[][..], ArchiveError::InvalidArchive),
+            (u32::MAX, 0, &[][..], ArchiveError::InvalidArchive),
+            (0, 1, &[][..], ArchiveError::InvalidArchive),
+            (0, u32::MAX, &[][..], ArchiveError::InvalidArchive),
+            (0, 0, &[3][..], ArchiveError::InvalidArchive),
+            (0, 0, &[0, 0][..], ArchiveError::InvalidArchive),
+            (0, 0, &[0, 1, 2, 0][..], ArchiveError::LimitsExceeded),
+        ] {
+            assert_eq!(
+                append_registration(fixture(), profile, credential, connections).err(),
+                Some(expected)
+            );
+            assert!(
+                fixture() == original,
+                "invalid selection changed ciphertext"
+            );
+        }
+    }
+
+    #[test]
+    fn v1_count_is_exact_and_v2_count_is_bounded_before_envelope_read() {
+        for count in [0, 2, 4, 128, 129, u32::MAX] {
+            let mut v1 = fixture().to_vec();
+            v1[12..16].copy_from_slice(&count.to_le_bytes());
+            assert_rejected_unchanged(&v1, ArchiveError::InvalidArchive);
+        }
+        for (count, expected) in [
+            (0_u32, ArchiveError::InvalidArchive),
+            (2, ArchiveError::InvalidArchive),
+            (129, ArchiveError::LimitsExceeded),
+            (u32::MAX, ArchiveError::LimitsExceeded),
+        ] {
+            let mut v2 = fixture().to_vec();
+            v2[8..12].copy_from_slice(&MUTABLE_ARCHIVE_VERSION.to_le_bytes());
+            v2[12..16].copy_from_slice(&count.to_le_bytes());
+            assert_rejected_unchanged(&v2, expected);
+        }
+        let mut minimum = fixture().to_vec();
+        minimum[8..12].copy_from_slice(&MUTABLE_ARCHIVE_VERSION.to_le_bytes());
+        assert_eq!(open_archive(&minimum).unwrap().len(), RECORD_COUNT);
+    }
+
+    #[test]
+    fn v2_encoding_keeps_archive_and_envelope_size_caps() {
+        let oversized = vec![0; MAX_ENVELOPE_BYTES + 1];
+        assert_eq!(
+            encode_archive_version(2, &[1], &[&[1], &[1], &oversized]).err(),
+            Some(ArchiveError::LimitsExceeded)
+        );
+        let maximum = vec![0; MAX_ENVELOPE_BYTES];
+        let records = vec![maximum.as_slice(); 8];
+        assert_eq!(
+            encode_archive_version(2, &[1], &records).err(),
+            Some(ArchiveError::LimitsExceeded)
+        );
+    }
+
+    #[test]
+    fn v2_last_record_is_authenticated_and_duplicate_existing_ids_are_rejected_before_append() {
+        let appended = append_registration(fixture(), 0, 0, &[]).unwrap();
+        let mut corrupt = appended.clone();
+        *corrupt.last_mut().unwrap() ^= 1;
+        assert_rejected_unchanged(&corrupt, ArchiveError::AuthenticationFailed);
+        let parsed = parse_archive(&appended).unwrap();
+        let mut records = parsed.records;
+        records[3] = records[0];
+        let duplicate = encode_archive_version(2, parsed.password_envelope, &records).unwrap();
+        assert_rejected_unchanged(&duplicate, ArchiveError::InvalidArchive);
+        records[3] = &[0x81, 0x01];
+        let future = encode_archive_version(2, parsed.password_envelope, &records).unwrap();
+        assert_rejected_unchanged(&future, ArchiveError::UpgradeRequired);
+    }
+
+    #[test]
+    fn append_reaches_128_records_but_never_exceeds_it() {
+        let parsed = parse_archive(fixture()).unwrap();
+        let session =
+            unlock_vault_v0alpha1(&demo_password().unwrap(), parsed.password_envelope).unwrap();
+        let selection = SyntheticRegistrationSelectionV1::from_ids(0, 0, &[]).unwrap();
+        let mut records: Vec<Vec<u8>> = parsed.records.iter().map(|bytes| bytes.to_vec()).collect();
+        while records.len() < MAX_RECORD_COUNT - 1 {
+            let sealed = seal_synthetic_registration_v1(&session, &selection).unwrap();
+            records.push(sealed.persistence_projection_v1().envelope().to_vec());
+        }
+        let record_refs: Vec<&[u8]> = records.iter().map(Vec::as_slice).collect();
+        let before = encode_archive_version(2, parsed.password_envelope, &record_refs).unwrap();
+        let maximum = append_registration(&before, 1, 0, &[0]).unwrap();
+        assert_preserved_prefix(&before, &maximum);
+        assert_eq!(open_archive(&maximum).unwrap().len(), MAX_RECORD_COUNT);
+        let saved = maximum.clone();
+        assert_eq!(
+            append_registration(&maximum, 0, 0, &[]).err(),
+            Some(ArchiveError::LimitsExceeded)
+        );
+        assert!(maximum == saved, "limit rejection changed archive");
     }
 }

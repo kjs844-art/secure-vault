@@ -83,6 +83,15 @@ pub fn seal_synthetic_fixture_v1(
     fixture: SyntheticCredentialFixtureId,
 ) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
     let item = build_synthetic_fixture_v1(fixture)?;
+    seal_item_v1(session, item)
+}
+
+/// Crate-private writer shared by the closed synthetic fixture and registration
+/// APIs. The general credential payload never becomes a public input type.
+pub(crate) fn seal_item_v1(
+    session: &VaultSession,
+    item: CredentialItemV1,
+) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
     let identity = generate_record_identity()?;
     item.validate(identity.revision_id)?;
     let plaintext = encode_current_item(&item, identity.revision_id)?;

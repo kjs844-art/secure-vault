@@ -1,6 +1,7 @@
-import init, { createSyntheticArchive, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
+import init, { appendSyntheticRegistration, createSyntheticArchive, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
 import { WasmCatalogAdapter } from "../../bridge/WasmCatalogAdapter";
 import { CATALOG_ERROR_CODES_V1, CatalogAdapterError } from "../../bridge/catalogProtocol";
+import { parseSyntheticRegistration } from "./syntheticRegistration";
 
 // Avoid adding DOM/WebWorker conflicting globals to the application tsconfig.
 interface WorkerScope {
@@ -26,14 +27,20 @@ async function execute(value: unknown): Promise<void> {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     const request = value as Record<string, unknown>;
-    if (request.op !== "create" && request.op !== "open") {
+    if (request.op !== "create" && request.op !== "open" && request.op !== "append") {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     // Validate and snapshot bounded input before initialization or WASM bindings.
-    const input = request.op === "open" ? archiveBytes(request.bytes) : undefined;
+    const input = request.op !== "create" ? archiveBytes(request.bytes) : undefined;
+    const selection = request.op === "append" ? parseSyntheticRegistration(request.selection) : undefined;
     await init();
     if (request.op === "create") {
       const bytes = archiveBytes(createSyntheticArchive());
+      port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
+    } else if (request.op === "append") {
+      const bytes = archiveBytes(appendSyntheticRegistration(
+        input!, selection!.profileId, selection!.credentialId, new Float64Array(selection!.connectionIds),
+      ));
       port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
     } else {
       adapter = new WasmCatalogAdapter(() => openSyntheticArchive(input!));

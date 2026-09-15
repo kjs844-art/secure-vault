@@ -26,6 +26,7 @@ KeyAtlas 자체의 로그인과 금고에 기록하는 외부 서비스 로그�
 - 기능 브랜치: `codex/firstvibe-local-session-hardening`
 - `apps/web`: React/TypeScript/Vite, `/?view=local-vault`는 합성 금고, `/?view=synthetic-backup`은 합성 백업 연습.
 - 현재 실제 Secret 입력, 소셜 계정 자동 조회, 운영 인증/DB, 결제, 공개 배포는 제공하지 않습니다.
+- 합성 등록 내부 API `SyntheticVaultSession.register(selection)`은 준비됐지만 등록 폼은 아직 없습니다. 닫힌 프로필/자격증명/연결 ID만 받으며 임의 문자열·키 입력 칸을 추가하지 않습니다. 계정/프로젝트/환경 projection을 기능 담당자가 연결한 뒤 화면을 붙입니다. [저장 경로 기록](../verification/2026-09-15-synthetic-registration-storage.md).
 - 상세 검증은 `docs/AUTONOMOUS_WORK_STATUS.md`와 `docs/verification/`의 최신 기록을 확인합니다.
 
 현재 checkout의 `git status`, HEAD, 원격을 먼저 확인하세요. 상위 KeyAtlas 폴더의 별도

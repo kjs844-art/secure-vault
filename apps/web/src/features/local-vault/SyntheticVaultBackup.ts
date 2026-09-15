@@ -4,6 +4,8 @@ import type { SyntheticVaultWorker } from "./SyntheticVaultSession";
 
 export const SYNTHETIC_BACKUP_FILENAME = "keyatlas-synthetic-v1.katldemo";
 const MAGIC = new Uint8Array([75, 65, 84, 76, 68, 69, 77, 79]); // KATLDEMO
+const LEGACY_SYNTHETIC_RECORD_COUNT = 3;
+const MAX_SYNTHETIC_RECORD_COUNT = 128;
 const ERROR_MESSAGES = {
   EMPTY: "No synthetic archive is saved.",
   EXISTS: "A local archive already exists and has been preserved.",
@@ -42,8 +44,15 @@ function snapshotArchive(value: Uint8Array): Uint8Array {
     throw new SyntheticBackupError("INVALID_BACKUP");
   }
   const header = new DataView(bytes.buffer);
-  if (header.getUint32(8, true) !== 1) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
-  if (header.getUint32(12, true) !== 3) throw new SyntheticBackupError("INVALID_BACKUP");
+  const version = header.getUint32(8, true);
+  const count = header.getUint32(12, true);
+  if (version !== 1 && version !== 2) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
+  if (count < LEGACY_SYNTHETIC_RECORD_COUNT || count > MAX_SYNTHETIC_RECORD_COUNT
+      || (version === 1 && count !== LEGACY_SYNTHETIC_RECORD_COUNT)) {
+    throw new SyntheticBackupError("INVALID_BACKUP");
+  }
+  // v2 carries additional fixed synthetic registrations. Header acceptance does
+  // not authenticate framing or records; the existing Worker/Rust path does.
   return bytes;
 }
 

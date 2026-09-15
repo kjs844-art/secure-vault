@@ -3,6 +3,7 @@ import {
   CATALOG_STATUSES_V1, CatalogAdapterError, type CatalogErrorCodeV1,
   type LocalCatalogConnectionV1, type LocalCatalogEntryV1,
 } from "../../bridge/catalogProtocol";
+import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
 
 export const SYNTHETIC_ARCHIVE_MAX_BYTES = 524_288;
 export const SYNTHETIC_WORKER_TIMEOUT_MS = 90_000;
@@ -17,7 +18,8 @@ export interface SyntheticVaultWorkerPort {
 }
 
 type WorkerFactory = () => SyntheticVaultWorkerPort;
-type Request = { op: "create" } | { op: "open"; bytes: Uint8Array };
+type Request = { op: "create" } | { op: "open"; bytes: Uint8Array }
+  | { op: "append"; bytes: Uint8Array; selection: SyntheticRegistrationSelection };
 const utf8 = new TextEncoder();
 
 /** One fresh worker per operation; cancel/replace terminates expensive KDF work. */
@@ -49,6 +51,16 @@ export class BrowserSyntheticVaultWorker {
   }
 
   cancel(): void { this.#cancelPending?.(); }
+
+  async append(bytes: Uint8Array, selection: SyntheticRegistrationSelection): Promise<Uint8Array> {
+    this.cancel();
+    const selected = parseSyntheticRegistration(selection);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "append", bytes: input, selection: selected }, (data) => {
+      if (data.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return copyArchive(data.bytes);
+    });
+  }
 
   #run<T>(request: Request, project: (data: Record<string, unknown>) => T): Promise<T> {
     this.cancel();
