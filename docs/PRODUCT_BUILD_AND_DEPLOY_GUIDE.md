@@ -22,7 +22,8 @@
 | SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
 | SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
-| Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
+| React 웹·Rust/WASM 합성 금고 | 로컬 기능 구현 | 합성 생성·암호문 IndexedDB 저장·재열기·관계 표시·잠금이 있습니다. 2026-09-14 합성 파일 백업과 빈 저장소 전용 복원을 추가했습니다. 실제 Secret 제품은 아닙니다. |
+| Android·iOS 앱 | 미구현 | Android 폴더는 계획된 자리표시자입니다. 모바일 생체 인증·실기기 검증은 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
 | 결제·Free/Pro | 정책 설계만 완료 | 공개 베타와 보안 게이트 전에는 결제 SDK나 실제 상품을 연결하지 않습니다. |
@@ -30,7 +31,16 @@
 
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
 
-### 현재 작업 경로와 다시 검사하는 방법 (2026-09-07)
+### 웹 합성 금고 작업 경로 (2026-09-14)
+
+현재 웹 작업은 `C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\wanted-ai-championship`,
+브랜치 `codex/firstvibe-wanted-ai-championship`입니다. Spark의 별도
+`spark-vault-tools` 폴더와 구분합니다. `apps/web`에서 `npm run typecheck`,
+`npm test -- --maxWorkers=1`, `npm run build`로 검사합니다.
+[합성 백업·복원 구현/검증 기록](verification/2026-09-14-synthetic-backup-restore.md)을
+확인하세요. 웹 저장소는 IndexedDB이며 기존 네이티브 SQLite와 아직 연결되지 않았습니다.
+
+### 이전 SQLite 작업 경로와 검사 방법 (2026-09-07 기록)
 
 코드는 `C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`에 있으며 작업 브랜치는 `codex/firstvibe-sqlite-store`입니다. `secure-vault` 폴더의 `main` 체크아웃과 구분해 사용합니다. 바탕화면 설명 문서는 같은 KeyAtlas 아래 `자료\KeyAtlas_보안_설계_패키지_2026-08-29`에 있습니다.
 
@@ -39,6 +49,10 @@
 [상세 변경 파일·검사 결과·남은 경계](verification/2026-09-07-local-verification-maintenance.md)를 함께 확인하세요.
 
 ## 3. 전체 아키텍처 그림
+
+아래는 목표 구조입니다. 현재 실행되는 웹 경로는
+`React → 전용 Worker → Rust/WASM ↔ IndexedDB 암호문`이며,
+합성 파일 백업·복원은 이 로컬 경로만 사용합니다. 서버·모바일·로그인 부분은 계획입니다.
 
 ```text
 [React 웹 / Android 앱]

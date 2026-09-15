@@ -1,0 +1,7 @@
+.backup-acknowledgement { display: flex; align-items: flex-start; gap: 10px; line-height: 1.7; margin-bottom: 24px; }
+.backup-acknowledgement input { flex: 0 0 auto; margin-top: 7px; }
+.backup-file-label { display: grid; gap: 12px; line-height: 1.7; }
+.backup-file-label input { max-width: 100%; }
+.backup-download { display: inline-block; padding: 12px 0; }
+.synthetic-backup button:disabled { opacity: 0.5; cursor: not-allowed; }
+.synthetic-backup input:focus-visible, .synthetic-backup button:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
