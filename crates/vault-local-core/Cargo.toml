@@ -1,0 +1,19 @@
+[package]
+name = "vault-local-core"
+version = "0.0.1-alpha.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+getrandom.workspace = true
+minicbor.workspace = true
+thiserror.workspace = true
+vault-crypto = { path = "../vault-crypto" }
+zeroize.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde.workspace = true
+trybuild.workspace = true

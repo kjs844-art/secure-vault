@@ -1,0 +1,22 @@
+[package]
+name = "vault-crypto"
+version = "0.0.1-alpha.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+argon2.workspace = true
+chacha20poly1305.workspace = true
+getrandom.workspace = true
+minicbor.workspace = true
+poly1305.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+trybuild.workspace = true

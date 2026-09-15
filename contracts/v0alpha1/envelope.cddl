@@ -1,0 +1,38 @@
+wire-version = 0
+suite-id = 41217 ; 0xA101
+
+password-envelope-v0alpha1 = [
+  wire-version,
+  suite-id,
+  1,
+  salt: bytes .size 16,
+  memory-kib: 65536,
+  time-cost: 3,
+  lanes: 4,
+  vault-commitment: bytes .size 32,
+  root-nonce: bytes .size 24,
+  wrapped-root-key: bytes .size 48
+]
+
+record-envelope-v0alpha1 = [
+  wire-version,
+  suite-id,
+  2,
+  vault-commitment: bytes .size 32,
+  opaque-record-id: bytes .size 16,
+  revision-id: bytes .size 32,
+  key-epoch: 1..4294967295,
+  padding-bucket: 1024 / 4096 / 16384 / 61440,
+  item-key-nonce: bytes .size 24,
+  wrapped-item-key: bytes .size 48,
+  body-nonce: bytes .size 24,
+  encrypted-body: bytes
+]
+
+; encrypted-body.size MUST equal padding-bucket + 16.
+; The fixed decoded body is:
+; uint32_be(plaintext_length) || plaintext || zero_padding
+; The complete deterministically encoded envelope MUST be at most 65,536 bytes.
+; Future outer wires preserved by storage v1 MUST retain a definite top-level array
+; whose first field is a minimal canonical unsigned wire-version; the remaining bytes
+; are preserved without interpretation by a v1 reader.

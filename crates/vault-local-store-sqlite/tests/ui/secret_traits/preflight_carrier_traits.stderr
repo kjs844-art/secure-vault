@@ -1,0 +1,239 @@
+error[E0277]: `ExistingVaultPreflightV1` doesn't implement `Debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:14:22
+   |
+14 |     requires_debug::<ExistingVaultPreflightV1>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `ExistingVaultPreflightV1`
+   |
+note: required by a bound in `requires_debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:8:22
+   |
+ 8 | fn requires_debug<T: Debug>() {}
+   |                      ^^^^^ required by this bound in `requires_debug`
+
+error[E0277]: `ExistingVaultPreflightV1` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:15:24
+   |
+15 |     requires_display::<ExistingVaultPreflightV1>();
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Display` is not implemented for `ExistingVaultPreflightV1`
+   |
+note: required by a bound in `requires_display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:9:24
+   |
+ 9 | fn requires_display<T: Display>() {}
+   |                        ^^^^^^^ required by this bound in `requires_display`
+
+error[E0277]: the trait bound `ExistingVaultPreflightV1: Clone` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:16:22
+   |
+16 |     requires_clone::<ExistingVaultPreflightV1>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `ExistingVaultPreflightV1`
+   |
+note: required by a bound in `requires_clone`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:10:22
+   |
+10 | fn requires_clone<T: Clone>() {}
+   |                      ^^^^^ required by this bound in `requires_clone`
+
+error[E0277]: the trait bound `ExistingVaultPreflightV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:17:26
+   |
+17 |     requires_serialize::<ExistingVaultPreflightV1>();
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `ExistingVaultPreflightV1`
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `ExistingVaultPreflightV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>() {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: `AuthenticatedVaultPreflightV1<'static>` doesn't implement `Debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:19:22
+   |
+19 |     requires_debug::<AuthenticatedVaultPreflightV1<'static>>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `AuthenticatedVaultPreflightV1<'static>`
+   |
+note: required by a bound in `requires_debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:8:22
+   |
+ 8 | fn requires_debug<T: Debug>() {}
+   |                      ^^^^^ required by this bound in `requires_debug`
+
+error[E0277]: `AuthenticatedVaultPreflightV1<'static>` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:20:24
+   |
+20 |     requires_display::<AuthenticatedVaultPreflightV1<'static>>();
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Display` is not implemented for `AuthenticatedVaultPreflightV1<'static>`
+   |
+note: required by a bound in `requires_display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:9:24
+   |
+ 9 | fn requires_display<T: Display>() {}
+   |                        ^^^^^^^ required by this bound in `requires_display`
+
+error[E0277]: the trait bound `AuthenticatedVaultPreflightV1<'static>: Clone` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:21:22
+   |
+21 |     requires_clone::<AuthenticatedVaultPreflightV1<'static>>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `AuthenticatedVaultPreflightV1<'static>`
+   |
+note: required by a bound in `requires_clone`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:10:22
+   |
+10 | fn requires_clone<T: Clone>() {}
+   |                      ^^^^^ required by this bound in `requires_clone`
+
+error[E0277]: the trait bound `AuthenticatedVaultPreflightV1<'static>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:22:26
+   |
+22 |     requires_serialize::<AuthenticatedVaultPreflightV1<'static>>();
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `AuthenticatedVaultPreflightV1<'static>`
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `AuthenticatedVaultPreflightV1<'static>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>() {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: `ExistingVaultPreflightOutcomeV1` doesn't implement `Debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:24:22
+   |
+24 |     requires_debug::<ExistingVaultPreflightOutcomeV1>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `ExistingVaultPreflightOutcomeV1`
+   |
+note: required by a bound in `requires_debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:8:22
+   |
+ 8 | fn requires_debug<T: Debug>() {}
+   |                      ^^^^^ required by this bound in `requires_debug`
+
+error[E0277]: `ExistingVaultPreflightOutcomeV1` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:25:24
+   |
+25 |     requires_display::<ExistingVaultPreflightOutcomeV1>();
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Display` is not implemented for `ExistingVaultPreflightOutcomeV1`
+   |
+note: required by a bound in `requires_display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:9:24
+   |
+ 9 | fn requires_display<T: Display>() {}
+   |                        ^^^^^^^ required by this bound in `requires_display`
+
+error[E0277]: the trait bound `ExistingVaultPreflightOutcomeV1: Clone` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:26:22
+   |
+26 |     requires_clone::<ExistingVaultPreflightOutcomeV1>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `ExistingVaultPreflightOutcomeV1`
+   |
+note: required by a bound in `requires_clone`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:10:22
+   |
+10 | fn requires_clone<T: Clone>() {}
+   |                      ^^^^^ required by this bound in `requires_clone`
+
+error[E0277]: the trait bound `ExistingVaultPreflightOutcomeV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:27:26
+   |
+27 |     requires_serialize::<ExistingVaultPreflightOutcomeV1>();
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `ExistingVaultPreflightOutcomeV1`
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `ExistingVaultPreflightOutcomeV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>() {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: `PreflightAuthenticationOutcomeV1<'static>` doesn't implement `Debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:29:22
+   |
+29 |     requires_debug::<PreflightAuthenticationOutcomeV1<'static>>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `PreflightAuthenticationOutcomeV1<'static>`
+   |
+note: required by a bound in `requires_debug`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:8:22
+   |
+ 8 | fn requires_debug<T: Debug>() {}
+   |                      ^^^^^ required by this bound in `requires_debug`
+
+error[E0277]: `PreflightAuthenticationOutcomeV1<'static>` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:30:24
+   |
+30 |     requires_display::<PreflightAuthenticationOutcomeV1<'static>>();
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `std::fmt::Display` is not implemented for `PreflightAuthenticationOutcomeV1<'static>`
+   |
+note: required by a bound in `requires_display`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:9:24
+   |
+ 9 | fn requires_display<T: Display>() {}
+   |                        ^^^^^^^ required by this bound in `requires_display`
+
+error[E0277]: the trait bound `PreflightAuthenticationOutcomeV1<'static>: Clone` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:31:22
+   |
+31 |     requires_clone::<PreflightAuthenticationOutcomeV1<'static>>();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `PreflightAuthenticationOutcomeV1<'static>`
+   |
+note: required by a bound in `requires_clone`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:10:22
+   |
+10 | fn requires_clone<T: Clone>() {}
+   |                      ^^^^^ required by this bound in `requires_clone`
+
+error[E0277]: the trait bound `PreflightAuthenticationOutcomeV1<'static>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:32:26
+   |
+32 |     requires_serialize::<PreflightAuthenticationOutcomeV1<'static>>();
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `PreflightAuthenticationOutcomeV1<'static>`
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `PreflightAuthenticationOutcomeV1<'static>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/preflight_carrier_traits.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>() {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`

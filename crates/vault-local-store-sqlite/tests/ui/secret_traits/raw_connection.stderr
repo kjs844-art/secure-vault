@@ -1,0 +1,23 @@
+error[E0599]: no method named `connection` found for struct `SyntheticWritableStoreV1` in the current scope
+ --> tests/ui/secret_traits/raw_connection.rs:4:19
+  |
+4 |     let _ = store.connection();
+  |                   ^^^^^^^^^^ private field, not a method
+
+error[E0599]: no method named `execute` found for struct `SyntheticWritableStoreV1` in the current scope
+ --> tests/ui/secret_traits/raw_connection.rs:5:19
+  |
+5 |     let _ = store.execute("SELECT 1");
+  |                   ^^^^^^^ method not found in `SyntheticWritableStoreV1`
+
+error[E0599]: no method named `spawn` found for struct `SyntheticWritableStoreV1` in the current scope
+ --> tests/ui/secret_traits/raw_connection.rs:6:19
+  |
+6 |     let _ = store.spawn("synthetic-child");
+  |                   ^^^^^ method not found in `SyntheticWritableStoreV1`
+
+error[E0599]: no method named `connect` found for struct `SyntheticWritableStoreV1` in the current scope
+ --> tests/ui/secret_traits/raw_connection.rs:7:19
+  |
+7 |     let _ = store.connect("example.invalid:443");
+  |                   ^^^^^^^ method not found in `SyntheticWritableStoreV1`

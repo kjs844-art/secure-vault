@@ -1,0 +1,11 @@
+error[E0277]: `VaultSession` doesn't implement `Debug`
+ --> tests/ui/secret_traits/vault_session_debug.rs:6:20
+  |
+6 |     assert_debug::<VaultSession>();
+  |                    ^^^^^^^^^^^^ the trait `Debug` is not implemented for `VaultSession`
+  |
+note: required by a bound in `assert_debug`
+ --> tests/ui/secret_traits/vault_session_debug.rs:3:20
+  |
+3 | fn assert_debug<T: core::fmt::Debug>() {}
+  |                    ^^^^^^^^^^^^^^^^ required by this bound in `assert_debug`

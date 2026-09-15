@@ -1,0 +1,412 @@
+error[E0599]: no method named `clone` found for struct `SealedCredentialRecordV0Alpha1` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:24:20
+   |
+24 |     let _ = sealed.clone();
+   |                    ^^^^^ method not found in `SealedCredentialRecordV0Alpha1`
+
+error[E0599]: no method named `clone` found for struct `CredentialCommitPersistenceProjectionV1<'a>` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:26:24
+   |
+26 |     let _ = projection.clone();
+   |                        ^^^^^ method not found in `CredentialCommitPersistenceProjectionV1<'_>`
+
+error[E0599]: no method named `clone` found for struct `CredentialStorageAuthenticatorV1<'session>` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:28:27
+   |
+28 |     let _ = authenticator.clone();
+   |                           ^^^^^ method not found in `CredentialStorageAuthenticatorV1<'_>`
+
+error[E0599]: no method named `clone` found for struct `AuthenticatedStoredCredentialRevisionV1<'a>` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:29:21
+   |
+29 |     let _ = receipt.clone();
+   |                     ^^^^^ method not found in `AuthenticatedStoredCredentialRevisionV1<'_>`
+
+error[E0599]: no method named `clone` found for struct `PreservedStoredCredentialEnvelopeV1<'a>` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:30:23
+   |
+30 |     let _ = preserved.clone();
+   |                       ^^^^^ method not found in `PreservedStoredCredentialEnvelopeV1<'_>`
+
+error[E0599]: no method named `clone` found for struct `SyntheticCredentialSuccessorV1` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:31:23
+   |
+31 |     let _ = successor.clone();
+   |                       ^^^^^ method not found in `SyntheticCredentialSuccessorV1`
+
+error[E0599]: no method named `clone` found for struct `OwnedRehydratedCredentialV1` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:32:19
+   |
+32 |     let _ = owned.clone();
+   |                   ^^^^^ method not found in `OwnedRehydratedCredentialV1`
+
+error[E0599]: no method named `clone` found for struct `OwnedPreservedCredentialEnvelopeV1` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:33:29
+   |
+33 |     let _ = owned_preserved.clone();
+   |                             ^^^^^ method not found in `OwnedPreservedCredentialEnvelopeV1`
+
+error[E0599]: no method named `clone` found for enum `StoredCredentialAuthenticationOutcomeV1<'a>` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:34:30
+   |
+34 |     let _ = borrowed_outcome.clone();
+   |                              ^^^^^ method not found in `StoredCredentialAuthenticationOutcomeV1<'_>`
+
+error[E0599]: no method named `clone` found for enum `OwnedRehydratedCredentialOutcomeV1` in the current scope
+  --> tests/ui/secret_traits/sealed_clone.rs:35:27
+   |
+35 |     let _ = owned_outcome.clone();
+   |                           ^^^^^ method not found in `OwnedRehydratedCredentialOutcomeV1`
+
+error[E0277]: `CredentialCommitPersistenceProjectionV1<'_>` doesn't implement `Debug`
+  --> tests/ui/secret_traits/sealed_clone.rs:36:22
+   |
+36 |     let _ = format!("{projection:?}");
+   |                      ^^^^^^^^^^^^^^ `CredentialCommitPersistenceProjectionV1<'_>` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+   |
+   = help: the trait `Debug` is not implemented for `CredentialCommitPersistenceProjectionV1<'_>`
+
+error[E0277]: `AuthenticatedStoredCredentialRevisionV1<'_>` doesn't implement `Debug`
+  --> tests/ui/secret_traits/sealed_clone.rs:37:22
+   |
+37 |     let _ = format!("{receipt:?}");
+   |                      ^^^^^^^^^^^ `AuthenticatedStoredCredentialRevisionV1<'_>` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+   |
+   = help: the trait `Debug` is not implemented for `AuthenticatedStoredCredentialRevisionV1<'_>`
+
+error[E0277]: `OwnedRehydratedCredentialV1` doesn't implement `Debug`
+  --> tests/ui/secret_traits/sealed_clone.rs:38:22
+   |
+38 |     let _ = format!("{owned:?}");
+   |                      ^^^^^^^^^ `OwnedRehydratedCredentialV1` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+   |
+   = help: the trait `Debug` is not implemented for `OwnedRehydratedCredentialV1`
+
+error[E0277]: `CredentialStorageAuthenticatorV1<'_>` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/sealed_clone.rs:39:22
+   |
+39 |     let _ = format!("{authenticator}");
+   |                      ^^^^^^^^^^^^^^^ `CredentialStorageAuthenticatorV1<'_>` cannot be formatted with the default formatter
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `CredentialStorageAuthenticatorV1<'_>`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+
+error[E0277]: `PreservedStoredCredentialEnvelopeV1<'_>` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/sealed_clone.rs:40:22
+   |
+40 |     let _ = format!("{preserved}");
+   |                      ^^^^^^^^^^^ `PreservedStoredCredentialEnvelopeV1<'_>` cannot be formatted with the default formatter
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `PreservedStoredCredentialEnvelopeV1<'_>`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+
+error[E0277]: `SyntheticCredentialSuccessorV1` doesn't implement `std::fmt::Display`
+  --> tests/ui/secret_traits/sealed_clone.rs:41:22
+   |
+41 |     let _ = format!("{successor}");
+   |                      ^^^^^^^^^^^ `SyntheticCredentialSuccessorV1` cannot be formatted with the default formatter
+   |
+   = help: the trait `std::fmt::Display` is not implemented for `SyntheticCredentialSuccessorV1`
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+
+error[E0277]: the trait bound `SealedCredentialRecordV0Alpha1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:42:24
+   |
+42 |     requires_serialize(&sealed);
+   |     ------------------ ^^^^^^^ the trait `Serialize` is not implemented for `SealedCredentialRecordV0Alpha1`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `SealedCredentialRecordV0Alpha1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `CredentialCommitPersistenceProjectionV1<'_>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:43:24
+   |
+43 |     requires_serialize(&projection);
+   |     ------------------ ^^^^^^^^^^^ the trait `Serialize` is not implemented for `CredentialCommitPersistenceProjectionV1<'_>`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `CredentialCommitPersistenceProjectionV1<'_>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `CredentialStorageAuthenticatorV1<'_>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:44:24
+   |
+44 |     requires_serialize(&authenticator);
+   |     ------------------ ^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `CredentialStorageAuthenticatorV1<'_>`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `CredentialStorageAuthenticatorV1<'_>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `AuthenticatedStoredCredentialRevisionV1<'_>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:45:24
+   |
+45 |     requires_serialize(&receipt);
+   |     ------------------ ^^^^^^^^ the trait `Serialize` is not implemented for `AuthenticatedStoredCredentialRevisionV1<'_>`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `AuthenticatedStoredCredentialRevisionV1<'_>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `PreservedStoredCredentialEnvelopeV1<'_>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:46:24
+   |
+46 |     requires_serialize(&preserved);
+   |     ------------------ ^^^^^^^^^^ the trait `Serialize` is not implemented for `PreservedStoredCredentialEnvelopeV1<'_>`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `PreservedStoredCredentialEnvelopeV1<'_>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `SyntheticCredentialSuccessorV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:47:24
+   |
+47 |     requires_serialize(&successor);
+   |     ------------------ ^^^^^^^^^^ the trait `Serialize` is not implemented for `SyntheticCredentialSuccessorV1`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `SyntheticCredentialSuccessorV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `OwnedRehydratedCredentialV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:48:24
+   |
+48 |     requires_serialize(&owned);
+   |     ------------------ ^^^^^^ the trait `Serialize` is not implemented for `OwnedRehydratedCredentialV1`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `OwnedRehydratedCredentialV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `OwnedPreservedCredentialEnvelopeV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:49:24
+   |
+49 |     requires_serialize(&owned_preserved);
+   |     ------------------ ^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `OwnedPreservedCredentialEnvelopeV1`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `OwnedPreservedCredentialEnvelopeV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `StoredCredentialAuthenticationOutcomeV1<'_>: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:50:24
+   |
+50 |     requires_serialize(&borrowed_outcome);
+   |     ------------------ ^^^^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `StoredCredentialAuthenticationOutcomeV1<'_>`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `StoredCredentialAuthenticationOutcomeV1<'_>` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0277]: the trait bound `OwnedRehydratedCredentialOutcomeV1: serde::Serialize` is not satisfied
+  --> tests/ui/secret_traits/sealed_clone.rs:51:24
+   |
+51 |     requires_serialize(&owned_outcome);
+   |     ------------------ ^^^^^^^^^^^^^^ the trait `Serialize` is not implemented for `OwnedRehydratedCredentialOutcomeV1`
+   |     |
+   |     required by a bound introduced by this call
+   |
+   = note: for local types consider adding `#[derive(serde::Serialize)]` to your `OwnedRehydratedCredentialOutcomeV1` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Serialize`:
+             &'a T
+             &'a mut T
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+             (T0, T1, T2, T3, T4)
+           and $N others
+note: required by a bound in `requires_serialize`
+  --> tests/ui/secret_traits/sealed_clone.rs:11:26
+   |
+11 | fn requires_serialize<T: Serialize>(_: &T) {}
+   |                          ^^^^^^^^^ required by this bound in `requires_serialize`
+
+error[E0624]: associated function `from_bytes` is private
+  --> tests/ui/secret_traits/sealed_clone.rs:52:25
+   |
+52 |     let _ = RecordIdV1::from_bytes([0_u8; 16]);
+   |                         ^^^^^^^^^^ private associated function
+   |
+  ::: src/ids.rs
+   |
+   |     pub(crate) const fn from_bytes(bytes: [u8; 16]) -> Self {
+   |     ------------------------------------------------------- private associated function defined here
+
+error[E0624]: associated function `from_bytes` is private
+  --> tests/ui/secret_traits/sealed_clone.rs:53:27
+   |
+53 |     let _ = RevisionIdV1::from_bytes([0_u8; 32]);
+   |                           ^^^^^^^^^^ private associated function
+   |
+  ::: src/ids.rs
+   |
+   |     pub(crate) const fn from_bytes(bytes: [u8; 32]) -> Self {
+   |     ------------------------------------------------------- private associated function defined here
+
+error[E0061]: this function takes 2 arguments but 5 arguments were supplied
+  --> tests/ui/secret_traits/sealed_clone.rs:57:13
+   |
+57 |     let _ = create_synthetic_successor_v1(session, &sealed, entropy, aad, nonce);
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                   -------  ---  ----- unexpected argument #5 of type `[u8; 24]`
+   |                                                             |        |
+   |                                                             |        unexpected argument #4 of type `[u8; 32]`
+   |                                                             unexpected argument #3 of type `[u8; 32]`
+   |
+note: function defined here
+  --> src/persistence.rs
+   |
+   | pub fn create_synthetic_successor_v1(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: remove the extra arguments
+   |
+57 -     let _ = create_synthetic_successor_v1(session, &sealed, entropy, aad, nonce);
+57 +     let _ = create_synthetic_successor_v1(session, &sealed);
+   |

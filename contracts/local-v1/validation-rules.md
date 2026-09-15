@@ -1,0 +1,24 @@
+# Credential Item V1 validation rules
+
+- Encoding is one definite-length CBOR array with exactly 30 fields.
+- Nested arrays use the exact field counts in `credential-item.cddl`.
+- Canonical encoded payload is at most 60,000 bytes.
+- `item_name` is 1..=128 UTF-8 bytes.
+- General display fields are at most 256 UTF-8 bytes; `display_hint` is at most 32 and `console_url` is at most 2,048.
+- Item `notes` is at most 8,192 UTF-8 bytes.
+- `secret_fields` contains 1..=16 entries and their value bytes total at most 32,768.
+- `connections` contains 0..=128 entries.
+- `tags` contains 0..=32 entries; each tag is 1..=64 UTF-8 bytes.
+- `scopes_or_permissions` contains at most 64 entries; each entry is at most 256 UTF-8 bytes.
+- MCP argument templates contain at most 32 entries, field bindings at most 16, and each configuration key is 1..=256 UTF-8 bytes.
+- Timestamps use exactly `YYYY-MM-DDTHH:MM:SSZ` and must be valid UTC calendar values.
+- Every field ID and connection ID is unique.
+- MCP binding field IDs must exist in the same item; binding pairs are unique.
+- `mcp_integration` is optional for `consumer_type=mcp_server` and forbidden for every other consumer type.
+- MCP execution policy is exactly `record_only`; no command is executed or auto-copied.
+- A rotation state requires `parent_revision_id`; `supersedes_revision_id` equals that parent.
+- Required connection IDs exactly equal non-removed connections with `required_for_cutover=true`.
+- Completed connection IDs are a subset of required connection IDs.
+- `superseded_revoked_at` exists only with `user_confirmed` or `provider_verified` and a matching attestation.
+- Current schema unknown enum values, dangling references, duplicate references, self revision references and non-canonical encodings are rejected.
+- Future schema versions are preserved as ciphertext and reported as upgrade-required.
