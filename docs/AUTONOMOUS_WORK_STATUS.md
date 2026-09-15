@@ -8,19 +8,20 @@
 | 항목 | 현재 증거 | 남은 일 |
 |---|---|---|
 | 암호화/필드 보존 | 기존 코어, 후속 67개 필드 비교 검사 cherry-pick | 통합 상태의 네이티브 회귀, 독립 리뷰 |
-| 로컬 웹 저장/복원 | IndexedDB·Worker·WASM 구현, 통합 웹 전체 635 tests; 합성 등록 후 저장본 재열기·새로고침 확인 | 실제 파일 다운로드 경로, 다중 writer/오프라인 통합 검사 |
+| 로컬 웹 저장/복원 | IndexedDB·Worker·WASM 구현, 통합 웹 전체 762 tests; 합성 등록 후 저장본 재열기·새로고침 확인, v3 내부 편집/백업은 실제 WASM+fake IndexedDB 검증 | 실제 파일 다운로드 경로, 다중 writer/오프라인 브라우저 통합 검사 |
 | 자동 잠금 | 5분/숨김/절전 후 만료/시계 오류 처리, 신규 18 tests | 실제 브라우저·모바일 수명 주기 확인 |
 | 키와 연결처 목록 | 계정/workspace/project/환경 private projection·검색; 실제 Comet에서 3→6개 등록, 0/1/3 연결과 순서 보존, 검색·잠금·재열기·360px 검사 | 임의 데이터 수동 등록/편집, 회전 체크리스트, 실제 모바일/큰 목록 검증 |
 | 합성 백업/복원 | ecf9ee9 원본을 현재 브랜치에 통합; 자동잠금 UI 세션 45 tests, 서비스 69 tests, 실제 WASM 8 tests; 별도 브라우저 복원 후 암호문 SHA-256 일치 | 디스크 다운로드가 테스트 Chrome에서 Download error; 네이티브 파일 선택·디스크 왕복 미검증. 실제 데이터용 기능 아님 |
 | 로컬 도구 경계 | 입력 64 tests + 세션 62 tests; 격리 Comet 검색/분류/잠금/재열기/숨김 검사, 중복 React key 수정 후 콘솔 경고 0 | 외부 AI/MCP 연결·개인 projection 승인 아님; 실제 모바일 검증 별도 |
-| 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 연결 편집/회전·rollback/누락 보장은 아직 없음 |
+| 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 연결 편집 화면/회전·rollback/누락 보장은 아직 없음 |
+| 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 편집 UI 미연결, 실제 브라우저 Worker/IDB 미검증, durable conflict outbox/회전 미구현 |
 | 네이티브 전체 QA | PR #2에 부분 통과와 OS 4551 차단 기록 | 보안 정책을 우회하지 않는 검증 환경/승인 필요 |
 
 ## 이어서 할 수 있는 구현
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
-2. 합성 등록 UI와 issuer 검색의 [검증된 체크포인트](verification/2026-09-15-synthetic-registration-ui.md)를 유지하며 연결 편집을 구현한다. 인증된 predecessor의 record/expected/parent revision에 묶인 successor를 만들고 무관한 필드와 기존 암호문을 보존한다.
-3. 웹 archive에서 immutable revisions와 canonical heads를 구분해 편집/충돌을 저장한다. v2에 같은 record의 successor를 단순 추가하거나 과거 envelope를 삭제하는 방식은 사용하지 않는다. 이후 회전 상태 전이·갱신 체크리스트로 진행하며 실제 Secret 경계와 Claude Code 디자인 영역을 보존한다.
+2. [내부 연결 편집 체크포인트](verification/2026-09-15-synthetic-connection-edit.md)를 작은 합성 편집 UI에 연결한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다. 실제 브라우저 잠금/변경/충돌을 검증한다.
+3. v3의 immutable revisions와 명시적 heads는 선형 이력만 지원한다. durable conflict outbox와 재시도/병합 설계를 별도로 구현·검증한 뒤 회전 상태 전이·갱신 체크리스트로 진행한다. CAS loser의 저장 실패를 충돌 사본 보존 성공으로 표시하지 않는다.
 4. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 5. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
 

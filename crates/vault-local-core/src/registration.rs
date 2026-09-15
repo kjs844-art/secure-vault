@@ -21,19 +21,19 @@ const FIELD_LABEL: &str = "EXAMPLE_API_KEY";
 const FIXTURE_TIMESTAMP: &str = "2026-08-14T00:00:00Z";
 const CONFIGURATION_REFERENCE: &str = "Synthetic local settings (record only)";
 
-struct RegistrationProfile {
-    template_id: &'static str,
-    provider: &'static str,
+pub(crate) struct RegistrationProfile {
+    pub(crate) template_id: &'static str,
+    pub(crate) provider: &'static str,
     item_name: &'static str,
-    console_url: &'static str,
+    pub(crate) console_url: &'static str,
     account: &'static str,
     workspace: &'static str,
-    project: &'static str,
-    environment: &'static str,
-    mcp_server: &'static str,
+    pub(crate) project: &'static str,
+    pub(crate) environment: &'static str,
+    pub(crate) mcp_server: &'static str,
 }
 
-const PROFILES: [RegistrationProfile; 2] = [
+pub(crate) const PROFILES: [RegistrationProfile; 2] = [
     RegistrationProfile {
         template_id: "synthetic-workshop-v1",
         provider: "Example AI Workshop",
@@ -58,8 +58,8 @@ const PROFILES: [RegistrationProfile; 2] = [
     },
 ];
 
-#[derive(Clone, Copy)]
-enum ConnectionFixture {
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ConnectionFixture {
     Mcp,
     Cli,
     Ci,
@@ -179,7 +179,7 @@ fn build_registration(
     })
 }
 
-fn build_connection(
+pub(crate) fn build_connection(
     profile: &RegistrationProfile,
     fixture: ConnectionFixture,
     field_id: EntityIdV1,

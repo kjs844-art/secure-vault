@@ -7,6 +7,7 @@ let checks = 0;
 let archiveRejections = 0;
 let catalogsVerified = 0;
 let registrationsVerified = 0;
+let connectionEditsVerified = 0;
 
 function check(condition) {
   checks++;
@@ -140,6 +141,31 @@ function withU32(archive, offset, value) {
   return altered;
 }
 
+function splitHistory(archive) {
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  check(view.getUint32(8, true) === 3);
+  const count = view.getUint32(12, true);
+  const revisions = view.getUint32(16, true);
+  check(count >= 3 && count <= 128 && revisions >= count && revisions <= 512);
+  const envelopes = [];
+  let offset = 20;
+  for (let index = 0; index <= revisions; index++) {
+    const length = view.getUint32(offset, true);
+    offset += 4;
+    check(length > 0 && length <= 65_536 && offset + length <= archive.length);
+    envelopes.push(archive.slice(offset, offset + length));
+    offset += length;
+  }
+  const headOffset = offset;
+  const heads = [];
+  for (let index = 0; index < count; index++, offset += 4) {
+    heads.push(view.getUint32(offset, true));
+  }
+  check(offset === archive.length && new Set(heads).size === count);
+  check(heads.every((head) => head < revisions));
+  return { envelopes, heads, headOffset };
+}
+
 function verifyRegistrationCatalog(catalog, originalRows, registrations) {
   try {
     check(catalog.length() === 3 + registrations.length);
@@ -185,7 +211,7 @@ async function run() {
   const wasmExports = api.initSync({ module: bytes });
   check(typeof api.WasmCatalogV1 === 'function');
   check(typeof api.WasmCatalogV1.from_snapshot === 'undefined');
-  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive', 'appendSyntheticRegistration']) {
+  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive', 'appendSyntheticRegistration', 'editSyntheticConnections']) {
     check(typeof api[name] === (demo ? 'function' : 'undefined'));
     check(typeof wasmExports[name] === (demo ? 'function' : 'undefined'));
   }
@@ -221,6 +247,7 @@ async function run() {
     const before = input.slice();
     expectCode(() => api.openSyntheticArchive(input), code);
     expectCode(() => api.appendSyntheticRegistration(input, 0, 0, new Float64Array()), code);
+    expectCode(() => api.editSyntheticConnections(input, 0, new Float64Array()), code);
     check(Buffer.from(input).equals(Buffer.from(before)));
     archiveRejections++;
   }
@@ -235,7 +262,7 @@ async function run() {
   badMagic[0] ^= 1;
   reject(badMagic, 'INVALID_ARCHIVE');
   reject(withU32(archive, 8, 0), 'INVALID_ARCHIVE');
-  reject(withU32(archive, 8, 3), 'UPGRADE_REQUIRED');
+  reject(withU32(archive, 8, 4), 'UPGRADE_REQUIRED');
   reject(withU32(archive, 12, 2), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 0), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 65_537), 'LIMITS_EXCEEDED');
@@ -297,7 +324,7 @@ async function run() {
   rejectSelection(0, 0, [0, 0]);
   rejectSelection(0, 0, [0, 1, 2, 0], 'LIMITS_EXCEEDED');
   reject(withU32(current, 8, 1), 'INVALID_ARCHIVE');
-  reject(withU32(current, 8, 3), 'UPGRADE_REQUIRED');
+  reject(withU32(current, 8, 4), 'UPGRADE_REQUIRED');
   reject(withU32(current, 12, 2), 'INVALID_ARCHIVE');
   reject(withU32(current, 12, 129), 'LIMITS_EXCEEDED');
   const corruptV2 = current.slice();
@@ -313,19 +340,72 @@ async function run() {
   expectCode(() => api.appendSyntheticRegistration(capped, 0, 0, new Float64Array()), 'LIMITS_EXCEEDED');
   check(Buffer.from(capped).equals(Buffer.from(cappedBefore)));
   archiveRejections++;
+
+  // Real WASM connection edits preserve the entire immutable ciphertext prefix.
+  let history = current;
+  let previousEnvelopes = splitFrame(current);
+  for (const connections of [[0], [2, 0, 1], []]) {
+    const before = history.slice();
+    const next = api.editSyntheticConnections(history, 2, new Float64Array(connections));
+    const parsed = splitHistory(next);
+    check(parsed.heads.length === 6);
+    check(parsed.envelopes.length === previousEnvelopes.length + 1);
+    previousEnvelopes.forEach((envelope, index) => {
+      check(Buffer.from(envelope).equals(Buffer.from(parsed.envelopes[index])));
+    });
+    check(parsed.heads[2] === parsed.envelopes.length - 2);
+    check(Buffer.from(history).equals(Buffer.from(before)));
+    const catalog = api.openSyntheticArchive(next);
+    try {
+      check(catalog.length() === 6 && catalog.connectionCount(2) === connections.length);
+      check(catalog.secretFieldCount(2) === 2);
+      check(catalog.issuerAccountIdentifier(2) === 'demo-account');
+      check(catalog.connectionCount(1) === 1 && catalog.connectionCount(3) === 0);
+      connections.forEach((id, index) => {
+        check(catalog.connectionLabel(2, index) === ['Example MCP', 'Example CLI', 'Example CI'][id]);
+      });
+    } finally { catalog.lock(); catalog.free(); }
+    previousEnvelopes = parsed.envelopes;
+    history = next;
+    connectionEditsVerified++;
+  }
+  for (const invalid of [-1, 0.5, 6, 2 ** 32, NaN, Infinity, -Infinity]) {
+    expectCode(() => api.editSyntheticConnections(history, invalid, new Float64Array()), 'INVALID_ARCHIVE');
+    expectCode(() => api.editSyntheticConnections(history, 0, new Float64Array([invalid])), 'INVALID_ARCHIVE');
+  }
+  expectCode(() => api.editSyntheticConnections(history, 0, new Float64Array([0, 0])), 'INVALID_ARCHIVE');
+  expectCode(() => api.editSyntheticConnections(history, 0, new Float64Array([0, 1, 2, 0])), 'LIMITS_EXCEEDED');
+  const parsedHistory = splitHistory(history);
+  reject(withU32(history, parsedHistory.headOffset + 8, 2), 'INVALID_ARCHIVE');
+  reject(withU32(history, 16, 513), 'LIMITS_EXCEEDED');
+  const corruptHistory = history.slice();
+  // Choose the actual old record 2 frame via prior envelope lengths.
+  const record2End = 20 + parsedHistory.envelopes.slice(0, 4).reduce((sum, env) => sum + 4 + env.length, 0);
+  check(record2End <= history.length);
+  corruptHistory[record2End - 1] ^= 1;
+  reject(corruptHistory, 'AUTHENTICATION_FAILED');
+  const appendedHistory = api.appendSyntheticRegistration(history, 1, 0, new Float64Array([0]));
+  const parsedAppend = splitHistory(appendedHistory);
+  check(parsedAppend.heads.length === 7);
+  parsedHistory.envelopes.forEach((env, index) => {
+    check(Buffer.from(env).equals(Buffer.from(parsedAppend.envelopes[index])));
+  });
+  const appendedCatalog = api.openSyntheticArchive(appendedHistory);
+  try { check(appendedCatalog.length() === 7 && appendedCatalog.connectionCount(2) === 0); }
+  finally { appendedCatalog.lock(); appendedCatalog.free(); }
 }
 
 try {
   await run();
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: true,
-    checks, catalogsVerified, archiveRejections, registrationsVerified,
+    checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
   }));
 } catch {
   // Do not print thrown values, assertion operands, rows, archive bytes or keys.
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: false,
-    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified,
+    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
   }));
   process.exitCode = 1;
 }

@@ -134,7 +134,7 @@ Secret 주입, 사용자 인증/동기화는 추가하지 않았습니다. `REAL
 현재 암호문이 expected와 정확히 같을 때만 같은 transaction에서 바꾸며, 충돌/부재는
 쓰기 없이 반환합니다. [저장 검증 기록](../../docs/verification/2026-09-15-ciphertext-cas.md).
 
-## 합성 등록 저장 경로 (내부 API, 화면 연결 전)
+## 합성 등록 화면과 저장 경로
 
 `SyntheticVaultSession.register(selection)`은 열린 합성 금고에서만 실행합니다.
 입력은 두 가상 프로필, 고정 합성 API 키 한 종류, MCP/CLI/CI 연결 0~3개의 닫힌
@@ -146,10 +146,31 @@ Worker/Rust에서 기존 암호문을 모두 인증하고 기존 envelope를 보
 암호문 커밋을 취소하지 못할 수 있지만 늦은 결과가 화면을 다시 열지는 않습니다.
 
 기존 archive v1(정확히 3개)을 계속 읽고, 추가 등록 결과는 v2(3~128개)입니다.
+연결 수정 이력이 있는 v3에 등록하면 그 이력과 v3 형식을 유지합니다.
 512 KiB 총 크기 제한이 먼저 적용될 수 있어 128개 저장을 보장하는 요금제가 아닙니다.
-백업·복원은 두 버전을 지원하며 기존 금고를 덮어쓰지 않습니다.
+백업·복원은 v1/v2/v3를 지원하며 기존 금고를 덮어쓰지 않습니다.
 
-아직 React 등록 폼과 계정·프로젝트·환경의 로컬 표시/검색은 연결하지 않았습니다.
-암호화 payload에는 해당 선택값이 들어가지만 현재 catalog는 이름·연결 목록만
-반환합니다. 편집·회전·동기화·실제 키 원문 조회가 완성됐다는 뜻이 아닙니다.
+React 선택형 등록 폼과 계정/workspace/project/환경의 private local-only 표시·검색이
+연결됐습니다. 실제 Comet의 등록·검색·잠금 검증은 [화면 기록](../../docs/verification/2026-09-15-synthetic-registration-ui.md)을 따릅니다.
+편집 화면·회전·동기화·실제 키 원문 조회가 완성됐다는 뜻이 아닙니다.
 [등록 저장 경로 기록](../../docs/verification/2026-09-15-synthetic-registration-storage.md).
+
+## 합성 연결 편집 내부 API (화면 연결 전)
+
+`session.editConnections(expectedGeneration, { reference, connectionIds })`는 열린
+화면의 generation과 실제 표시를 만든 암호문 snapshot을 함께 확인합니다. UI 연결 시
+reference와 generation을 같은 render/editor에서 캡처해야 하며, 오래된 callback에서
+현재 generation을 새로 읽어 넣으면 안 됩니다. 현재 이 API를 호출하는 편집 폼은 없습니다.
+
+저장소가 표시 당시와 바뀌면 수정 Worker/CAS를 호출하지 않습니다. 일치하면 원래 bytes로
+후속 revision을 만들고 CAS → 동일 저장본 재읽기 → 전체 인증 뒤 목록을 게시합니다.
+잠금/새 작업은 이전 완료를 무효화합니다. 실패한 후보를 영구 보관하는 outbox는 없습니다.
+
+v3는 최대 128 records / 512 revisions / 총 512 KiB입니다. 과거 envelope를 지우지 않고
+head index만 교체하며 모든 과거 revision도 인증합니다. 분기·누락 부모·중복·손상·미래
+형식은 보존 후 거부합니다. v1/v2의 부모 없는 successor는 읽을 수 있지만 v3로 편집 승격하지
+않습니다. 전체 rollback/출처/누락을 보증하는 signed manifest는 아닙니다.
+
+이번 [내부 연결 편집 검증](../../docs/verification/2026-09-15-synthetic-connection-edit.md)은
+웹 전체 762 tests, 실제 WASM+Node+fake IndexedDB를 포함합니다. 실제 브라우저 편집 동작,
+브라우저 다중 탭 충돌, 실제 Secret 지원을 검증한 것은 아닙니다.

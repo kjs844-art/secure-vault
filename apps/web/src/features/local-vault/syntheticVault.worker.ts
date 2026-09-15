@@ -1,7 +1,8 @@
-import init, { appendSyntheticRegistration, createSyntheticArchive, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
+import init, { appendSyntheticRegistration, createSyntheticArchive, editSyntheticConnections, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
 import { WasmCatalogAdapter } from "../../bridge/WasmCatalogAdapter";
 import { CATALOG_ERROR_CODES_V1, CatalogAdapterError } from "../../bridge/catalogProtocol";
 import { parseSyntheticRegistration } from "./syntheticRegistration";
+import { parseSyntheticConnectionEdit } from "./syntheticConnectionEdit";
 
 // Avoid adding DOM/WebWorker conflicting globals to the application tsconfig.
 interface WorkerScope {
@@ -11,6 +12,9 @@ interface WorkerScope {
 }
 const port = self as unknown as WorkerScope;
 const MAX_ARCHIVE_BYTES = 524_288;
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
+)!.get!;
 let started = false;
 
 port.onmessage = (event) => {
@@ -27,12 +31,13 @@ async function execute(value: unknown): Promise<void> {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     const request = value as Record<string, unknown>;
-    if (request.op !== "create" && request.op !== "open" && request.op !== "append") {
+    if (request.op !== "create" && request.op !== "open" && request.op !== "append" && request.op !== "editConnections") {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     // Validate and snapshot bounded input before initialization or WASM bindings.
     const input = request.op !== "create" ? archiveBytes(request.bytes) : undefined;
     const selection = request.op === "append" ? parseSyntheticRegistration(request.selection) : undefined;
+    const edit = request.op === "editConnections" ? parseSyntheticConnectionEdit(request.selection) : undefined;
     await init();
     if (request.op === "create") {
       const bytes = archiveBytes(createSyntheticArchive());
@@ -41,6 +46,9 @@ async function execute(value: unknown): Promise<void> {
       const bytes = archiveBytes(appendSyntheticRegistration(
         input!, selection!.profileId, selection!.credentialId, new Float64Array(selection!.connectionIds),
       ));
+      port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
+    } else if (request.op === "editConnections") {
+      const bytes = archiveBytes(editSyntheticConnections(input!, edit!.reference, new Float64Array(edit!.connectionIds)));
       port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
     } else {
       adapter = new WasmCatalogAdapter(() => openSyntheticArchive(input!));
@@ -65,9 +73,15 @@ async function execute(value: unknown): Promise<void> {
 }
 
 function archiveBytes(value: unknown): Uint8Array {
-  if (!(value instanceof Uint8Array) || value.byteLength === 0) {
+  let length: number;
+  try {
+    if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) throw new Error();
+    length = typedArrayByteLength.call(value) as number;
+  } catch {
     throw new CatalogAdapterError("INVALID_ARCHIVE");
   }
-  if (value.byteLength > MAX_ARCHIVE_BYTES) throw new CatalogAdapterError("LIMITS_EXCEEDED");
-  return new Uint8Array(value);
+  if (length < 1) throw new CatalogAdapterError("INVALID_ARCHIVE");
+  if (length > MAX_ARCHIVE_BYTES) throw new CatalogAdapterError("LIMITS_EXCEEDED");
+  try { return new Uint8Array(value); }
+  catch { throw new CatalogAdapterError("INVALID_ARCHIVE"); }
 }

@@ -17,19 +17,29 @@ use vault_crypto::{
 };
 use vault_local_core::{
     CredentialStorageAuthenticatorV1, LocalVaultErrorCode, OwnedRehydratedCredentialOutcomeV1,
-    SyntheticCredentialFixtureId, SyntheticRegistrationSelectionV1, seal_synthetic_fixture_v1,
+    SyntheticConnectionSelectionV1, SyntheticCredentialFixtureId, SyntheticRegistrationSelectionV1,
+    create_synthetic_connection_successor_v1, seal_synthetic_fixture_v1,
     seal_synthetic_registration_v1,
 };
 
 const ARCHIVE_MAGIC: &[u8; 8] = b"KATLDEMO";
 const ARCHIVE_VERSION: u32 = 1;
 const MUTABLE_ARCHIVE_VERSION: u32 = 2;
+const HISTORY_ARCHIVE_VERSION: u32 = 3;
 const RECORD_COUNT: usize = 3;
 const MAX_RECORD_COUNT: usize = 128;
+const MAX_REVISION_COUNT: usize = 512;
 const HEADER_BYTES: usize = 16;
 const MAX_ENVELOPE_BYTES: usize = 65_536;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1_024;
 const DEMO_PASSWORD: &str = "DEMO_VALUE_ONLY_wasm_catalog";
+
+#[path = "archive_history.rs"]
+mod history;
+
+#[cfg(test)]
+#[path = "archive_history_tests.rs"]
+mod history_tests;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ArchiveError {
@@ -53,8 +63,12 @@ impl ArchiveError {
 }
 
 struct ParsedArchive<'a> {
+    version: u32,
     password_envelope: &'a [u8],
+    // Immutable revisions. In legacy archives every envelope is a head.
     records: Vec<&'a [u8]>,
+    // Ordered indexes into records; no record/revision ID crosses the UI boundary.
+    heads: Vec<usize>,
 }
 
 pub(crate) fn create_archive() -> Result<Vec<u8>, ArchiveError> {
@@ -77,11 +91,11 @@ pub(crate) fn open_archive(input: &[u8]) -> Result<ClientCatalogSnapshotV1, Arch
     let password = demo_password()?;
     let session = unlock_vault_v0alpha1(&password, parsed.password_envelope)
         .map_err(|error| map_crypto_error(error.code()))?;
-    project_records(&session, parsed.records)
+    project_archive(&session, &parsed)
 }
 
 /// Append one closed synthetic selection after authenticating the entire input.
-/// All original encrypted envelopes are borrowed unchanged into a v2 frame.
+/// All original encrypted envelopes are borrowed unchanged into a v2/v3 frame.
 /// This returns ciphertext only and has no storage or origin/rollback authority.
 pub(crate) fn append_registration(
     input: &[u8],
@@ -94,20 +108,108 @@ pub(crate) fn append_registration(
             .map_err(|error| map_local_error(error.code()))?;
     let parsed = parse_archive(input)?;
     inspect_envelopes(&parsed)?;
-    if parsed.records.len() >= MAX_RECORD_COUNT {
+    if parsed.heads.len() >= MAX_RECORD_COUNT || parsed.records.len() >= MAX_REVISION_COUNT {
         return Err(ArchiveError::LimitsExceeded);
     }
     let password = demo_password()?;
     let session = unlock_vault_v0alpha1(&password, parsed.password_envelope)
         .map_err(|error| map_crypto_error(error.code()))?;
     // Reject every corrupt/future payload and duplicate identity before sealing.
-    drop(project_records(&session, parsed.records.iter().copied())?);
+    drop(project_archive(&session, &parsed)?);
     let sealed = seal_synthetic_registration_v1(&session, &selection)
         .map_err(|error| map_local_error(error.code()))?;
     let projection = sealed.persistence_projection_v1();
+    let mut heads = parsed.heads;
     let mut records = parsed.records;
+    heads.push(records.len());
     records.push(projection.envelope());
-    encode_archive_version(MUTABLE_ARCHIVE_VERSION, parsed.password_envelope, &records)
+    let candidate = if parsed.version == HISTORY_ARCHIVE_VERSION {
+        history::encode(parsed.password_envelope, &records, &heads)
+    } else {
+        encode_archive_version(MUTABLE_ARCHIVE_VERSION, parsed.password_envelope, &records)
+    }?;
+    verify_candidate(&session, candidate)
+}
+
+/// Edit the head at a reference in THIS exact archive, never a later archive.
+/// The host must bind its displayed snapshot and CAS expected bytes to input.
+/// Append a successor and preserve every old envelope; this does not commit it.
+pub(crate) fn edit_connections(
+    input: &[u8],
+    reference: u32,
+    connection_ids: &[u32],
+) -> Result<Vec<u8>, ArchiveError> {
+    let selection = SyntheticConnectionSelectionV1::from_ids(connection_ids)
+        .map_err(|error| map_local_error(error.code()))?;
+    let parsed = parse_archive(input)?;
+    inspect_envelopes(&parsed)?;
+    let reference = usize::try_from(reference).map_err(|_| ArchiveError::InvalidArchive)?;
+    let &head = parsed
+        .heads
+        .get(reference)
+        .ok_or(ArchiveError::InvalidArchive)?;
+    if parsed.records.len() >= MAX_REVISION_COUNT {
+        return Err(ArchiveError::LimitsExceeded);
+    }
+    let session = unlock_vault_v0alpha1(&demo_password()?, parsed.password_envelope)
+        .map_err(|error| map_crypto_error(error.code()))?;
+    // Includes non-head revisions. Legacy open remains compatible, but a legacy
+    // successor without its ancestors must not be promoted into fabricated history.
+    drop(project_archive(&session, &parsed)?);
+    if parsed.version != HISTORY_ARCHIVE_VERSION {
+        history::validate(&session, &parsed)?;
+    }
+    let predecessor = match CredentialStorageAuthenticatorV1::new(&session)
+        .rehydrate_owned_stored_credential_v1(parsed.records[head].to_vec())
+        .map_err(|error| map_local_error(error.code()))?
+    {
+        OwnedRehydratedCredentialOutcomeV1::Current(record) => record,
+        OwnedRehydratedCredentialOutcomeV1::UpgradeRequired(_) => {
+            return Err(ArchiveError::UpgradeRequired);
+        }
+    };
+    let successor =
+        create_synthetic_connection_successor_v1(&session, predecessor.sealed_record(), &selection)
+            .map_err(|error| map_local_error(error.code()))?;
+    let before = predecessor.sealed_record().persistence_projection_v1();
+    let after = successor.persistence_projection_v1();
+    if before.record_id() != after.record_id()
+        || after.expected_revision_id() != Some(before.revision_id())
+        || before.revision_id() == after.revision_id()
+    {
+        return Err(ArchiveError::InvalidArchive);
+    }
+    let mut records = parsed.records;
+    let mut heads = parsed.heads;
+    heads[reference] = records.len();
+    records.push(after.envelope());
+    let candidate = history::encode(parsed.password_envelope, &records, &heads)?;
+    verify_candidate(&session, candidate)
+}
+
+// Validate the assembled output too: even a generated ID collision must fail
+// before ciphertext can leave this API for a caller's eventual storage CAS.
+fn verify_candidate(
+    session: &vault_crypto::VaultSession,
+    candidate: Vec<u8>,
+) -> Result<Vec<u8>, ArchiveError> {
+    let parsed = parse_archive(&candidate)?;
+    inspect_envelopes(&parsed)?;
+    drop(project_archive(session, &parsed)?);
+    Ok(candidate)
+}
+
+fn project_archive(
+    session: &vault_crypto::VaultSession,
+    parsed: &ParsedArchive<'_>,
+) -> Result<ClientCatalogSnapshotV1, ArchiveError> {
+    if parsed.version == HISTORY_ARCHIVE_VERSION {
+        history::validate(session, parsed)?;
+    }
+    project_records(
+        session,
+        parsed.heads.iter().map(|&head| parsed.records[head]),
+    )
 }
 
 fn demo_password() -> Result<MasterPassword, ArchiveError> {
@@ -171,6 +273,10 @@ fn encode_archive_version(
     password_envelope: &[u8],
     records: &[&[u8]],
 ) -> Result<Vec<u8>, ArchiveError> {
+    if version == HISTORY_ARCHIVE_VERSION {
+        // v3 requires an explicit revision count and head map; use history::encode.
+        return Err(ArchiveError::InvalidArchive);
+    }
     check_record_count(version, records.len())?;
     let mut size = HEADER_BYTES;
     for envelope in std::iter::once(password_envelope).chain(records.iter().copied()) {
@@ -205,23 +311,50 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
     }
     let version = cursor.u32()?;
     match version {
-        ARCHIVE_VERSION | MUTABLE_ARCHIVE_VERSION => {}
-        version if version > MUTABLE_ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
+        ARCHIVE_VERSION | MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION => {}
+        version if version > HISTORY_ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
         _ => return Err(ArchiveError::InvalidArchive),
     }
     let record_count = usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?;
     check_record_count(version, record_count)?;
+    let revision_count = if version == HISTORY_ARCHIVE_VERSION {
+        usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?
+    } else {
+        record_count
+    };
+    if revision_count > MAX_REVISION_COUNT {
+        return Err(ArchiveError::LimitsExceeded);
+    }
+    if revision_count < record_count {
+        return Err(ArchiveError::InvalidArchive);
+    }
     let password_envelope = cursor.envelope()?;
-    let mut records = Vec::with_capacity(record_count);
-    for _ in 0..record_count {
+    let mut records = Vec::with_capacity(revision_count);
+    for _ in 0..revision_count {
         records.push(cursor.envelope()?);
     }
+    let heads = if version == HISTORY_ARCHIVE_VERSION {
+        let mut heads = Vec::with_capacity(record_count);
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..record_count {
+            let index = usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?;
+            if index >= revision_count || !seen.insert(index) {
+                return Err(ArchiveError::InvalidArchive);
+            }
+            heads.push(index);
+        }
+        heads
+    } else {
+        (0..record_count).collect()
+    };
     if cursor.position != input.len() {
         return Err(ArchiveError::InvalidArchive);
     }
     Ok(ParsedArchive {
+        version,
         password_envelope,
         records,
+        heads,
     })
 }
 
@@ -229,10 +362,12 @@ fn check_record_count(version: u32, count: usize) -> Result<(), ArchiveError> {
     match version {
         ARCHIVE_VERSION if count == RECORD_COUNT => Ok(()),
         ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
-        MUTABLE_ARCHIVE_VERSION if count > MAX_RECORD_COUNT => Err(ArchiveError::LimitsExceeded),
-        MUTABLE_ARCHIVE_VERSION if count >= RECORD_COUNT => Ok(()),
-        MUTABLE_ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
-        version if version > MUTABLE_ARCHIVE_VERSION => Err(ArchiveError::UpgradeRequired),
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION if count > MAX_RECORD_COUNT => {
+            Err(ArchiveError::LimitsExceeded)
+        }
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION if count >= RECORD_COUNT => Ok(()),
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
+        version if version > HISTORY_ARCHIVE_VERSION => Err(ArchiveError::UpgradeRequired),
         _ => Err(ArchiveError::InvalidArchive),
     }
 }
@@ -417,7 +552,7 @@ mod tests {
     #[test]
     fn future_archive_version_is_preserved_not_reinitialized() {
         let mut future = fixture().to_vec();
-        future[8..12].copy_from_slice(&3_u32.to_le_bytes());
+        future[8..12].copy_from_slice(&4_u32.to_le_bytes());
         assert_rejected_unchanged(&future, ArchiveError::UpgradeRequired);
     }
 

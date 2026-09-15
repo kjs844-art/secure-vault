@@ -46,13 +46,18 @@ function snapshotArchive(value: Uint8Array): Uint8Array {
   const header = new DataView(bytes.buffer);
   const version = header.getUint32(8, true);
   const count = header.getUint32(12, true);
-  if (version !== 1 && version !== 2) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
+  if (version !== 1 && version !== 2 && version !== 3) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
   if (count < LEGACY_SYNTHETIC_RECORD_COUNT || count > MAX_SYNTHETIC_RECORD_COUNT
       || (version === 1 && count !== LEGACY_SYNTHETIC_RECORD_COUNT)) {
     throw new SyntheticBackupError("INVALID_BACKUP");
   }
-  // v2 carries additional fixed synthetic registrations. Header acceptance does
-  // not authenticate framing or records; the existing Worker/Rust path does.
+  if (version === 3) {
+    if (bytes.byteLength < 20) throw new SyntheticBackupError("INVALID_BACKUP");
+    const revisions = header.getUint32(16, true);
+    if (revisions < count || revisions > 512) throw new SyntheticBackupError("INVALID_BACKUP");
+  }
+  // v3 retains historical revisions. Header acceptance does not authenticate
+  // framing, head indexes or any records; the existing Worker/Rust path does.
   return bytes;
 }
 

@@ -4,11 +4,13 @@ import {
   type LocalCatalogEntryV1,
 } from "../../bridge/catalogProtocol";
 import {
+  MAX_SYNTHETIC_ARCHIVE_BYTES,
   SyntheticStorageError,
   type SyntheticCiphertextStore,
   type SyntheticMutableCiphertextStore,
 } from "../../storage/SyntheticCiphertextStore";
 import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
+import { parseSyntheticConnectionEdit, type SyntheticConnectionEditSelection } from "./syntheticConnectionEdit";
 
 export interface SyntheticVaultWorker {
   create(): Promise<Uint8Array>;
@@ -20,8 +22,12 @@ export interface SyntheticRegistrationWorker extends SyntheticVaultWorker {
   append(bytes: Uint8Array, selection: SyntheticRegistrationSelection): Promise<Uint8Array>;
 }
 
+export interface SyntheticConnectionEditWorker extends SyntheticVaultWorker {
+  editConnections(bytes: Uint8Array, selection: SyntheticConnectionEditSelection): Promise<Uint8Array>;
+}
+
 class RegistrationStateError extends Error {
-  constructor(readonly code: "REGISTRATION_UNAVAILABLE" | "STORAGE_CONFLICT" | "STORAGE_MISSING") {
+  constructor(readonly code: "REGISTRATION_UNAVAILABLE" | "CONNECTION_EDIT_UNAVAILABLE" | "STORAGE_CONFLICT" | "STORAGE_MISSING") {
     super(code);
   }
 }
@@ -38,6 +44,37 @@ const STORAGE_ERROR_CODES = new Set([
   "quota", "aborted", "failed",
 ]);
 const CATALOG_ERROR_CODES = new Set<string>(CATALOG_ERROR_CODES_V1);
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
+)!.get!;
+
+function copyArchive(value: Uint8Array): Uint8Array {
+  let length: number;
+  try {
+    if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) throw new Error();
+    // Own byteLength/length properties cannot replace the native view's bounds.
+    length = typedArrayByteLength.call(value) as number;
+  } catch {
+    throw new CatalogAdapterError("INVALID_ARCHIVE");
+  }
+  if (length < 1) throw new CatalogAdapterError("INVALID_ARCHIVE");
+  if (length > MAX_SYNTHETIC_ARCHIVE_BYTES) throw new CatalogAdapterError("LIMITS_EXCEEDED");
+  try { return new Uint8Array(value); }
+  catch { throw new CatalogAdapterError("INVALID_ARCHIVE"); }
+}
+
+function sameArchive(left: Uint8Array, right: Uint8Array): boolean {
+  try {
+    if (!(left instanceof Uint8Array) || Object.getPrototypeOf(left) !== Uint8Array.prototype
+        || !(right instanceof Uint8Array) || Object.getPrototypeOf(right) !== Uint8Array.prototype) return false;
+    const length = typedArrayByteLength.call(left) as number;
+    if (length < 1 || length > MAX_SYNTHETIC_ARCHIVE_BYTES || length !== typedArrayByteLength.call(right)) return false;
+    for (let index = 0; index < length; index += 1) {
+      if (left[index] !== right[index]) return false;
+    }
+    return true;
+  } catch { return false; }
+}
 
 function emptyState(phase: "locked" | "busy" | "empty" | "error", errorCode: string | null = null): SyntheticVaultSessionState {
   return Object.freeze({ phase, entries: EMPTY_ENTRIES, errorCode });
@@ -89,14 +126,16 @@ function snapshotEntries(entries: readonly LocalCatalogEntryV1[]): readonly Loca
  */
 export class SyntheticVaultSession {
   readonly #store: SyntheticCiphertextStore & Partial<SyntheticMutableCiphertextStore>;
-  readonly #worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker>;
+  readonly #worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker>;
   readonly #listeners = new Set<() => void>();
   #generation = 0;
   #state: SyntheticVaultSessionState = emptyState("locked");
+  // Owned, bounded ciphertext only. Never exposed through state, tools, or rows.
+  #displayedArchive: Uint8Array | undefined;
 
   constructor(
     store: SyntheticCiphertextStore & Partial<SyntheticMutableCiphertextStore>,
-    worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker>,
+    worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker>,
   ) {
     this.#store = store;
     this.#worker = worker;
@@ -121,6 +160,7 @@ export class SyntheticVaultSession {
   async register(input: unknown): Promise<void> {
     if (this.#state.phase !== "open") return;
     const generation = ++this.#generation;
+    this.#forgetArchive();
     this.#state = emptyState("busy");
     try {
       this.#worker.cancel();
@@ -147,13 +187,73 @@ export class SyntheticVaultSession {
       if (saved === null) throw new RegistrationStateError("STORAGE_MISSING");
       // A later writer may already have changed storage. Do not confirm our candidate
       // based on a different archive or silently retry an ambiguous commit.
-      if (saved.length !== candidate.length || saved.some((byte, index) => byte !== candidate[index])) {
+      if (!sameArchive(candidate, saved)) {
         throw new RegistrationStateError("STORAGE_CONFLICT");
       }
-      const entries = await this.#worker.open(saved);
+      const authenticatedArchive = copyArchive(saved);
+      if (!this.#isCurrent(generation)) return;
+      const entries = await this.#worker.open(new Uint8Array(authenticatedArchive));
       if (!this.#isCurrent(generation)) return;
       const snapshot = snapshotEntries(entries);
       if (!this.#isCurrent(generation)) return;
+      this.#displayedArchive = authenticatedArchive;
+      this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
+      this.#notify();
+    } catch (error: unknown) {
+      if (!this.#isCurrent(generation)) return;
+      const code = fixedErrorCode(error);
+      if (!this.#isCurrent(generation)) return;
+      this.#state = emptyState("error", code);
+      this.#notify();
+    }
+  }
+
+  /**
+   * Bind a positional reference to the exact archive used for the selected view.
+   * No implicit unlock, retry, overwrite or durable losing-candidate outbox.
+   */
+  async editConnections(expectedGeneration: number, input: unknown): Promise<void> {
+    if (this.#state.phase !== "open" || expectedGeneration !== this.#generation || !this.#displayedArchive) return;
+    const before = new Uint8Array(this.#displayedArchive);
+    const generation = ++this.#generation;
+    this.#forgetArchive();
+    this.#state = emptyState("busy");
+    try {
+      this.#worker.cancel();
+      this.#notify();
+      if (!this.#isCurrent(generation)) return;
+      const selection = parseSyntheticConnectionEdit(input);
+      if (!this.#isCurrent(generation)) return;
+      if (!this.#store.compareAndSwapArchive || !this.#worker.editConnections) {
+        throw new RegistrationStateError("CONNECTION_EDIT_UNAVAILABLE");
+      }
+      const current = await this.#store.read();
+      if (!this.#isCurrent(generation)) return;
+      if (current === null) throw new RegistrationStateError("STORAGE_MISSING");
+      if (!sameArchive(before, current)) throw new RegistrationStateError("STORAGE_CONFLICT");
+      if (!this.#isCurrent(generation)) return;
+      // Separate owned copies protect comparison baselines from injected ports.
+      const edited = await this.#worker.editConnections(new Uint8Array(before), selection);
+      if (!this.#isCurrent(generation)) return;
+      const candidate = copyArchive(edited);
+      if (!this.#isCurrent(generation)) return;
+      const committed = await this.#store.compareAndSwapArchive(new Uint8Array(before), new Uint8Array(candidate));
+      if (!this.#isCurrent(generation)) return;
+      if (committed !== "updated") {
+        throw new RegistrationStateError(committed === "missing" ? "STORAGE_MISSING" : "STORAGE_CONFLICT");
+      }
+      const saved = await this.#store.read();
+      if (!this.#isCurrent(generation)) return;
+      if (saved === null) throw new RegistrationStateError("STORAGE_MISSING");
+      if (!sameArchive(candidate, saved)) throw new RegistrationStateError("STORAGE_CONFLICT");
+      const authenticatedArchive = copyArchive(saved);
+      if (!sameArchive(candidate, authenticatedArchive)) throw new RegistrationStateError("STORAGE_CONFLICT");
+      if (!this.#isCurrent(generation)) return;
+      const entries = await this.#worker.open(new Uint8Array(authenticatedArchive));
+      if (!this.#isCurrent(generation)) return;
+      const snapshot = snapshotEntries(entries);
+      if (!this.#isCurrent(generation)) return;
+      this.#displayedArchive = authenticatedArchive;
       this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
       this.#notify();
     } catch (error: unknown) {
@@ -167,6 +267,7 @@ export class SyntheticVaultSession {
 
   lock(): void {
     this.#generation += 1;
+    this.#forgetArchive();
     this.#state = emptyState("locked");
     try { this.#worker.cancel(); } catch { /* Cleared state stays locked even if cleanup fails. */ }
     this.#notify();
@@ -174,6 +275,7 @@ export class SyntheticVaultSession {
 
   async #run(allowCreation: boolean): Promise<void> {
     const generation = ++this.#generation;
+    this.#forgetArchive();
     this.#state = emptyState("busy");
     try {
       this.#worker.cancel();
@@ -197,10 +299,13 @@ export class SyntheticVaultSession {
       if (bytes === null) {
         this.#state = emptyState("empty");
       } else {
-        const entries = await this.#worker.open(bytes);
+        const authenticatedArchive = copyArchive(bytes);
+        if (!this.#isCurrent(generation)) return;
+        const entries = await this.#worker.open(new Uint8Array(authenticatedArchive));
         if (!this.#isCurrent(generation)) return;
         const snapshot = snapshotEntries(entries);
         if (!this.#isCurrent(generation)) return;
+        this.#displayedArchive = authenticatedArchive;
         this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
       }
       this.#notify();
@@ -214,6 +319,11 @@ export class SyntheticVaultSession {
   }
 
   #isCurrent(generation: number): boolean { return generation === this.#generation; }
+
+  #forgetArchive(): void {
+    this.#displayedArchive?.fill(0);
+    this.#displayedArchive = undefined;
+  }
 
   #notify(): void {
     for (const listener of [...this.#listeners]) {

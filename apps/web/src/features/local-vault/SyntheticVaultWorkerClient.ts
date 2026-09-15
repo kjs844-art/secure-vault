@@ -4,6 +4,7 @@ import {
   type LocalCatalogConnectionV1, type LocalCatalogEntryV1,
 } from "../../bridge/catalogProtocol";
 import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
+import { parseSyntheticConnectionEdit, type SyntheticConnectionEditSelection } from "./syntheticConnectionEdit";
 
 export const SYNTHETIC_ARCHIVE_MAX_BYTES = 524_288;
 export const SYNTHETIC_WORKER_TIMEOUT_MS = 90_000;
@@ -19,8 +20,12 @@ export interface SyntheticVaultWorkerPort {
 
 type WorkerFactory = () => SyntheticVaultWorkerPort;
 type Request = { op: "create" } | { op: "open"; bytes: Uint8Array }
-  | { op: "append"; bytes: Uint8Array; selection: SyntheticRegistrationSelection };
+  | { op: "append"; bytes: Uint8Array; selection: SyntheticRegistrationSelection }
+  | { op: "editConnections"; bytes: Uint8Array; selection: SyntheticConnectionEditSelection };
 const utf8 = new TextEncoder();
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
+)!.get!;
 
 /** One fresh worker per operation; cancel/replace terminates expensive KDF work. */
 export class BrowserSyntheticVaultWorker {
@@ -57,6 +62,16 @@ export class BrowserSyntheticVaultWorker {
     const selected = parseSyntheticRegistration(selection);
     const input = copyArchive(bytes);
     return this.#run({ op: "append", bytes: input, selection: selected }, (data) => {
+      if (data.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return copyArchive(data.bytes);
+    });
+  }
+
+  async editConnections(bytes: Uint8Array, selection: SyntheticConnectionEditSelection): Promise<Uint8Array> {
+    this.cancel();
+    const selected = parseSyntheticConnectionEdit(selection);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "editConnections", bytes: input, selection: selected }, (data) => {
       if (data.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
       return copyArchive(data.bytes);
     });
@@ -114,13 +129,19 @@ function safeCode(value: unknown): CatalogErrorCodeV1 {
 }
 
 function copyArchive(value: unknown): Uint8Array {
-  if (!(value instanceof Uint8Array) || value.byteLength === 0) {
+  let length: number;
+  try {
+    if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) throw new Error();
+    length = typedArrayByteLength.call(value) as number;
+  } catch {
     throw new CatalogAdapterError("INVALID_ARCHIVE");
   }
-  if (value.byteLength > SYNTHETIC_ARCHIVE_MAX_BYTES) {
+  if (length < 1) throw new CatalogAdapterError("INVALID_ARCHIVE");
+  if (length > SYNTHETIC_ARCHIVE_MAX_BYTES) {
     throw new CatalogAdapterError("LIMITS_EXCEEDED");
   }
-  return new Uint8Array(value);
+  try { return new Uint8Array(value); }
+  catch { throw new CatalogAdapterError("INVALID_ARCHIVE"); }
 }
 
 function object(value: unknown, code: CatalogErrorCodeV1 = "INVALID_CATALOG"): Record<string, unknown> {

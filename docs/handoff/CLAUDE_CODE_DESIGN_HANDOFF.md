@@ -28,6 +28,7 @@ KeyAtlas 자체의 로그인과 금고에 기록하는 외부 서비스 로그�
 - 현재 실제 Secret 입력, 소셜 계정 자동 조회, 운영 인증/DB, 결제, 공개 배포는 제공하지 않습니다.
 - `SyntheticRegistrationPanel.tsx`와 `SyntheticVaultSession.register(selection)`이 연결됐습니다. 닫힌 프로필/자격증명/연결 ID만 받으며 임의 문자열·키 입력 칸을 추가하지 않습니다. 계정/workspace/project/환경은 사용자 로컬 목록과 검색에만 표시합니다. 실제 Comet의 등록/검색/잠금/재열기 검사는 [등록 화면 기록](../verification/2026-09-15-synthetic-registration-ui.md)을 확인하세요. 이는 최종 디자인이나 실제 키 입력 UI가 아닙니다.
 - 상세 검증은 `docs/AUTONOMOUS_WORK_STATUS.md`와 `docs/verification/`의 최신 기록을 확인합니다.
+- 후속 `editConnections(expectedGeneration, { reference, connectionIds })` 내부 경로는 검증됐지만 편집 UI는 아직 없습니다. 기존 이름으로 연결 ID를 임의 추론하거나 오래된 row에 최신 generation을 붙이지 마세요. UI 통합은 기능 담당자와 조율하며 [연결 편집 기록](../verification/2026-09-15-synthetic-connection-edit.md)의 snapshot 계약을 따릅니다.
 
 현재 checkout의 `git status`, HEAD, 원격을 먼저 확인하세요. 상위 KeyAtlas 폴더의 별도
 커밋 없는 저장소를 앱 저장소로 오인하거나 중첩 저장소 전체를 add하지 않습니다.

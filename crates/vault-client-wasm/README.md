@@ -18,16 +18,18 @@ invalid-reference checks as other row getters. They expose no shared entity IDs,
 Console URL, notes, configuration bindings, or secret values.
 
 The `synthetic-demo` feature adds `syntheticCatalog()`, `createSyntheticArchive()`,
-`openSyntheticArchive(bytes)` and `appendSyntheticRegistration(bytes, profileId,
-credentialId, connectionIds)`. They use fixed synthetic fixtures, real Rust
-encryption and authenticated projection. The default build excludes all four.
+`openSyntheticArchive(bytes)`, `appendSyntheticRegistration(bytes, profileId,
+credentialId, connectionIds)` and `editSyntheticConnections(bytes, reference,
+connectionIds)`. They use fixed synthetic fixtures, real Rust encryption and
+authenticated projection. The default build excludes all five.
 The bounded archive parser accepts encrypted bytes, but cannot prove synthetic
 origin. The public fixed demo password provides no real-secret confidentiality;
 there is no real-user initialization/unlock flow.
 
 Creation retains the exact-three-record v1 frame. Append authenticates every
 existing record, rejects duplicate identities, preserves the old password and
-record ciphertext bytes, and returns a v2 frame with 3–128 records. Both versions
+record ciphertext bytes, and returns a v2 frame with 3–128 records (or retains v3
+when appending to an existing history). All versions
 retain the 512 KiB archive and 65,536-byte envelope caps. Returned bytes do not
 mean storage has committed; the caller owns the explicit durable write.
 
@@ -37,6 +39,27 @@ fixed synthetic API credential (0), and at most three distinct connection IDs
 argument is a `Float64Array`: numeric values are checked in Rust before u32
 conversion, so fractions, NaN, infinities and wrapping values are rejected.
 No arbitrary user text, secret, key export or storage write enters this export.
+
+Connection edits append a same-record successor with a new revision and preserve
+every old encrypted envelope. The v3 format has 3–128 explicit ordered heads and
+at most 512 immutable revisions, within the same total byte cap. Every revision,
+including historical non-heads, authenticates before a catalog or candidate is
+returned. Parents must precede children for the same record in a single linear
+chain; each explicit head must be that record's final leaf. Duplicate revisions,
+branches, missing ancestors and non-leaf heads are rejected unchanged. There is
+no automatic history compaction; an archive at capacity rejects further writes.
+
+Legacy v1/v2 archives remain readable. Their first connection edit migrates to v3
+only when complete ancestry is available; a legacy successor-only archive is not
+rewritten as a fabricated root. `reference` is a row position in the **exact input
+archive**, not a persistent record ID. The host must capture it with the displayed
+view generation and ciphertext, compare current storage, then CAS those exact
+bytes. Changed storage is a conflict, never permission to reinterpret the index.
+
+The head table is not a signed manifest. This transport does not prevent complete
+archive rollback/replacement, establish origin/completeness, or implement the
+native SQLite durable conflict outbox. A CAS loser is unsaved. The internal edit
+API is not yet connected to a user-facing edit form.
 
 ## Build and check on Windows
 

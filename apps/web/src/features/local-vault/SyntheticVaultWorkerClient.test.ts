@@ -33,9 +33,75 @@ function setup() {
   return { client: new BrowserSyntheticVaultWorker(factory), workers, factory };
 }
 
+function invalidLengthArchive(kind: string): Uint8Array {
+  const bytes = new Uint8Array(kind === "oversized" ? SYNTHETIC_ARCHIVE_MAX_BYTES + 1 : kind === "detached" ? 2 : 0);
+  if (kind === "detached") structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+  return Object.defineProperty(bytes, "byteLength", { value: 1 });
+}
+
 afterEach(() => { vi.useRealTimers(); });
 
 describe("BrowserSyntheticVaultWorker", () => {
+  it.each(["empty", "oversized", "detached"])("rejects %s input with spoofed byteLength before worker creation", async (kind) => {
+    const { client, factory } = setup();
+    await expect(client.editConnections(invalidLengthArchive(kind), { reference: 0, connectionIds: [] }))
+      .rejects.toHaveProperty("code", kind === "oversized" ? "LIMITS_EXCEEDED" : "INVALID_ARCHIVE");
+    expect(factory).not.toHaveBeenCalled();
+  });
+  it.each(["empty", "oversized", "detached"])("rejects %s worker ciphertext with spoofed byteLength", async (kind) => {
+    const { client, workers } = setup();
+    const pending = client.editConnections(new Uint8Array([1]), { reference: 0, connectionIds: [] });
+    workers[0]!.reply({ ok: true, kind: "archive", bytes: invalidLengthArchive(kind) });
+    await expect(pending).rejects.toHaveProperty("code", kind === "oversized" ? "LIMITS_EXCEEDED" : "INVALID_ARCHIVE");
+    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+  it("copies native bytes without inspecting byteLength, length or iterator shadows", async () => {
+    const { client, workers } = setup();
+    const shadow = vi.fn(() => { throw new Error("unused shadow"); });
+    const bytes = Object.defineProperties(new Uint8Array([1, 2]), {
+      byteLength: { get: shadow }, length: { get: shadow }, [Symbol.iterator]: { get: shadow },
+    });
+    const pending = client.editConnections(bytes, { reference: 0, connectionIds: [] });
+    const request = workers[0]!.postMessage.mock.calls[0]![0] as { bytes: Uint8Array };
+    expect(request.bytes).toEqual(new Uint8Array([1, 2]));
+    workers[0]!.reply({ ok: true, kind: "archive", bytes });
+    expect(await pending).toEqual(new Uint8Array([1, 2]));
+    expect(shadow).not.toHaveBeenCalled();
+  });
+  it("dispatches only copied closed connection-edit inputs and receives copied ciphertext", async () => {
+    const { client, workers } = setup();
+    const bytes = new Uint8Array([1, 2]);
+    const selection = { reference: 2, connectionIds: [2, 0] } as const;
+    const pending = client.editConnections(bytes, selection);
+    const request = workers[0]!.postMessage.mock.calls[0]![0] as { op: string; bytes: Uint8Array; selection: typeof selection };
+    expect(request).toEqual({ op: "editConnections", bytes, selection });
+    expect(request.bytes).not.toBe(bytes);
+    expect(request.selection).not.toBe(selection);
+    expect(request.selection.connectionIds).not.toBe(selection.connectionIds);
+    const candidate = new Uint8Array([1, 2, 3]);
+    workers[0]!.reply({ ok: true, kind: "archive", bytes: candidate, recordId: "private", entries: [row()] });
+    const output = await pending;
+    expect(output).toEqual(candidate); expect(output).not.toBe(candidate);
+    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+  it.each([-1, 128, NaN, Infinity, 0.5, 2 ** 32])("rejects invalid edit reference %s without worker startup", async (reference) => {
+    const { client, factory } = setup();
+    await expect(client.editConnections(new Uint8Array([1]), { reference, connectionIds: [] }))
+      .rejects.toHaveProperty("code", "INVALID_ARCHIVE");
+    expect(factory).not.toHaveBeenCalled();
+  });
+  it("rejects edit catalog responses and cannot receive an archive after cancellation", async () => {
+    const { client, workers } = setup();
+    const first = client.editConnections(new Uint8Array([1]), { reference: 0, connectionIds: [] });
+    workers[0]!.reply({ ok: true, kind: "catalog", entries: [row()] });
+    await expect(first).rejects.toHaveProperty("code", "BRIDGE_FAILURE");
+    const pending = client.editConnections(new Uint8Array([1]), { reference: 0, connectionIds: [] });
+    const rejected = expect(pending).rejects.toHaveProperty("code", "CANCELLED");
+    const late = workers[1]!.onmessage!; client.cancel();
+    late({ data: { ok: true, kind: "archive", bytes: new Uint8Array([9]) } } as MessageEvent<unknown>);
+    await rejected;
+    expect(workers[1]!.terminate).toHaveBeenCalledOnce();
+  });
   it.each(["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"])(
     "requires explicit null or bounded string for Worker issuer field %s", async (field) => {
       for (const value of [undefined, false, 42, {}, "한".repeat(86), "x".repeat(257)]) {

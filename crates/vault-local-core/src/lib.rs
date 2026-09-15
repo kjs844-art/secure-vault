@@ -6,6 +6,7 @@
 
 mod catalog;
 mod codec;
+mod connection_edit;
 mod error;
 mod ids;
 mod model;
@@ -18,6 +19,9 @@ mod synthetic;
 pub use catalog::{
     CatalogConnectionTypeV1, CatalogConnectionViewV1, CatalogCredentialStatusV1,
     CatalogCredentialTypeV1, CredentialCatalogProjectionV1,
+};
+pub use connection_edit::{
+    SyntheticConnectionSelectionV1, create_synthetic_connection_successor_v1,
 };
 pub use error::{LocalVaultError, LocalVaultErrorCode};
 pub use ids::{RecordIdV1, RevisionIdV1};

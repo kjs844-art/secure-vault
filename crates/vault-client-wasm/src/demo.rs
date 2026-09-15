@@ -32,7 +32,7 @@ pub fn open_synthetic_archive(bytes: &[u8]) -> Result<WasmCatalogV1, JsValue> {
 
 /// Append only a closed Rust-owned synthetic profile/credential/connection set.
 /// f64 preserves JS numeric values until validated, avoiding u32 coercion aliases.
-/// Returns a v2 ciphertext archive; no key, plaintext credential or storage write.
+/// Returns a v2/v3 ciphertext archive; no key, plaintext credential or storage write.
 #[wasm_bindgen(js_name = appendSyntheticRegistration)]
 pub fn append_synthetic_registration(
     bytes: &[u8],
@@ -53,6 +53,28 @@ pub fn append_synthetic_registration(
         .map_err(archive_js_error)?;
     archive::append_registration(bytes, profile_id, credential_id, &connection_ids)
         .map_err(archive_js_error)
+}
+
+/// Change only closed synthetic connections in the selected archive snapshot.
+/// The host must bind reference to these exact displayed bytes and use them as
+/// the storage CAS expected value. Returns v3 ciphertext, never writes storage.
+#[wasm_bindgen(js_name = editSyntheticConnections)]
+pub fn edit_synthetic_connections(
+    bytes: &[u8],
+    reference: f64,
+    connection_ids: &[f64],
+) -> Result<Vec<u8>, JsValue> {
+    if connection_ids.len() > 3 {
+        return Err(archive_js_error(archive::ArchiveError::LimitsExceeded));
+    }
+    let reference = selection_id(reference).map_err(archive_js_error)?;
+    let connection_ids = connection_ids
+        .iter()
+        .copied()
+        .map(selection_id)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(archive_js_error)?;
+    archive::edit_connections(bytes, reference, &connection_ids).map_err(archive_js_error)
 }
 
 fn selection_id(value: f64) -> Result<u32, archive::ArchiveError> {

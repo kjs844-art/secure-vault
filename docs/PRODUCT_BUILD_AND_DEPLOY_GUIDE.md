@@ -23,7 +23,8 @@
 | SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
 | Web 합성 금고 화면 | 로컬 구현·범위별 실제 브라우저 검증 | React에서 선택형 등록/목록/issuer 검색/자동 잠금/IndexedDB 재열기/백업 연습을 제공합니다. 최종 디자인은 별도이며 운영 서비스가 아닙니다. |
-| Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·연결 편집·회전은 아직 미구현입니다. |
+| Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·편집 화면·회전은 아직 미구현입니다. |
+| Web 합성 연결 편집 내부 API | 구현·합성 자동 검사 완료, UI 미연결 | 기존 record/비밀 필드 보존 successor → v3 선형 이력/heads → 화면 bytes+generation 결합·CAS/재인증. 과거 기록도 인증합니다. 전체 웹 762 tests, 실제 demo WASM 973 checks. 실제 브라우저 편집·durable conflict outbox·rollback anchor는 미완료입니다. |
 | Android 화면 | 미구현 | 웹 구현이 Android 앱 구현을 의미하지 않습니다. 생체 인증·Keystore·앱 수명 주기 검증이 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
@@ -31,6 +32,10 @@
 | 공개 배포·앱스토어 | 미구현 | 보안 감사·복구 훈련·정책 문서·스토어 계정 준비가 먼저입니다. |
 
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
+
+[연결 편집 구현·검증 기록](verification/2026-09-15-synthetic-connection-edit.md)과
+[Amazon Quick/Spark 협업 인계·프롬프트](handoff/AMAZON_QUICK_COLLABORATION.md)를 함께 확인하세요.
+Quick 연결이나 유료 구독은 실행하지 않았으며 핵심 보안은 기능 담당자가 계속 책임집니다.
 
 ### 현재 작업 경로와 다시 검사하는 방법 (2026-09-15)
 

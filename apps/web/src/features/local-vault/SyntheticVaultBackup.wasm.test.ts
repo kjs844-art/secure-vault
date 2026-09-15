@@ -8,6 +8,7 @@ import type { LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
 import init, {
   appendSyntheticRegistration,
   createSyntheticArchive,
+  editSyntheticConnections,
   openSyntheticArchive,
 } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
@@ -197,7 +198,7 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
 
   it("refuses a future archive version without writing a recipient archive", async () => {
     const future = archive.slice();
-    new DataView(future.buffer).setUint32(8, 3, true);
+    new DataView(future.buffer).setUint32(8, 4, true);
     const snapshot = future.slice();
     const store = createSyntheticCiphertextStore(new IDBFactory());
     const create = vi.spyOn(store, "createIfAbsent");
@@ -222,6 +223,61 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
     expect(saved).toEqual(existing);
     expect(await actualWasmWorker().open(saved!)).toEqual(EXPECTED_ROWS);
   }, WASM_TIMEOUT);
+
+  describe("v3 archives with preserved connection-edit revisions", () => {
+    let edited: Uint8Array;
+    let expected: readonly LocalCatalogEntryV1[];
+    beforeAll(async () => {
+      edited = editSyntheticConnections(archive, 1, new Float64Array([2, 0]));
+      expect(new DataView(edited.buffer).getUint32(8, true)).toBe(3);
+      expect(new DataView(edited.buffer).getUint32(12, true)).toBe(3);
+      expect(new DataView(edited.buffer).getUint32(16, true)).toBe(4);
+      expected = await actualWasmWorker().open(edited);
+      expect(expected[0]).toEqual(EXPECTED_ROWS[0]);
+      expect(expected[2]).toEqual(EXPECTED_ROWS[2]);
+      expect(expected[1]).toEqual({ ...EXPECTED_ROWS[1], connectionCount: 2,
+        connections: [{ label: "Example CI", consumerType: "ci_cd" }, { label: "Example MCP", consumerType: "mcp_server" }] });
+    }, 60_000);
+
+    it("exports, restores and reopens exact v3 bytes including their history", async () => {
+      const source = createSyntheticCiphertextStore(new IDBFactory());
+      await source.createIfAbsent(edited);
+      const exportedV3 = await new SyntheticVaultBackup(source, actualWasmWorker()).exportArchive();
+      const database = new IDBFactory();
+      const target = createSyntheticCiphertextStore(database);
+      await new SyntheticVaultBackup(target, actualWasmWorker()).restoreArchive(exportedV3);
+      const saved = await createSyntheticCiphertextStore(database).read();
+      expect(saved).toEqual(edited);
+      expect(exportedV3).toEqual(edited);
+      expect(await actualWasmWorker().open(saved!)).toEqual(expected);
+      expect(await source.read()).toEqual(edited);
+    }, 90_000);
+
+    it("refuses corrupted historical revision ciphertext, not just visible heads", async () => {
+      // First original envelope begins after the password frame and its own
+      // length. Its final byte is authenticated even if that revision is old.
+      const revisionEdited = editSyntheticConnections(archive, 0, new Float64Array([1]));
+      const malformed = revisionEdited.slice();
+      const header = new DataView(malformed.buffer);
+      const firstFrame = 24 + header.getUint32(20, true);
+      const end = firstFrame + 4 + header.getUint32(firstFrame, true);
+      malformed[end - 1] = malformed[end - 1]! ^ 1;
+      const target = createSyntheticCiphertextStore(new IDBFactory());
+      const create = vi.spyOn(target, "createIfAbsent");
+      await expect(new SyntheticVaultBackup(target, actualWasmWorker()).restoreArchive(malformed))
+        .rejects.toHaveProperty("code", "VALIDATION_FAILED");
+      expect(create).not.toHaveBeenCalled();
+      expect(await target.read()).toBeNull();
+    }, 60_000);
+
+    it("does not overwrite an existing destination with v3", async () => {
+      const target = createSyntheticCiphertextStore(new IDBFactory());
+      await target.createIfAbsent(archive);
+      await expect(new SyntheticVaultBackup(target, actualWasmWorker()).restoreArchive(edited))
+        .rejects.toHaveProperty("code", "EXISTS");
+      expect(await target.read()).toEqual(archive);
+    });
+  });
 
   describe("v2 archives with one fixed synthetic registration", () => {
     const expectedRows: readonly LocalCatalogEntryV1[] = [

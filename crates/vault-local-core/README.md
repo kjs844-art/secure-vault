@@ -84,3 +84,55 @@ Registration tests independently check both profiles with 0, 1, and 3 selected
 connections, then use the same full-field comparator after session re-unlock.
 They also check invalid IDs, duplicate/oversized selections, detached selection
 inputs, newly generated identifiers, and absent known plaintext in ciphertext.
+
+## Closed synthetic connection-edit successors
+
+`SyntheticConnectionSelectionV1::from_ids(&[u32])` accepts the same closed
+connection IDs (`0` MCP, `1` CLI, `2` CI), zero to three distinct entries in
+caller-selected order. Unknown/duplicate IDs return `InvalidItem`; more than
+three returns `LimitsExceeded`. The owned selection cannot carry caller text,
+secret values, executable configuration, record IDs, or revision IDs.
+
+`create_synthetic_connection_successor_v1(session, &predecessor, &selection)`
+authenticates and validates the canonical predecessor envelope, then edits only
+its connection list. It reuses the existing successor authentication/encryption
+path: the record ID stays unchanged, one new 32-byte revision is generated in
+Rust, the authenticated old revision becomes both the encrypted parent and the
+expected CAS revision. Revision collisions fail existing model validation.
+There is no persistence, CAS execution, external call, or success publication in
+this function. Its caller must atomically commit the resulting projection.
+
+The supported mapping is intentionally narrower than the general private model:
+
+- Provider/type: API-key items from the original Workshop catalog (no provider
+  template) or either exact registration template/provider pair. Other provider
+  templates/types fail closed. Issuer display/reference fields, item names,
+  values, notes, timestamps, and policies are not used as replacement data.
+- Binding target: exactly one `EXAMPLE_WORKSHOP_API_KEY` field for catalog items
+  or `EXAMPLE_API_KEY` for registered items, with the fixture's Secret/Secret
+  role/sensitivity (or catalog Identifier/PrivateMetadata). Additional distinct
+  fields are preserved. Duplicate target labels or incompatible roles fail.
+- Existing relationships: the exact consumer type/name pair, profile-specific
+  project/environment, configuration reference, and credential alias must agree.
+  Connection IDs are never used to guess the kind. Duplicate kinds and unknown
+  relationships are rejected even when the selection requests removal of all.
+- MCP: the expected profile server, stdio/record-only policy, canonical single
+  binding to the original target field, and fixture configuration location must
+  agree; executable/package references, arguments, endpoints, or other bindings
+  are unsupported. CLI/CI must have no MCP integration.
+- Rotation: any rotation state or `Rotating` status is unsupported and rejected,
+  including if no connection is being removed; no rotation metadata is repaired
+  or discarded to make an edit pass validation.
+
+Retained connection objects move intact, preserving their IDs, bindings, notes,
+purpose, status, verification metadata, and cutover flags. Only newly selected
+connections receive fresh Rust-generated IDs and build-included metadata; they
+are record-only and not externally verified. Removal followed by re-addition is
+a new connection identity. All unrelated item fields, including every secret
+field ID/value, issuer metadata, tags, timestamps, and policies, remain unchanged.
+Invalid input and failed authentication leave predecessor ciphertext untouched.
+
+Connection-edit tests cover catalog and both registration profiles through
+0-to-1-to-3-to-0 and repeated edits, exact full-field/retained-object preservation,
+multi-secret populated records, new IDs, malformed authenticated payloads,
+future formats, wrong sessions, ambiguous mappings, and rotation rejection.

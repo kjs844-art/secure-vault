@@ -35,6 +35,7 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 - 합성 비밀번호로 Vault Root Key를 생성·래핑하고 다시 잠금 해제
 - 타입이 고정된 `CredentialItemV1`과 세 가지 합성 관계 fixture
 - 추가 등록용 닫힌 합성 프로필 2종과 연결 0~3개 선택 폼, 기존 암호문을 보존하는 archive v2 및 웹 Worker/세션 CAS→저장본 재인증, 계정/workspace/project/환경의 private local-only 표시·검색
+- 합성 연결 편집 내부 API: 같은 record의 successor와 v3 불변 선형 이력/명시적 head, 표시 당시 bytes+generation을 결합한 CAS·재인증. 편집 UI와 durable conflict outbox는 미연결/미구현이며 [검증 범위](verification/2026-09-15-synthetic-connection-edit.md)를 따른다.
 - 합성 레코드를 로컬에서 seal/open하고 authenticated restore
 - 세션을 버린 뒤 다시 잠금 해제해 동일한 관계를 복구
 - canonical CBOR만 허용하는 엄격한 payload 및 envelope 코덱
