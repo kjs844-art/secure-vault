@@ -1,0 +1,395 @@
+:root {
+  --ground: #07090c;
+  --ink: #f4f6fa;
+  --ink-2: #99a1b1;
+  --ink-3: #5d6675;
+  --ink-4: #39414f;
+  --amber: #f0b429;
+  --amber-lo: #8a6a24;
+  --line: #1e232c;
+  --glass: rgba(16, 20, 27, 0.58);
+  --glass-line: rgba(122, 135, 158, 0.16);
+
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; background: var(--ground); }
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+a { color: var(--amber); text-decoration: none; }
+a:hover { color: #ffc94d; }
+
+.mono { font-family: var(--mono); }
+
+/* ---------- 무대 ---------- */
+
+.stage {
+  position: relative;
+  min-height: 100svh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+}
+
+.webgl { position: fixed; inset: 0; z-index: 0; }
+
+/* 평평한 그라디언트는 합성처럼 보인다. 그레인이 화면에 물성을 준다. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 왼쪽 글자가 3D 위에서도 읽히도록 */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    98deg,
+    rgba(7, 9, 12, 0.96) 0%,
+    rgba(7, 9, 12, 0.9) 26%,
+    rgba(7, 9, 12, 0.55) 44%,
+    rgba(7, 9, 12, 0) 62%
+  );
+}
+
+.layer { position: relative; z-index: 2; }
+
+/* ---------- 실험 배너 ---------- */
+
+.alpha-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px clamp(16px, 4vw, 40px);
+  background: rgba(42, 31, 12, 0.82);
+  border-bottom: 1px solid #5c4413;
+  backdrop-filter: blur(10px);
+  color: var(--amber);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.alpha-bar b { font-weight: 600; }
+.alpha-bar span { color: #b5903a; }
+
+/* ---------- 내비게이션 ---------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 3vw, 44px);
+  padding: 22px clamp(16px, 4vw, 40px);
+}
+
+.wordmark { display: flex; align-items: center; gap: 11px; flex-shrink: 0; }
+
+.wordmark-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  color: var(--amber);
+}
+
+.wordmark-text {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 2.3px;
+}
+
+.nav-links { display: flex; gap: 26px; font-size: 13.5px; color: var(--ink-2); }
+.nav-links span { cursor: pointer; transition: color 0.2s; }
+.nav-links span:hover { color: var(--ink); }
+
+.nav-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+
+/* 알약 버튼 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.24s, background 0.24s, transform 0.24s;
+}
+.pill:hover { border-color: rgba(240, 180, 41, 0.5); transform: translateY(-1px); }
+
+.pill-solid {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #1a1305;
+  font-weight: 600;
+}
+.pill-solid:hover { background: #ffc94d; border-color: #ffc94d; }
+
+.pill-lg { height: 54px; padding: 0 28px; font-size: 15.5px; }
+
+/* ---------- 히어로 ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+  padding: clamp(28px, 6vh, 76px) clamp(16px, 4vw, 40px) 0;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-family: var(--mono);
+  font-size: clamp(9.5px, 2.4vw, 11px);
+  letter-spacing: clamp(1.2px, 0.5vw, 2.4px);
+  color: var(--amber);
+  margin-bottom: 26px;
+}
+.eyebrow i { display: block; width: 28px; height: 1px; background: var(--amber); }
+
+h1 {
+  margin: 0;
+  font-size: clamp(34px, 5.4vw, 66px);
+  line-height: 1.16;
+  font-weight: 700;
+  letter-spacing: -2.4px;
+  /* 한글은 어절 단위로 끊는다. 이게 없으면 "몇 개/의"처럼 낱말이 쪼개진다. */
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+.hero p,
+.card-foot,
+.card li em,
+.legend-item { word-break: keep-all; }
+
+.hero p {
+  margin: 28px 0 0;
+  max-width: 520px;
+  font-size: clamp(14.5px, 1.2vw, 16.5px);
+  line-height: 1.82;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.hero p b { color: #c9cfda; font-weight: 500; }
+
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 38px; }
+
+.trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 26px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.trust i { color: var(--ink-4); font-style: normal; }
+
+/* ---------- 가림 장치: 우리만의 시그니처 ---------- */
+
+.redact {
+  position: relative;
+  display: inline-block;
+  font-family: var(--mono);
+  color: var(--ink);
+  isolation: isolate;
+}
+.redact::after {
+  content: "";
+  position: absolute;
+  inset: -1px -3px;
+  z-index: 1;
+  background: var(--amber);
+  transform-origin: right center;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.redact:hover::after,
+.card:hover .redact::after { transform: scaleX(0); }
+
+/* ---------- 떠 있는 카드 ---------- */
+
+.card-field {
+  position: relative;
+  min-height: 560px;
+  perspective: 1500px;
+  transform-style: preserve-3d;
+}
+
+.card-slot {
+  position: absolute;
+  width: 268px;
+  animation: bob 9s ease-in-out infinite;
+  animation-delay: var(--delay);
+  transform-style: preserve-3d;
+}
+
+.card {
+  width: 100%;
+  padding: 20px 20px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(130%);
+  box-shadow: 0 28px 70px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  transform:
+    translate3d(
+      calc(var(--px, 0) * var(--d) * -26px),
+      calc(var(--py, 0) * var(--d) * -18px),
+      var(--z)
+    )
+    rotateY(calc(var(--px, 0) * -5deg))
+    rotateX(calc(var(--py, 0) * 3.5deg))
+    rotateZ(var(--tilt));
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.card:hover { border-color: rgba(240, 180, 41, 0.42); }
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+.card-head { display: flex; align-items: center; gap: 11px; margin-bottom: 15px; }
+
+.card-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.card-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.2px; }
+.card-count { margin-left: auto; font-family: var(--mono); font-size: 19px; font-weight: 500; }
+
+.card ul { list-style: none; margin: 0; padding: 0; }
+.card li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.card li + li { border-top: 1px dotted var(--ink-4); }
+.card li em { flex: 1; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card li span { font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex-shrink: 0; }
+
+.card-foot {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
+/* ---------- 범례 ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin: 40px clamp(16px, 4vw, 40px) 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(11, 13, 17, 0.6);
+  backdrop-filter: blur(10px);
+  width: fit-content;
+  max-width: calc(100% - 32px);
+}
+.legend-item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+.scroll-hint {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 32px clamp(16px, 4vw, 40px) 44px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 1.8px;
+}
+.scroll-hint svg { animation: nudge 2.4s ease-in-out infinite; }
+
+@keyframes nudge {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+/* ---------- 좁은 화면 ---------- */
+
+@media (max-width: 1080px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .scrim {
+    background: linear-gradient(180deg, rgba(7, 9, 12, 0.94) 0%, rgba(7, 9, 12, 0.72) 48%, rgba(7, 9, 12, 0.9) 100%);
+  }
+  .card-field {
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    perspective: none;
+  }
+  .card-slot {
+    position: static;
+    width: min(268px, 100%);
+    animation: none;
+  }
+  .card { transform: none; }
+  .nav-links { display: none; }
+}
+
+@media (max-width: 560px) {
+  /* 390px에서 워드마크와 버튼 둘을 나란히 두면 글자가 쪼개진다.
+     주 행동 하나만 남긴다. */
+  .nav-right .pill:not(.pill-solid) { display: none; }
+  .pill { height: 42px; padding: 0 18px; font-size: 13.5px; }
+  .pill-lg { height: 50px; padding: 0 22px; font-size: 14.5px; }
+  .cta-row .pill { flex: 1 1 auto; justify-content: center; }
+  .wordmark-text { font-size: 11.5px; letter-spacing: 1.8px; }
+  h1 { letter-spacing: -1.4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-slot, .scroll-hint svg { animation: none; }
+  .card { transform: translateZ(0); }
+}
