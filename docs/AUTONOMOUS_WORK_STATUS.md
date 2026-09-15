@@ -39,5 +39,5 @@
 
 ## 현황 공유·다른 기기 협업
 
-[2026-09-15 갱신 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md)에 조건부 기간, 작업 경로, 역할/브랜치 제안 및 원격 미검증 범위를 정리했다. 같은 본문을 사용자 요청의 바탕화면 파일에도 반영했다. 이전 9월 12일 본문은 archive에 보존한다.
-사용자는 다른 기기의 안티그래비티에 입력장치 공유 및 CPU/GPU/AI 분산 구성을 맡겼다고 알렸다. 이후 사용자 명시 승인 아래 두 Windows 기기의 Tailscale OpenSSH 관리자 공개 키 인증을 구성했다. 양방향 정확한 hostname, 계정, 공개 키 지문/ACL 및 양쪽 `sshd`·Tailscale 자동 시작을 직접 확인했다. [양방향 SSH 검증 기록](verification/2026-09-15-bidirectional-tailscale-ssh.md). 이는 입력장치·화면 제어 또는 CPU/GPU/AI 분산 실행 완료 증거가 아니며 해당 설정은 중복 변경하지 않는다.
+[2026-09-15 갱신 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md)에 조건부 기간, 작업 경로, 역할/브랜치 제안 및 병렬 협업 범위를 정리했다. 같은 본문을 사용자 요청의 바탕화면 파일에도 반영했다. 이전 9월 12일 본문은 archive에 보존한다.
+기기 연결·원격 제어·연산 오케스트레이션은 KeyAtlas 밖의 비공개 운영 저장소에서 관리한다. KeyAtlas에는 별도 clone/worktree, 담당 파일, base/head SHA, 재현 가능한 검사 명령과 종료 코드만 남기며 장치·계정·접근 설정은 기록하지 않는다.

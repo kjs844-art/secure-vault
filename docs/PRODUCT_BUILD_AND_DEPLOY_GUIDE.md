@@ -141,9 +141,7 @@ Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 
 
 ## 9. 작업 로그
 
-- 2026-09-15 — 사용자 명시 승인 아래 추가 Windows 노트북과 데스크톱의 Tailscale OpenSSH 공개 키 인증을 양방향으로 검증했습니다. 양쪽의 정확한 hostname/계정, 관리자 키 파일 ACL, `sshd`·Tailscale 자동 시작을 확인했습니다. 중간 보고와 달리 역방향 성공 키는 별도 fleet 키가 아니라 기존 키였고, 불필요한 두 번째 관리자 키는 추가하지 않았습니다. 공개 문서에는 Tailscale IP·키 원문·지문을 쓰지 않았습니다. 이 결과는 SSH 명령 통로만 증명하며 AnyDesk·Mouse Without Borders·분산 AI 연산은 미완료입니다. [상세 검증 기록](verification/2026-09-15-bidirectional-tailscale-ssh.md).
-
-- 2026-09-15 — 합성 연결 편집 UI를 연결하고 모델 58/SSR 19를 포함한 웹 839 tests 및 타입/빌드 exit 0을 확인했습니다. 독립 리뷰의 행 전환 포커스 문제를 수정했으나 실제 포커스 검사는 미완료입니다. 격리 Comet에서 금고 안 항목 3개와 편집 폼 초기 상태까지 관찰한 후 브라우저 도구의 CDP 연결 종료로 저장/취소/잠금 검증을 마치지 못했습니다. 사용자 현황 요청에 따라 새 구현과 개발 서버를 중단하고 부분 체크포인트로 기록합니다. [UI 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md), [일정·기기·AI 협업 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md). 원격 설정은 다른 기기 안티그래비티 담당이며 이 작업에서 변경하지 않았습니다.
+- 2026-09-15 — 합성 연결 편집 UI를 연결하고 모델 58/SSR 19를 포함한 웹 839 tests 및 타입/빌드 exit 0을 확인했습니다. 독립 리뷰의 행 전환 포커스 문제를 수정했으나 실제 포커스 검사는 미완료입니다. 격리 Comet에서 금고 안 항목 3개와 편집 폼 초기 상태까지 관찰한 후 브라우저 도구의 CDP 연결 종료로 저장/취소/잠금 검증을 마치지 못했습니다. 사용자 현황 요청에 따라 새 구현과 개발 서버를 중단하고 부분 체크포인트로 기록합니다. [UI 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md), [일정·AI 협업 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md).
 
 - 2026-09-15 19시대 KST — 선택형 등록 폼과 계정/workspace/project/환경의 local-only projection·검색을 연결했습니다. 네이티브 core catalog 3/3·projection 1/1, bridge 8/8+doctests 4/4, WASM 19/19와 demo 771/default 20 checks가 통과했습니다. 웹 최종 635/635·타입 검사·빌드 통과, 실제 격리 Comet에서 3→6개 등록/검색/잠금·재열기/탭 전환/360px 및 콘솔 오류 없음 확인. 기존 대용량 테스트 2개의 timeout은 전체 byte 비교를 유지한 테스트 전용 비교 개선으로 해결했습니다. 디자인·배포·실제 Secret/Phase 0A 게이트는 유지합니다. [등록 화면·RED/BLUE 검증 기록](verification/2026-09-15-synthetic-registration-ui.md).
 
