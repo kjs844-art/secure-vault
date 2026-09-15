@@ -15,6 +15,25 @@ src/index.css                디자인 토큰과 레이아웃
 src/fonts.ts                 자체 호스팅 폰트
 ```
 
+## 처음 실행할 때
+
+Node.js 20.19 이상이 필요합니다 (22 LTS 권장). **관리자 권한은 필요 없습니다.**
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+터미널에 뜨는 `http://localhost:5173` 을 브라우저에서 엽니다.
+
+Windows PowerShell에서 `npm.ps1 ... 스크립트를 실행할 수 없습니다` 오류가 나면 실행 정책 문제입니다.
+관리자 권한이 아니라 아래 한 줄로 풉니다.
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
 ## 명령
 
 ```bash
