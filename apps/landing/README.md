@@ -42,6 +42,7 @@ npm run build       # 프로덕션 빌드
 npm run typecheck   # 타입 검사
 npm run preview     # 빌드 결과 미리보기
 npm run screenshot  # 데스크톱·와이드·모바일 스크린샷 (미리보기 서버가 떠 있어야 함)
+npm run build:single # 폰트·JS까지 한 파일에 넣은 미리보기 빌드 → dist-single/ (더블클릭으로 열림)
 ```
 
 스크린샷은 `TARGET`으로 주소를, `OUT`으로 저장 위치를, `CHROME_PATH`로 Chromium 실행 파일을 지정할 수 있습니다.
