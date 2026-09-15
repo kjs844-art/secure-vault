@@ -7,6 +7,8 @@ type Session = Pick<SyntheticVaultSession, "state" | "viewGeneration" | "subscri
 
 function item(reference: number, overrides: Partial<LocalCatalogEntryV1> = {}): LocalCatalogEntryV1 {
   return Object.freeze({ reference, itemName: "DEMO workbench", providerName: "Example Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key", status: "active", connectionCount: 0, secretFieldCount: 1,
     mcpConnectionCount: 0, connections: Object.freeze([]), ...overrides });
 }
@@ -293,6 +295,34 @@ describe("synthetic local tools session guards", () => {
 });
 
 describe("synthetic local tools operations and receipts", () => {
+  it("copies only reviewed local issuer fields while receipts reveal neither rows nor query", async () => {
+    const { session, tools } = setup();
+    const source = { ...item(42), issuerAccountIdentifier: "PRIVATE_ACCOUNT_FIXTURE",
+      issuerOrganizationOrWorkspace: "PRIVATE_WORKSPACE_FIXTURE", issuerProject: "PRIVATE_PROJECT_FIXTURE",
+      issuerEnvironment: "PRIVATE_ENVIRONMENT_FIXTURE",
+      connections: [{ label: "LOCAL_CONNECTION", consumerType: "app" as const }], connectionCount: 1 };
+    for (const field of ["notes", "issuerConsoleUrl", "secretValue", "toJSON"]) {
+      Object.defineProperty(source, field, { enumerable: true, get() { throw new Error("UNREVIEWED_FIELD_READ"); } });
+    }
+    session.change("open", [source]);
+    const receipt = await tools.executeTool(search("PRIVATE_ACCOUNT_FIXTURE"));
+    expect(receipt).toEqual({ kind: "ok", action: "search_catalog" });
+    expect(JSON.stringify(receipt)).not.toContain("PRIVATE_");
+    const copied = tools.state.entries[0]!;
+    // Compare identity as a boolean: assertion diagnostics may otherwise
+    // inspect deliberately hostile test-only getters on the source object.
+    expect(Object.is(copied, source)).toBe(false);
+    expect(Object.is(copied.connections, source.connections)).toBe(false);
+    expect(copied).toMatchObject({ issuerAccountIdentifier: "PRIVATE_ACCOUNT_FIXTURE",
+      issuerOrganizationOrWorkspace: "PRIVATE_WORKSPACE_FIXTURE", issuerProject: "PRIVATE_PROJECT_FIXTURE",
+      issuerEnvironment: "PRIVATE_ENVIRONMENT_FIXTURE" });
+    expect(Object.isFrozen(copied)).toBe(true); expect(Object.isFrozen(copied.connections[0])).toBe(true);
+    for (const field of ["notes", "issuerConsoleUrl", "secretValue", "toJSON"]) expect(copied).not.toHaveProperty(field);
+    source.issuerAccountIdentifier = "changed"; source.connections[0]!.label = "changed";
+    expect(copied.issuerAccountIdentifier).toBe("PRIVATE_ACCOUNT_FIXTURE");
+    expect(copied.connections[0]!.label).toBe("LOCAL_CONNECTION");
+    session.lock(); expect(tools.state.entries).toEqual([]);
+  });
   it.each(["locked", "busy", "empty", "open", "error"] as const)("locks immediately while %s, without an await or unlock", async (phase) => {
     const { session, tools } = setup();
     session.change(phase);

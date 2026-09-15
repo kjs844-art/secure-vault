@@ -86,6 +86,39 @@ impl WasmCatalogV1 {
         Ok(JsValue::from_str(self.entry(reference)?.provider_name()))
     }
 
+    /// Optional private local metadata; absent source values become JS undefined.
+    #[wasm_bindgen(js_name = issuerAccountIdentifier)]
+    pub fn issuer_account_identifier(&self, reference: f64) -> Result<Option<String>, JsValue> {
+        Ok(self
+            .entry(reference)?
+            .issuer_account_identifier()
+            .map(str::to_owned))
+    }
+
+    #[wasm_bindgen(js_name = issuerOrganizationOrWorkspace)]
+    pub fn issuer_organization_or_workspace(
+        &self,
+        reference: f64,
+    ) -> Result<Option<String>, JsValue> {
+        Ok(self
+            .entry(reference)?
+            .issuer_organization_or_workspace()
+            .map(str::to_owned))
+    }
+
+    #[wasm_bindgen(js_name = issuerProject)]
+    pub fn issuer_project(&self, reference: f64) -> Result<Option<String>, JsValue> {
+        Ok(self.entry(reference)?.issuer_project().map(str::to_owned))
+    }
+
+    #[wasm_bindgen(js_name = issuerEnvironment)]
+    pub fn issuer_environment(&self, reference: f64) -> Result<Option<String>, JsValue> {
+        Ok(self
+            .entry(reference)?
+            .issuer_environment()
+            .map(str::to_owned))
+    }
+
     #[wasm_bindgen(js_name = credentialType)]
     pub fn credential_type(&self, reference: f64) -> Result<String, JsValue> {
         Ok(match self.entry(reference)?.credential_type() {
@@ -168,4 +201,37 @@ fn checked_index(value: f64) -> Result<usize, JsValue> {
 
 fn checked_count(value: usize) -> Result<u32, JsValue> {
     u32::try_from(value).map_err(|_| JsValue::from_str("LIMITS_EXCEEDED"))
+}
+
+#[cfg(all(test, feature = "synthetic-demo"))]
+mod issuer_projection_tests {
+    use super::*;
+
+    #[test]
+    fn issuer_getters_preserve_the_optional_source_values() {
+        let snapshot = archive::create_catalog().unwrap();
+        let mut catalog = WasmCatalogV1::from_snapshot(snapshot);
+        for reference in 0..3 {
+            let reference = f64::from(reference);
+            assert!(
+                catalog
+                    .issuer_account_identifier(reference)
+                    .unwrap()
+                    .as_deref()
+                    == Some("demo-account")
+            );
+            assert!(
+                catalog
+                    .issuer_organization_or_workspace(reference)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(catalog.issuer_project(reference).unwrap().as_deref() == Some("demo-project"));
+            assert!(catalog.issuer_environment(reference).unwrap().as_deref() == Some("demo"));
+        }
+        catalog.lock();
+        assert!(catalog.is_locked());
+        // JS error conversion is tested by the real-WASM script, including
+        // every optional getter after lock and with invalid references.
+    }
 }

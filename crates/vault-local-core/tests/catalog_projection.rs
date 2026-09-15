@@ -33,6 +33,10 @@ fn opened_credentials_consume_into_non_secret_catalog_projections() {
         assert!(projection.revision_id() == expected_revision_id);
         assert_eq!(projection.item_name(), "Example Workshop API Credential");
         assert_eq!(projection.provider_name(), "Example AI Workshop");
+        assert!(projection.issuer_account_identifier() == Some("demo-account"));
+        assert!(projection.issuer_organization_or_workspace().is_none());
+        assert!(projection.issuer_project() == Some("demo-project"));
+        assert!(projection.issuer_environment() == Some("demo"));
         assert!(projection.credential_type() == CatalogCredentialTypeV1::ApiKey);
         assert!(projection.status() == CatalogCredentialStatusV1::Active);
         assert_eq!(projection.connection_count(), expected_connections);

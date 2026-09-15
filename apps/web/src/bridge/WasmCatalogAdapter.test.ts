@@ -14,6 +14,10 @@ function catalog(overrides: Partial<WasmCatalogV1> = {}) {
     free: vi.fn(),
     itemName: vi.fn(() => "Synthetic workshop"),
     providerName: vi.fn(() => "Synthetic provider"),
+    issuerAccountIdentifier: vi.fn(() => "demo-account"),
+    issuerOrganizationOrWorkspace: vi.fn(() => undefined as string | undefined),
+    issuerProject: vi.fn(() => "demo-project"),
+    issuerEnvironment: vi.fn(() => "demo"),
     credentialType: vi.fn(() => "api_key"),
     status: vi.fn(() => "active"),
     connectionCount: vi.fn(() => 2),
@@ -49,11 +53,14 @@ describe("WasmCatalogAdapter", () => {
     const adapter = new WasmCatalogAdapter(() => handle);
     const rows = await adapter.load();
     expect(Object.keys(rows[0] ?? {})).toEqual([
-      "reference", "itemName", "providerName", "credentialType", "status",
+      "reference", "itemName", "providerName", "issuerAccountIdentifier", "issuerOrganizationOrWorkspace",
+      "issuerProject", "issuerEnvironment", "credentialType", "status",
       "connectionCount", "secretFieldCount", "mcpConnectionCount", "connections",
     ]);
     expect(rows[0]).toEqual({
       reference: 0, itemName: "Synthetic workshop", providerName: "Synthetic provider",
+      issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+      issuerProject: "demo-project", issuerEnvironment: "demo",
       credentialType: "api_key", status: "active", connectionCount: 2,
       secretFieldCount: 1, mcpConnectionCount: 1,
       connections: [{label: "Example MCP", consumerType: "mcp_server"}, {label: "Example CLI", consumerType: "cli"}],
@@ -67,6 +74,30 @@ describe("WasmCatalogAdapter", () => {
     expect(adapter.isLocked).toBe(false);
     adapter.dispose();
   });
+
+  it("normalizes only absent WASM issuer values to null without losing empty strings", async () => {
+    const adapter = new WasmCatalogAdapter(() => Object.assign(catalog(), {
+      issuerAccountIdentifier: () => undefined, issuerOrganizationOrWorkspace: () => "",
+      issuerProject: () => "한".repeat(85), issuerEnvironment: () => "x".repeat(256),
+    }));
+    expect((await adapter.load())[0]).toMatchObject({
+      issuerAccountIdentifier: null, issuerOrganizationOrWorkspace: "",
+      issuerProject: "한".repeat(85), issuerEnvironment: "x".repeat(256),
+    });
+    adapter.dispose();
+  });
+
+  it.each(["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"])(
+    "rejects malformed and overlong WASM %s without projecting private errors", async (field) => {
+      for (const value of [null, false, 42, {}, "한".repeat(86), "x".repeat(257)]) {
+        const handle = Object.assign(catalog(), { [field]: () => value });
+        const adapter = new WasmCatalogAdapter(() => handle);
+        await expect(adapter.load()).rejects.toMatchObject({ code: typeof value === "string" ? "LIMITS_EXCEEDED" : "INVALID_CATALOG" });
+        expect(adapter.entries).toEqual([]);
+        expect(handle.free).toHaveBeenCalledOnce();
+      }
+    },
+  );
 
   it.each(CATALOG_CREDENTIAL_TYPES_V1)("accepts core kind %s", async (kind) => {
     const adapter = new WasmCatalogAdapter(() => catalog({ credentialType: () => kind }));

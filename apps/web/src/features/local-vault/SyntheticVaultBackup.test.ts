@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
 
@@ -21,6 +22,16 @@ function fakeArchive(length = 32, marker = 7): Uint8Array {
   header.setUint32(8, 1, true);
   header.setUint32(12, 3, true);
   return bytes;
+}
+
+/** Compare every visible byte without Vitest enumerating half a million properties. */
+function expectArchiveBytesEqual(actual: Uint8Array, expected: Uint8Array): void {
+  expect(Object.getPrototypeOf(actual)).toBe(Uint8Array.prototype);
+  expect(Object.getPrototypeOf(expected)).toBe(Uint8Array.prototype);
+  expect(actual.byteLength).toBe(expected.byteLength);
+  const actualBytes = Buffer.from(actual.buffer, actual.byteOffset, actual.byteLength);
+  const expectedBytes = Buffer.from(expected.buffer, expected.byteOffset, expected.byteLength);
+  expect(actualBytes.equals(expectedBytes)).toBe(true);
 }
 
 function withHeader(version: number, count = 3): Uint8Array {
@@ -94,6 +105,34 @@ const invalidInputs: [string, unknown][] = [
   ["null", null],
   ["undefined", undefined],
 ];
+
+describe("test-only exact archive byte assertion", () => {
+  it.each([0, Math.floor(MAX_SYNTHETIC_ARCHIVE_BYTES / 2), MAX_SYNTHETIC_ARCHIVE_BYTES - 1])(
+    "rejects a one-byte difference at offset %i", (offset) => {
+      const expected = fakeArchive(MAX_SYNTHETIC_ARCHIVE_BYTES);
+      const actual = expected.slice();
+      actual[offset] = actual[offset]! ^ 1;
+      expect(() => expectArchiveBytesEqual(actual, expected)).toThrow();
+    },
+  );
+
+  it.each([-1, 1])("rejects a length difference of %i byte", (difference) => {
+    expect(() => expectArchiveBytesEqual(fakeArchive(32 + difference), fakeArchive())).toThrow();
+  });
+
+  it("compares only the visible bytes of views with different offsets and backing lengths", () => {
+    const expectedBacking = new Uint8Array(80).fill(99);
+    const actualBacking = new Uint8Array(96).fill(11);
+    expectedBacking.set(fakeArchive(), 12);
+    actualBacking.set(fakeArchive(), 20);
+    expectArchiveBytesEqual(actualBacking.subarray(20, 52), expectedBacking.subarray(12, 44));
+  });
+
+  it("rejects another typed-array type even when its visible bytes match", () => {
+    const actual = new Uint16Array(16) as unknown as Uint8Array;
+    expect(() => expectArchiveBytesEqual(actual, new Uint8Array(32))).toThrow();
+  });
+});
 
 describe("SyntheticVaultBackup with fake bytes and an injected test worker", () => {
   it("constructs without reading, writing, validating, or cancelling", () => {
@@ -212,7 +251,8 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     "delegates the %i-byte boundary to the test worker (not real framing validation)", async (length) => {
       const { backup, worker } = fixture();
       await backup.restoreArchive(fakeArchive(length));
-      await expect(backup.exportArchive()).resolves.toEqual(fakeArchive(length));
+      const exported = await backup.exportArchive();
+      expectArchiveBytesEqual(exported, fakeArchive(length));
       expect(worker.open).toHaveBeenCalledTimes(2);
     },
   );
@@ -303,7 +343,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     const expected = new Uint8Array(bytes);
     const { backup, store, worker } = fixture(bytes);
     await expect(backup.exportArchive()).rejects.toMatchObject({ code });
-    expect(new Uint8Array(bytes)).toEqual(expected);
+    expectArchiveBytesEqual(new Uint8Array(bytes), expected);
     expect(store.read).toHaveBeenCalledOnce();
     expect(worker.open).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();

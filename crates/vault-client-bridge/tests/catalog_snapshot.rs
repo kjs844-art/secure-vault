@@ -3,11 +3,11 @@ use vault_client_bridge::{
     CatalogCredentialTypeV1, ClientBridgeErrorCodeV1, ClientCatalogSnapshotV1,
     client_catalog_entry_count_is_supported_v1, project_authenticated_catalog_v1,
 };
-use vault_crypto::{MasterPassword, VaultSession, create_vault_v0alpha1};
+use vault_crypto::{MasterPassword, VaultSession, create_vault_v0alpha1, unlock_vault_v0alpha1};
 use vault_local_core::{
     CredentialStorageAuthenticatorV1, OwnedRehydratedCredentialOutcomeV1,
-    OwnedRehydratedCredentialV1, SyntheticCredentialFixtureId, create_synthetic_successor_v1,
-    seal_synthetic_fixture_v1,
+    OwnedRehydratedCredentialV1, SyntheticCredentialFixtureId, SyntheticRegistrationSelectionV1,
+    create_synthetic_successor_v1, seal_synthetic_fixture_v1, seal_synthetic_registration_v1,
 };
 
 fn rehydrate_fixture(
@@ -101,6 +101,10 @@ fn authenticated_heads_become_an_ordered_secret_value_free_catalog() {
         assert_eq!(entry.reference(), reference);
         assert!(entry.item_name() == "Example Workshop API Credential");
         assert!(entry.provider_name() == "Example AI Workshop");
+        assert!(entry.issuer_account_identifier() == Some("demo-account"));
+        assert!(entry.issuer_organization_or_workspace().is_none());
+        assert!(entry.issuer_project() == Some("demo-project"));
+        assert!(entry.issuer_environment() == Some("demo"));
         assert!(entry.credential_type() == CatalogCredentialTypeV1::ApiKey);
         assert!(entry.status() == CatalogCredentialStatusV1::Active);
         assert!(entry.connection(entry.connection_count()).is_none());
@@ -222,4 +226,41 @@ fn different_revisions_of_one_record_are_not_accepted_as_separate_rows() {
         );
         heads.reverse();
     }
+}
+
+#[test]
+fn both_registered_profiles_recover_private_issuer_metadata_from_ciphertext() {
+    let password =
+        MasterPassword::from_utf8("DEMO_VALUE_ONLY_issuer_projection_password".to_owned()).unwrap();
+    let created = create_vault_v0alpha1(&password).unwrap();
+    let mut envelopes = Vec::new();
+    for profile in [0, 1] {
+        let selection = SyntheticRegistrationSelectionV1::from_ids(profile, 0, &[0, 2]).unwrap();
+        let sealed = seal_synthetic_registration_v1(&created.session, &selection).unwrap();
+        envelopes.push(sealed.persistence_projection_v1().envelope().to_vec());
+    }
+    let before = envelopes.clone();
+    let password_envelope = created.password_envelope;
+    drop(created.session);
+    let reopened = unlock_vault_v0alpha1(&password, &password_envelope).unwrap();
+    let heads: Vec<_> = envelopes
+        .iter()
+        .map(|envelope| rehydrate_envelope(&reopened, envelope.clone()))
+        .collect();
+    let catalog = project_authenticated_catalog_v1(&reopened, &heads).unwrap();
+    for (reference, account, workspace, project, environment) in [
+        (0, "demo-account", "demo-workspace", "demo-project", "demo"),
+        (1, "lab-account", "lab-workspace", "lab-project", "staging"),
+    ] {
+        let entry = catalog.entry(reference).unwrap();
+        assert!(entry.issuer_account_identifier() == Some(account));
+        assert!(entry.issuer_organization_or_workspace() == Some(workspace));
+        assert!(entry.issuer_project() == Some(project));
+        assert!(entry.issuer_environment() == Some(environment));
+        assert_eq!(entry.connection_count(), 2);
+    }
+    assert!(
+        envelopes == before,
+        "issuer projection must preserve ciphertext"
+    );
 }

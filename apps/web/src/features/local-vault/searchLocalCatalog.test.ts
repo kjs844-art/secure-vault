@@ -7,6 +7,8 @@ import { MAX_LOCAL_QUERY_LENGTH, searchLocalCatalog, type ConnectionFilter } fro
 
 function item(reference: number, overrides: Partial<LocalCatalogEntryV1> = {}): LocalCatalogEntryV1 {
   return Object.freeze({ reference, itemName: "DEMO Workbench", providerName: "Example Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key", status: "active", connectionCount: 0, secretFieldCount: 1,
     mcpConnectionCount: 0, connections: Object.freeze([]), ...overrides });
 }
@@ -22,6 +24,21 @@ const records = Object.freeze([
 const refs = (query: string, filter: ConnectionFilter = "all") => searchLocalCatalog(records, query, filter).map((row) => row.reference);
 
 describe("local catalog allowlisted search", () => {
+  it.each(["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"] as const)(
+    "searches explicitly reviewed private field %s locally", (field) => {
+      const row = item(42, { [field]: "개인 ＬＡＢ Kontext" });
+      expect(searchLocalCatalog([row], "개인 lab kontext")).toEqual([row]);
+      expect(searchLocalCatalog([row], "different-private-value")).toEqual([]);
+    },
+  );
+
+  it("does not make null or empty issuer fields into searchable placeholder strings", () => {
+    const row = item(43, { issuerAccountIdentifier: null, issuerOrganizationOrWorkspace: null,
+      issuerProject: "", issuerEnvironment: "" });
+    for (const query of ["null", "undefined", "기록 없음", "빈 값으로 기록됨"]) {
+      expect(searchLocalCatalog([row], query)).toEqual([]);
+    }
+  });
   it.each(["", "   ", "\t\n\u00a0"])("empty query returns all entries in snapshot order (%s)", (query) => {
     expect(refs(query)).toEqual([9, 2, 7]);
   });
@@ -76,6 +93,26 @@ describe("local catalog allowlisted search", () => {
 });
 
 describe("local catalog rendering", () => {
+  it("shows four issuer labels and distinguishes absent metadata from an explicitly empty value", () => {
+    const html = renderToStaticMarkup(createElement(LocalCatalogResults, { entries: [item(42, {
+      issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+      issuerProject: "", issuerEnvironment: "demo",
+    })] }));
+    for (const label of ["발급 계정", "조직 · 워크스페이스", "프로젝트", "환경", "demo-account", "기록 없음", "빈 값으로 기록됨"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).not.toContain("undefined");
+  });
+
+  it.each(["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"] as const)(
+    "renders private issuer %s as escaped text, never markup or links", (field) => {
+      const html = renderToStaticMarkup(createElement(LocalCatalogResults, { entries: [item(42, {
+        [field]: '<a href="https://example.invalid">PRIVATE_DEMO</a>',
+      })] }));
+      expect(html).toContain("&lt;a href="); expect(html).not.toContain("<a ");
+      expect(html).toContain("PRIVATE_DEMO&lt;/a&gt;");
+    },
+  );
   it("renders labels, bounded search input and no form action or external links", () => {
     const html = renderToStaticMarkup(createElement(LocalCatalogSearch, { entries: records }));
     expect(html).toContain('for="local-catalog-query"');

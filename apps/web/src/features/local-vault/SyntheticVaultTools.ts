@@ -29,6 +29,22 @@ const FILTERS: Readonly<Record<SyntheticToolFilterV1, ConnectionFilter>> = Objec
 });
 const failure = (code: SyntheticToolErrorCodeV1): SyntheticToolReceiptV1 => Object.freeze({ kind: "error", code });
 
+/** The private UI snapshot is separate from the fixed, metadata-free receipt. */
+function snapshotLocalRow(entry: LocalCatalogEntryV1): LocalCatalogEntryV1 {
+  return Object.freeze({
+    reference: entry.reference, itemName: entry.itemName, providerName: entry.providerName,
+    issuerAccountIdentifier: entry.issuerAccountIdentifier,
+    issuerOrganizationOrWorkspace: entry.issuerOrganizationOrWorkspace,
+    issuerProject: entry.issuerProject, issuerEnvironment: entry.issuerEnvironment,
+    credentialType: entry.credentialType, status: entry.status,
+    connectionCount: entry.connectionCount, secretFieldCount: entry.secretFieldCount,
+    mcpConnectionCount: entry.mcpConnectionCount,
+    connections: Object.freeze(entry.connections.map((connection) => Object.freeze({
+      label: connection.label, consumerType: connection.consumerType,
+    }))),
+  });
+}
+
 /**
  * Local-only synthetic command controller, not an external AI authorization
  * boundary. Construction is inert; a mounted UI owns an explicit binding.
@@ -147,7 +163,7 @@ export class SyntheticVaultTools {
       const rows = searchLocalCatalog(this.#session.state.entries,
         action.op === "search_catalog" ? action.query : "",
         action.op === "filter_catalog" ? FILTERS[action.filter] : "all");
-      const localRows = Object.freeze(rows.slice(0, action.maxResults ?? SYNTHETIC_TOOL_MAX_RESULTS));
+      const localRows = Object.freeze(rows.slice(0, action.maxResults ?? SYNTHETIC_TOOL_MAX_RESULTS).map(snapshotLocalRow));
       if (!this.#current(binding, request, generation) || this.#session.state.phase !== "open") return failure("CANCELLED");
       const receipt = Object.freeze({ kind: "ok" as const, action: action.op });
       this.#publish("ready", localRows, receipt, generation, true);

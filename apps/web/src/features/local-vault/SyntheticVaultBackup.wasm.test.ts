@@ -13,6 +13,7 @@ import init, {
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
 import { SyntheticVaultBackup } from "./SyntheticVaultBackup";
 import type { SyntheticVaultWorker } from "./SyntheticVaultSession";
+import { searchLocalCatalog } from "./searchLocalCatalog";
 
 const WASM_TIMEOUT = 30_000;
 const EXPECTED_ROWS: readonly LocalCatalogEntryV1[] = [
@@ -20,6 +21,8 @@ const EXPECTED_ROWS: readonly LocalCatalogEntryV1[] = [
     reference: 0,
     itemName: "Example Workshop API Credential",
     providerName: "Example AI Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key",
     status: "active",
     connectionCount: 0,
@@ -31,6 +34,8 @@ const EXPECTED_ROWS: readonly LocalCatalogEntryV1[] = [
     reference: 1,
     itemName: "Example Workshop API Credential",
     providerName: "Example AI Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key",
     status: "active",
     connectionCount: 1,
@@ -42,6 +47,8 @@ const EXPECTED_ROWS: readonly LocalCatalogEntryV1[] = [
     reference: 2,
     itemName: "Example Workshop API Credential",
     providerName: "Example AI Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key",
     status: "active",
     connectionCount: 3,
@@ -98,6 +105,29 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
 
   afterEach(() => { vi.restoreAllMocks(); });
 
+  it.each([
+    [0, { issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: "demo-workspace",
+      issuerProject: "demo-project", issuerEnvironment: "demo" }],
+    [1, { issuerAccountIdentifier: "lab-account", issuerOrganizationOrWorkspace: "lab-workspace",
+      issuerProject: "lab-project", issuerEnvironment: "staging" }],
+  ] as const)("reopens saved profile %i issuer context and searches every reviewed field locally", async (profile, issuer) => {
+    const selected = appendSyntheticRegistration(archive, profile, 0, new Float64Array([0]));
+    const database = new IDBFactory();
+    expect(await createSyntheticCiphertextStore(database).createIfAbsent(selected)).toBe("created");
+    // Discard the registration handle and reopen bytes read from a fresh store.
+    const saved = await createSyntheticCiphertextStore(database).read();
+    expect(saved).toEqual(selected);
+    const reopened = await actualWasmWorker().open(saved!);
+    expect(reopened.slice(0, 3)).toEqual(EXPECTED_ROWS);
+    const added = reopened[3]!;
+    expect(added).toMatchObject({ ...issuer, reference: 3, connectionCount: 1, mcpConnectionCount: 1 });
+    for (const value of Object.values(issuer)) {
+      expect(searchLocalCatalog(reopened, value.toUpperCase(), "mcp")).toContain(added);
+    }
+    expect(searchLocalCatalog(reopened, issuer.issuerOrganizationOrWorkspace)).toEqual([added]);
+    expect(Buffer.from(saved!).includes(Buffer.from(issuer.issuerOrganizationOrWorkspace, "utf8"))).toBe(false);
+  }, WASM_TIMEOUT);
+
   it("exports identical stored ciphertext that authenticates all three records and relations", async () => {
     expect(exported).toEqual(archive);
     expect(exported).not.toBe(archive);
@@ -127,6 +157,7 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
     for (const plaintext of [
       "Example Workshop API Credential", "Example AI Workshop",
       "Example MCP", "Example CLI", "Example CI",
+      "demo-account", "demo-project",
       "DEMO_VALUE_ONLY_API_KEY_0001", "DEMO_VALUE_ONLY_TOKEN_0002",
       "DEMO_VALUE_ONLY_wasm_catalog",
     ]) {
@@ -199,6 +230,8 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
         reference: 3,
         itemName: "Example Cloud Lab Registered API Key",
         providerName: "Example Cloud Lab",
+        issuerAccountIdentifier: "lab-account", issuerOrganizationOrWorkspace: "lab-workspace",
+        issuerProject: "lab-project", issuerEnvironment: "staging",
         credentialType: "api_key",
         status: "active",
         connectionCount: 2,
@@ -296,6 +329,7 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
       for (const plaintext of [
         "Example Cloud Lab Registered API Key", "Example Cloud Lab",
         "Example CI", "Example MCP", "DEMO_VALUE_ONLY_API_KEY_0001",
+        "lab-account", "lab-workspace", "lab-project",
       ]) {
         expect(ciphertext.includes(Buffer.from(plaintext, "utf8"))).toBe(false);
       }

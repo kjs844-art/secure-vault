@@ -8,6 +8,8 @@ const oldBytes = new Uint8Array([1]);
 const newBytes = new Uint8Array([1, 2]);
 function rows(name: string): readonly LocalCatalogEntryV1[] {
   return [{ reference: 0, itemName: name, providerName: "Example", credentialType: "api_key",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     status: "active", connectionCount: 0, mcpConnectionCount: 0, secretFieldCount: 1, connections: [] }];
 }
 function deferred<T>() {

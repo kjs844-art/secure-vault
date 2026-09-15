@@ -8,6 +8,15 @@ state. `lock()` drops that snapshot; `free()` releases the generated handle.
 There is no exported secret getter, record ID, revision ID, real-user credential
 form, network call, or JavaScript vault constructor.
 
+Four private local issuer getters expose only metadata already inside each
+authenticated encrypted item: `issuerAccountIdentifier(reference)`,
+`issuerOrganizationOrWorkspace(reference)`, `issuerProject(reference)`, and
+`issuerEnvironment(reference)`. They return `string | undefined`; absence is
+`undefined` (not `null`), and an explicitly stored empty string is preserved.
+Each source field is limited to 256 UTF-8 bytes. All four use the same locked and
+invalid-reference checks as other row getters. They expose no shared entity IDs,
+Console URL, notes, configuration bindings, or secret values.
+
 The `synthetic-demo` feature adds `syntheticCatalog()`, `createSyntheticArchive()`,
 `openSyntheticArchive(bytes)` and `appendSyntheticRegistration(bytes, profileId,
 credentialId, connectionIds)`. They use fixed synthetic fixtures, real Rust
@@ -60,7 +69,7 @@ not an approval to deploy a real-secret vault.
 
 ## Security limits
 
-- Item/provider and connection names are private metadata, not safe AI or telemetry input.
+- Item/provider, issuer fields, and connection names are private metadata, not safe AI or telemetry input.
 - Rust can release its owned buffers, not revoke JS strings, DOM text, or copies
   retained by callers. The application must clear state and terminate workers.
 - Generated bindings expose memory/ownership machinery. WASM is not protection

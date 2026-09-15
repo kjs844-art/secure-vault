@@ -14,3 +14,12 @@
 .local-catalog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .local-catalog-controls input, .local-catalog-controls select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
 .local-catalog-controls input:focus-visible, .local-catalog-controls select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.synthetic-registration form { display: grid; gap: 12px; }
+.synthetic-registration select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.synthetic-registration fieldset { min-width: 0; border: 1px solid #dce2e8; padding: 12px; }
+.synthetic-registration fieldset label, .registration-acknowledgement { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
+.synthetic-registration input[type="checkbox"] { flex: 0 0 auto; margin-top: 4px; }
+.synthetic-registration input:focus-visible, .synthetic-registration select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.registration-profile { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr); gap: 8px; margin: 0; }
+.registration-profile dt { color: #52616d; }
+.registration-profile dd { margin: 0; overflow-wrap: anywhere; }

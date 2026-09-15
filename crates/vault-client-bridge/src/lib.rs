@@ -1,6 +1,6 @@
 //! Platform-neutral client boundary for the synthetic-only KeyAtlas alpha.
 //!
-//! The catalog produced here is secret-value-free, but its names are private
+//! The catalog produced here is secret-value-free, but its names and issuer fields are private
 //! metadata. Keep it inside an unlocked local UI. It is not safe for logs,
 //! analytics, AI prompts, or network transfer.
 
@@ -65,6 +65,25 @@ pub struct ClientCatalogSnapshotV1 {
 ///
 /// `reference` is meaningful only while the parent snapshot remains alive. No
 /// stable record or revision identifier crosses this client boundary.
+/// Issuer account, workspace, project, and environment are private local display
+/// metadata, not an AI projection. Other metadata is deliberately inaccessible:
+///
+/// ```compile_fail
+/// use vault_client_bridge::ClientCatalogEntryViewV1;
+/// fn read(entry: &ClientCatalogEntryViewV1<'_>) { let _ = entry.notes(); }
+/// ```
+/// ```compile_fail
+/// use vault_client_bridge::ClientCatalogEntryViewV1;
+/// fn read(entry: &ClientCatalogEntryViewV1<'_>) { let _ = entry.console_url(); }
+/// ```
+/// ```compile_fail
+/// use vault_client_bridge::ClientCatalogEntryViewV1;
+/// fn read(entry: &ClientCatalogEntryViewV1<'_>) { let _ = entry.issuer_account_ref(); }
+/// ```
+/// ```compile_fail
+/// use vault_client_bridge::ClientCatalogEntryViewV1;
+/// fn read(entry: &ClientCatalogEntryViewV1<'_>) { let _ = entry.issuer_project_ref(); }
+/// ```
 pub struct ClientCatalogEntryViewV1<'snapshot> {
     reference: u32,
     projection: &'snapshot CredentialCatalogProjectionV1,
@@ -100,6 +119,22 @@ impl ClientCatalogEntryViewV1<'_> {
 
     pub fn provider_name(&self) -> &str {
         self.projection.provider_name()
+    }
+
+    pub fn issuer_account_identifier(&self) -> Option<&str> {
+        self.projection.issuer_account_identifier()
+    }
+
+    pub fn issuer_organization_or_workspace(&self) -> Option<&str> {
+        self.projection.issuer_organization_or_workspace()
+    }
+
+    pub fn issuer_project(&self) -> Option<&str> {
+        self.projection.issuer_project()
+    }
+
+    pub fn issuer_environment(&self) -> Option<&str> {
+        self.projection.issuer_environment()
     }
 
     pub fn credential_type(&self) -> CatalogCredentialTypeV1 {

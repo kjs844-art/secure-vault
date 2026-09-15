@@ -84,6 +84,10 @@ export class WasmCatalogAdapter {
 function readEntry(catalog: WasmCatalogV1, reference: number): LocalCatalogEntryV1 {
   const itemName = text(catalog.itemName(reference), 128, true);
   const providerName = text(catalog.providerName(reference), 256, false);
+  const issuerAccountIdentifier = optionalIssuerText(catalog.issuerAccountIdentifier(reference));
+  const issuerOrganizationOrWorkspace = optionalIssuerText(catalog.issuerOrganizationOrWorkspace(reference));
+  const issuerProject = optionalIssuerText(catalog.issuerProject(reference));
+  const issuerEnvironment = optionalIssuerText(catalog.issuerEnvironment(reference));
   const credentialType = catalog.credentialType(reference);
   const status = catalog.status(reference);
   if (!CATALOG_CREDENTIAL_TYPES_V1.some((value) => value === credentialType)) {
@@ -111,10 +115,17 @@ function readEntry(catalog: WasmCatalogV1, reference: number): LocalCatalogEntry
   // Construct the allowlist explicitly. Never spread a generated object here.
   return Object.freeze({
     reference, itemName, providerName,
+    issuerAccountIdentifier, issuerOrganizationOrWorkspace, issuerProject, issuerEnvironment,
     credentialType: credentialType as CatalogCredentialTypeV1,
     status: status as CatalogStatusV1,
     connectionCount, secretFieldCount, mcpConnectionCount, connections: Object.freeze(connections),
   });
+}
+
+function optionalIssuerText(value: string | undefined): string | null {
+  // Only wasm-bindgen's Option::None representation is normalized here. The
+  // structured Worker boundary requires explicit null instead of undefined.
+  return value === undefined ? null : text(value, 256, false);
 }
 
 function count(value: number, maximum: number): number {

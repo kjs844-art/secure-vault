@@ -5,6 +5,7 @@ import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
 import { bindVaultAutoLock } from "./bindVaultAutoLock";
 import { LocalCatalogSearch } from "./LocalCatalogSearch";
 import { SyntheticToolPanel } from "./SyntheticToolPanel";
+import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -43,11 +44,12 @@ export function LocalVaultPanel() {
           {state.phase === "busy" && "처리 중 · 이 기기에서 암호화 또는 복호화하고 있습니다. 잠그면 화면과 연산을 중단하지만, 이미 시작된 암호문 저장은 완료될 수 있습니다."}
           {state.phase === "empty" && "저장된 합성 금고가 없습니다. ‘합성 금고 만들기’를 눌러 시작하세요."}
           {state.phase === "open" && `열림 · 저장된 암호문에서 ${state.entries.length}개 합성 항목을 인증하고 복원했습니다.`}
-          {state.phase === "error" && `열지 못했습니다 (${state.errorCode}). 기존 저장 내용은 자동 삭제하거나 덮어쓰지 않습니다.`}
+          {state.phase === "error" && `작업을 확인하지 못했습니다 (${state.errorCode}). 오류 시 자동 초기화·재시도는 하지 않습니다. 저장이 이미 완료됐을 수 있으므로 먼저 금고를 다시 열어 확인하세요.`}
         </p>
         <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠길 수 있습니다.</small>
       </section>
 
+      {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <LocalCatalogSearch key={`catalog-${session.viewGeneration}`} entries={state.entries} />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">

@@ -36,8 +36,11 @@ export function searchLocalCatalog(
     if (filter === "unconnected" && entry.connections.length !== 0) return false;
     if (filter === "mcp" && !entry.connections.some((connection) => connection.consumerType === "mcp_server")) return false;
     // Explicit allowlist. Never stringify the object: extra future properties
-    // (notes, identifiers, secrets) must not become searchable automatically.
+    // (notes, URLs, secrets) must not become searchable automatically. The four
+    // reviewed issuer fields remain local-only, never AI inventory fields.
     const fields = [entry.providerName, entry.itemName, entry.credentialType,
+      ...[entry.issuerAccountIdentifier, entry.issuerOrganizationOrWorkspace,
+        entry.issuerProject, entry.issuerEnvironment].filter((value): value is string => value !== null),
       credentialLabels[entry.credentialType], entry.status, statusLabels[entry.status],
       ...entry.connections.flatMap((connection) => [connection.label,
         connection.consumerType, consumerLabels[connection.consumerType]]),

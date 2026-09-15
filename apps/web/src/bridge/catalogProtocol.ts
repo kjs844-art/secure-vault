@@ -26,6 +26,11 @@ export interface LocalCatalogEntryV1 {
   readonly reference: number;
   readonly itemName: string;
   readonly providerName: string;
+  /** Private issuer context, 256 UTF-8 bytes each. Null means not recorded. */
+  readonly issuerAccountIdentifier: string | null;
+  readonly issuerOrganizationOrWorkspace: string | null;
+  readonly issuerProject: string | null;
+  readonly issuerEnvironment: string | null;
   readonly credentialType: CatalogCredentialTypeV1;
   readonly status: CatalogStatusV1;
   readonly connectionCount: number;
@@ -42,6 +47,10 @@ export interface WasmCatalogV1 {
   free(): void;
   itemName(reference: number): string;
   providerName(reference: number): string;
+  issuerAccountIdentifier(reference: number): string | undefined;
+  issuerOrganizationOrWorkspace(reference: number): string | undefined;
+  issuerProject(reference: number): string | undefined;
+  issuerEnvironment(reference: number): string | undefined;
   credentialType(reference: number): string;
   status(reference: number): string;
   connectionCount(reference: number): number;

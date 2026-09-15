@@ -27,7 +27,9 @@ function expectCode(operation, expected) {
   check(code === expected);
 }
 
-const rowGetters = ['itemName', 'providerName', 'credentialType', 'status',
+const issuerGetters = ['issuerAccountIdentifier', 'issuerOrganizationOrWorkspace',
+  'issuerProject', 'issuerEnvironment'];
+const rowGetters = ['itemName', 'providerName', ...issuerGetters, 'credentialType', 'status',
   'connectionCount', 'secretFieldCount', 'mcpConnectionCount'];
 const connectionGetters = ['connectionLabel', 'connectionType'];
 
@@ -41,6 +43,11 @@ function verifyCatalog(catalog, previousRows) {
     for (let ref = 0; ref < 3; ref++) {
       check(catalog.itemName(ref) === 'Example Workshop API Credential');
       check(catalog.providerName(ref) === 'Example AI Workshop');
+      check(catalog.issuerAccountIdentifier(ref) === 'demo-account');
+      check(catalog.issuerOrganizationOrWorkspace(ref) === undefined);
+      check(catalog.issuerOrganizationOrWorkspace(ref) !== null);
+      check(catalog.issuerProject(ref) === 'demo-project');
+      check(catalog.issuerEnvironment(ref) === 'demo');
       check(catalog.credentialType(ref) === 'api_key');
       check(catalog.status(ref) === 'active');
       check(catalog.connectionCount(ref) === [0, 1, 3][ref]);
@@ -148,6 +155,10 @@ function verifyRegistrationCatalog(catalog, originalRows, registrations) {
       const ref = 3 + index;
       check(catalog.providerName(ref) === ['Example AI Workshop', 'Example Cloud Lab'][profile]);
       check(catalog.itemName(ref) === ['Example Workshop Registered API Key', 'Example Cloud Lab Registered API Key'][profile]);
+      check(catalog.issuerAccountIdentifier(ref) === ['demo-account', 'lab-account'][profile]);
+      check(catalog.issuerOrganizationOrWorkspace(ref) === ['demo-workspace', 'lab-workspace'][profile]);
+      check(catalog.issuerProject(ref) === ['demo-project', 'lab-project'][profile]);
+      check(catalog.issuerEnvironment(ref) === ['demo', 'staging'][profile]);
       check(catalog.credentialType(ref) === 'api_key' && catalog.status(ref) === 'active');
       check(catalog.secretFieldCount(ref) === 1);
       check(catalog.connectionCount(ref) === connections.length);
@@ -184,6 +195,10 @@ async function run() {
     ...rowGetters, ...connectionGetters].sort();
   const actual = Object.getOwnPropertyNames(api.WasmCatalogV1.prototype).sort();
   check(actual.length === expected.length && actual.every((name, index) => name === expected[index]));
+  for (const denied of ['secretValue', 'secretFields', 'notes', 'consoleUrl', 'recordId',
+    'revisionId', 'issuerAccountRef', 'issuerProjectRef', 'configurationReference']) {
+    check(typeof api.WasmCatalogV1.prototype[denied] === 'undefined');
+  }
   if (!demo) return;
 
   const rows = verifyCatalog(api.syntheticCatalog());

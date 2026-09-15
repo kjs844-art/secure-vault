@@ -65,15 +65,21 @@ impl CatalogConnectionViewV1<'_> {
 
 /// Owned, secret-value-free projection intended for an unlocked local UI catalog.
 ///
-/// Item, provider, and connection labels remain private metadata. This type is
-/// not safe for AI prompts, analytics, logs, or network transfer. It intentionally
-/// has no secret values, account identifiers, notes, URLs, connection identifiers,
-/// bindings, serialization implementation, or public constructor.
+/// Item, provider, issuer metadata, and connection labels remain private metadata.
+/// This type is not safe for AI prompts, analytics, logs, or network transfer.
+/// It intentionally has no secret values, notes, URLs, connection identifiers,
+/// bindings, serialization implementation, or public constructor. The four
+/// optional issuer display fields retain absence and empty strings without
+/// normalization; each authenticated source field is at most 256 UTF-8 bytes.
 pub struct CredentialCatalogProjectionV1 {
     record_id: RecordIdV1,
     revision_id: RevisionIdV1,
     item_name: String,
     provider_name: String,
+    issuer_account_identifier: Option<String>,
+    issuer_organization_or_workspace: Option<String>,
+    issuer_project: Option<String>,
+    issuer_environment: Option<String>,
     credential_type: CatalogCredentialTypeV1,
     status: CatalogCredentialStatusV1,
     connections: Vec<CatalogConnectionProjectionV1>,
@@ -107,6 +113,10 @@ impl CredentialCatalogProjectionV1 {
             revision_id,
             item_name: item.item_name,
             provider_name: item.provider_name,
+            issuer_account_identifier: item.issuer_account_identifier,
+            issuer_organization_or_workspace: item.issuer_organization_or_workspace,
+            issuer_project: item.issuer_project,
+            issuer_environment: item.issuer_environment,
             credential_type: item.credential_type.into(),
             status: item.status.into(),
             connections,
@@ -129,6 +139,22 @@ impl CredentialCatalogProjectionV1 {
 
     pub fn provider_name(&self) -> &str {
         &self.provider_name
+    }
+
+    pub fn issuer_account_identifier(&self) -> Option<&str> {
+        self.issuer_account_identifier.as_deref()
+    }
+
+    pub fn issuer_organization_or_workspace(&self) -> Option<&str> {
+        self.issuer_organization_or_workspace.as_deref()
+    }
+
+    pub fn issuer_project(&self) -> Option<&str> {
+        self.issuer_project.as_deref()
+    }
+
+    pub fn issuer_environment(&self) -> Option<&str> {
+        self.issuer_environment.as_deref()
     }
 
     pub fn credential_type(&self) -> CatalogCredentialTypeV1 {
@@ -213,12 +239,79 @@ impl Drop for CredentialCatalogProjectionV1 {
     fn drop(&mut self) {
         self.item_name.zeroize();
         self.provider_name.zeroize();
+        self.issuer_account_identifier.zeroize();
+        self.issuer_organization_or_workspace.zeroize();
+        self.issuer_project.zeroize();
+        self.issuer_environment.zeroize();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CatalogConnectionTypeV1, ConsumerTypeV1};
+    use super::{CatalogConnectionTypeV1, ConsumerTypeV1, CredentialCatalogProjectionV1};
+    use crate::ids::generate_record_identity;
+    use crate::synthetic::{SyntheticCredentialFixtureId, build_synthetic_fixture_v1};
+
+    #[test]
+    fn issuer_projection_preserves_absence_empty_and_utf8_limit_values() {
+        // These are test-only decoded payloads, not new public fixture inputs.
+        let maximum = format!("{}a", "계".repeat(85));
+        assert_eq!(maximum.len(), 256);
+        for value in [None, Some(String::new()), Some(maximum)] {
+            let mut item =
+                build_synthetic_fixture_v1(SyntheticCredentialFixtureId::UnconnectedApiKey)
+                    .unwrap();
+            item.issuer_account_identifier = value.clone();
+            item.issuer_organization_or_workspace = value.clone();
+            item.issuer_project = value.clone();
+            item.issuer_environment = value.clone();
+            let identity = generate_record_identity().unwrap();
+            item.validate(identity.revision_id).unwrap();
+            let projection = CredentialCatalogProjectionV1::from_item(
+                identity.record_id,
+                identity.revision_id,
+                item,
+            );
+            assert!(projection.issuer_account_identifier() == value.as_deref());
+            assert!(projection.issuer_organization_or_workspace() == value.as_deref());
+            assert!(projection.issuer_project() == value.as_deref());
+            assert!(projection.issuer_environment() == value.as_deref());
+        }
+    }
+
+    #[test]
+    fn issuer_projection_moves_the_owned_source_strings_without_cloning() {
+        let mut item =
+            build_synthetic_fixture_v1(SyntheticCredentialFixtureId::UnconnectedApiKey).unwrap();
+        item.issuer_organization_or_workspace = Some("DEMO_VALUE_ONLY_workspace".to_owned());
+        let pointers = [
+            item.issuer_account_identifier.as_ref().unwrap().as_ptr(),
+            item.issuer_organization_or_workspace
+                .as_ref()
+                .unwrap()
+                .as_ptr(),
+            item.issuer_project.as_ref().unwrap().as_ptr(),
+            item.issuer_environment.as_ref().unwrap().as_ptr(),
+        ];
+        let identity = generate_record_identity().unwrap();
+        item.validate(identity.revision_id).unwrap();
+        let projection = CredentialCatalogProjectionV1::from_item(
+            identity.record_id,
+            identity.revision_id,
+            item,
+        );
+        for (source, projected) in pointers.into_iter().zip([
+            projection.issuer_account_identifier(),
+            projection.issuer_organization_or_workspace(),
+            projection.issuer_project(),
+            projection.issuer_environment(),
+        ]) {
+            assert!(
+                source == projected.unwrap().as_ptr(),
+                "source metadata ownership must move"
+            );
+        }
+    }
 
     #[test]
     fn every_consumer_type_maps_to_its_allowlisted_catalog_type() {

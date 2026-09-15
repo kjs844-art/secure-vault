@@ -34,7 +34,7 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 
 - 합성 비밀번호로 Vault Root Key를 생성·래핑하고 다시 잠금 해제
 - 타입이 고정된 `CredentialItemV1`과 세 가지 합성 관계 fixture
-- 추가 등록용 닫힌 합성 프로필 2종과 연결 0~3개 선택, 기존 암호문을 보존하는 archive v2 및 웹 Worker/세션 CAS→저장본 재인증 (등록 UI·계정/프로젝트/환경 표시 연결은 미완료)
+- 추가 등록용 닫힌 합성 프로필 2종과 연결 0~3개 선택 폼, 기존 암호문을 보존하는 archive v2 및 웹 Worker/세션 CAS→저장본 재인증, 계정/workspace/project/환경의 private local-only 표시·검색
 - 합성 레코드를 로컬에서 seal/open하고 authenticated restore
 - 세션을 버린 뒤 다시 잠금 해제해 동일한 관계를 복구
 - canonical CBOR만 허용하는 엄격한 payload 및 envelope 코덱
@@ -49,7 +49,7 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 
 웹 데모에는 합성 목록·로컬 검색·자동 잠금·합성 백업/복원 화면이 있습니다. [현재 통합 증거](verification/2026-09-15-backup-session-integration.md)는 실제 브라우저 복원을 포함하지만, 디스크 다운로드/네이티브 파일 선택 왕복은 미검증입니다. 이 데모는 아래의 제품 MVP 완료를 의미하지 않습니다.
 
-[합성 등록 저장 경로 증거](verification/2026-09-15-synthetic-registration-storage.md)는 v1/v2 백업과 실제 WASM/Node 세션 재열기를 포함합니다. 선택형 등록 화면과 실제 브라우저 등록 검증은 다음 작업입니다.
+[합성 등록 저장 경로 증거](verification/2026-09-15-synthetic-registration-storage.md)는 v1/v2 백업과 실제 WASM/Node 세션 재열기를 포함합니다. 후속 [등록 화면·issuer 검색 증거](verification/2026-09-15-synthetic-registration-ui.md)는 선택형 폼, 실제 Comet의 0/1/3 연결 등록과 순서 보존, 검색·잠금·재열기·새로고침·탭 전환 검사를 포함합니다. 임의 자격 증명 등록이나 실제 모바일 검증은 아닙니다.
 
 실제 자격 증명 입력·가져오기, 제품용 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
 

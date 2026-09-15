@@ -39,4 +39,22 @@ describe("toAiSafeInventory", () => {
 
     expect(serialized).not.toContain("DEMO_VALUE_ONLY_");
   });
+
+  it("does not read or serialize newly projected private issuer fields", () => {
+    const privateFields = ["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"];
+    const metadata = { ...vaultItems[0]! };
+    for (const field of privateFields) {
+      Object.defineProperty(metadata, field, { enumerable: true, get() { throw new Error("PRIVATE_ISSUER_GETTER_READ"); } });
+    }
+    expect(toAiSafeInventory([metadata])).toEqual(toAiSafeInventory([vaultItems[0]!]));
+    const withValues = { ...vaultItems[0]!, issuerAccountIdentifier: "PRIVATE_ACCOUNT_FIXTURE",
+      issuerOrganizationOrWorkspace: "PRIVATE_WORKSPACE_FIXTURE", issuerProject: "PRIVATE_PROJECT_FIXTURE",
+      issuerEnvironment: "PRIVATE_ENVIRONMENT_FIXTURE" };
+    const serialized = JSON.stringify(toAiSafeInventory([withValues]));
+    for (const field of privateFields) expect(serialized).not.toContain(field);
+    expect(serialized).not.toContain("PRIVATE_");
+    // Legacy fixture environment remains its existing reviewed field; do not
+    // substitute the private issuerEnvironment into it.
+    expect(toAiSafeInventory([withValues]).entries[0]?.environment).toBe(vaultItems[0]!.environment);
+  });
 });

@@ -16,7 +16,7 @@ export function LocalCatalogSearch({ entries }: { readonly entries: readonly Loc
       <h2 id="relationships-heading">합성 연결 관계</h2>
       <p>아래는 자동 탐지 결과가 아닌 가상 예시입니다. 키 원문은 화면으로 전달하지 않습니다.</p>
       <div className="local-catalog-controls">
-        <label htmlFor="local-catalog-query">서비스·항목·연결처 검색</label>
+        <label htmlFor="local-catalog-query">서비스·계정·프로젝트·연결처 검색</label>
         <input id="local-catalog-query" type="search" value={query} maxLength={MAX_LOCAL_QUERY_LENGTH}
           autoComplete="off" spellCheck={false} aria-describedby="local-search-privacy"
           onChange={(event) => setQuery(event.currentTarget.value)} />
@@ -44,6 +44,12 @@ export function LocalCatalogResults({ entries }: { readonly entries: readonly Lo
       <p className="relationship-service">{entry.providerName}</p>
       <h3>{entry.itemName} <small>예시 {entry.reference + 1}</small></h3>
       <p>{credentialLabels[entry.credentialType]} · {statusLabels[entry.status]} · 보관된 비밀 필드 {entry.secretFieldCount}개 · 연결 {entry.connectionCount}곳</p>
+      <dl className="issuer-context" aria-label={`예시 ${entry.reference + 1} 발급 계정 정보`}>
+        <dt>발급 계정</dt><dd>{issuerLabel(entry.issuerAccountIdentifier)}</dd>
+        <dt>조직 · 워크스페이스</dt><dd>{issuerLabel(entry.issuerOrganizationOrWorkspace)}</dd>
+        <dt>프로젝트</dt><dd>{issuerLabel(entry.issuerProject)}</dd>
+        <dt>환경</dt><dd>{issuerLabel(entry.issuerEnvironment)}</dd>
+      </dl>
       {entry.connections.length === 0 ? <p>아직 연결 기록이 없는 예시입니다.</p> : (
         <ul aria-label={`예시 ${entry.reference + 1} 연결 목록`}>
           {entry.connections.map((connection, index) => <li key={index}>
@@ -54,4 +60,8 @@ export function LocalCatalogResults({ entries }: { readonly entries: readonly Lo
       )}
     </li>)}
   </ol>;
+}
+
+function issuerLabel(value: string | null): string {
+  return value === null ? "기록 없음" : value === "" ? "빈 값으로 기록됨" : value;
 }

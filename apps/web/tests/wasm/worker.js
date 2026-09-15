@@ -27,13 +27,17 @@ async function run() {
     const rows = await adapter.load();
     check(rows.length === 3 && adapter.isLocked === false);
     const allowed = [
-      "reference", "itemName", "providerName", "credentialType", "status",
+      "reference", "itemName", "providerName", "issuerAccountIdentifier", "issuerOrganizationOrWorkspace",
+      "issuerProject", "issuerEnvironment", "credentialType", "status",
       "connectionCount", "secretFieldCount", "mcpConnectionCount", "connections",
     ];
     for (const row of rows) {
       const keys = Object.keys(row);
       check(keys.length === allowed.length && keys.every((key, index) => key === allowed[index]));
       check(Object.isFrozen(row));
+      check(row.issuerAccountIdentifier === "demo-account");
+      check(row.issuerOrganizationOrWorkspace === null);
+      check(row.issuerProject === "demo-project" && row.issuerEnvironment === "demo");
     }
     adapter.lock();
     check(adapter.entries.length === 0 && adapter.isLocked === true);

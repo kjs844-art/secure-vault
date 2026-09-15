@@ -51,6 +51,14 @@ record has been committed and verified. Sealing alone does not provide storage,
 CAS, an outbox, or restart durability. The MCP fixture is record-only and carries
 no executable command. Recorded connections are not provider-verified.
 
+The authenticated local catalog now also moves four optional issuer display
+fields from the decrypted payload: account identifier, organization/workspace,
+project, and environment. Each remains limited to 256 UTF-8 bytes; absence and
+empty strings remain distinct. The projection drops/zeroizes these owned strings
+with its other private metadata. This is a local UI allowlist only, not approval
+to send issuer metadata to AI, logs, analytics, or a network service. It adds no
+secret-value, notes, Console URL, or shared account/project reference getter.
+
 ## Field-preservation regression coverage
 
 Test-only comparators check all 67 fields across the item and its five nested

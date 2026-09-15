@@ -148,6 +148,10 @@ function text(value: unknown, maximumBytes: number, required = false): string {
   return value;
 }
 
+function issuerText(value: unknown): string | null {
+  return value === null ? null : text(value, 256);
+}
+
 function member<T extends string>(value: unknown, allowed: readonly T[]): T {
   if (typeof value !== "string" || !allowed.some((candidate) => candidate === value)) {
     throw new CatalogAdapterError("INVALID_CATALOG");
@@ -165,6 +169,10 @@ function projectRows(value: unknown): readonly LocalCatalogEntryV1[] {
     if (row.reference !== reference) throw new CatalogAdapterError("INVALID_CATALOG");
     const itemName = text(row.itemName, 128, true);
     const providerName = text(row.providerName, 256);
+    const issuerAccountIdentifier = issuerText(row.issuerAccountIdentifier);
+    const issuerOrganizationOrWorkspace = issuerText(row.issuerOrganizationOrWorkspace);
+    const issuerProject = issuerText(row.issuerProject);
+    const issuerEnvironment = issuerText(row.issuerEnvironment);
     const credentialType = member(row.credentialType, CATALOG_CREDENTIAL_TYPES_V1);
     const status = member(row.status, CATALOG_STATUSES_V1);
     const connectionCount = count(row.connectionCount, 128);
@@ -189,6 +197,7 @@ function projectRows(value: unknown): readonly LocalCatalogEntryV1[] {
     // Never spread or publish an untrusted message object, even after validation.
     rows.push(Object.freeze({
       reference, itemName, providerName, credentialType, status,
+      issuerAccountIdentifier, issuerOrganizationOrWorkspace, issuerProject, issuerEnvironment,
       connectionCount, secretFieldCount, mcpConnectionCount,
       connections: Object.freeze(connections),
     }));

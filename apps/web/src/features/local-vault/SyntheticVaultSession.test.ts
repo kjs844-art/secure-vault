@@ -7,6 +7,8 @@ import { SyntheticVaultSession, type SyntheticVaultWorker } from "./SyntheticVau
 function entry(itemName = "Synthetic item"): LocalCatalogEntryV1 {
   return {
     reference: 0, itemName, providerName: "Demo provider", credentialType: "api_key",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     status: "active", connectionCount: 1, secretFieldCount: 1, mcpConnectionCount: 1,
     connections: [{ label: "Demo consumer", consumerType: "mcp_server" }],
   };
@@ -159,8 +161,14 @@ describe("SyntheticVaultSession", () => {
     expect(Object.isFrozen(savedRow.connections)).toBe(true);
     expect(Object.isFrozen(savedRow.connections[0])).toBe(true);
     expect(savedRow).not.toHaveProperty("unknown");
+    expect(savedRow).toMatchObject({ issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+      issuerProject: "demo-project", issuerEnvironment: "demo" });
     row.itemName = "Changed worker-owned row";
+    row.issuerAccountIdentifier = "changed-account";
+    row.issuerProject = "changed-project";
     expect(savedRow.itemName).toBe("Synthetic item");
+    expect(savedRow.issuerAccountIdentifier).toBe("demo-account");
+    expect(savedRow.issuerProject).toBe("demo-project");
   });
 
   it("clears previously displayed entries immediately on each new operation", async () => {

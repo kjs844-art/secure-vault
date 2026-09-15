@@ -16,6 +16,8 @@ class FakeWorker implements SyntheticVaultWorkerPort {
 function row() {
   return {
     reference: 0, itemName: "Example API", providerName: "Example Workshop",
+    issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+    issuerProject: "demo-project", issuerEnvironment: "demo",
     credentialType: "api_key", status: "active", connectionCount: 2,
     secretFieldCount: 1, mcpConnectionCount: 1,
     connections: [
@@ -34,6 +36,34 @@ function setup() {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("BrowserSyntheticVaultWorker", () => {
+  it.each(["issuerAccountIdentifier", "issuerOrganizationOrWorkspace", "issuerProject", "issuerEnvironment"])(
+    "requires explicit null or bounded string for Worker issuer field %s", async (field) => {
+      for (const value of [undefined, false, 42, {}, "한".repeat(86), "x".repeat(257)]) {
+        const { client, workers } = setup();
+        const pending = client.open(new Uint8Array([1]));
+        workers[0]!.reply({ ok: true, kind: "catalog", entries: [{ ...row(), [field]: value }] });
+        await expect(pending).rejects.toMatchObject({ code: typeof value === "string" ? "LIMITS_EXCEEDED" : "INVALID_CATALOG" });
+      }
+      const { client, workers } = setup();
+      const pending = client.open(new Uint8Array([1]));
+      const missing = { ...row() } as Record<string, unknown>; delete missing[field];
+      workers[0]!.reply({ ok: true, kind: "catalog", entries: [missing] });
+      await expect(pending).rejects.toHaveProperty("code", "INVALID_CATALOG");
+    },
+  );
+
+  it("preserves bounded issuer strings and explicit null without extra private fields", async () => {
+    const { client, workers } = setup();
+    const pending = client.open(new Uint8Array([1]));
+    const input = { ...row(), issuerAccountIdentifier: "x".repeat(256), issuerOrganizationOrWorkspace: null,
+      issuerProject: "", issuerEnvironment: "한".repeat(85), issuerConsoleUrl: "https://private.invalid", notes: "PRIVATE_NOTE" };
+    workers[0]!.reply({ ok: true, kind: "catalog", entries: [input] });
+    const result = await pending;
+    expect(result[0]).toMatchObject({ issuerAccountIdentifier: "x".repeat(256), issuerOrganizationOrWorkspace: null,
+      issuerProject: "", issuerEnvironment: "한".repeat(85) });
+    expect(result[0]).not.toHaveProperty("issuerConsoleUrl"); expect(result[0]).not.toHaveProperty("notes");
+  });
+
   it("dispatches a copied closed append selection and returns only copied ciphertext", async () => {
     const { client, workers } = setup();
     const input = new Uint8Array([1, 2]);
