@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
 import {
   MAX_LOCAL_QUERY_LENGTH, consumerLabels, credentialLabels, statusLabels,
@@ -7,7 +7,10 @@ import {
 
 // Mounted only while the owning session is open. Lock/unmount discards query
 // and filter state; this is not a claim of erasing JavaScript heap copies.
-export function LocalCatalogSearch({ entries }: { readonly entries: readonly LocalCatalogEntryV1[] }) {
+export function LocalCatalogSearch({ entries, renderEntryActions }: {
+  readonly entries: readonly LocalCatalogEntryV1[];
+  readonly renderEntryActions?: ((entry: LocalCatalogEntryV1) => ReactNode) | undefined;
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ConnectionFilter>("all");
   const matches = useMemo(() => searchLocalCatalog(entries, query, filter), [entries, query, filter]);
@@ -32,12 +35,15 @@ export function LocalCatalogSearch({ entries }: { readonly entries: readonly Loc
       </div>
       <p id="local-search-privacy">이 화면에서만 검색합니다. 검색어를 서버·AI로 보내거나 앱의 저장소에 기록하지 않습니다. 잠그면 검색어가 초기화됩니다.</p>
       <p role="status" aria-live="polite" data-testid="local-search-count">전체 {entries.length}개 중 {matches.length}개</p>
-      <LocalCatalogResults entries={matches} />
+      <LocalCatalogResults entries={matches} renderEntryActions={renderEntryActions} />
     </section>
   );
 }
 
-export function LocalCatalogResults({ entries }: { readonly entries: readonly LocalCatalogEntryV1[] }) {
+export function LocalCatalogResults({ entries, renderEntryActions }: {
+  readonly entries: readonly LocalCatalogEntryV1[];
+  readonly renderEntryActions?: ((entry: LocalCatalogEntryV1) => ReactNode) | undefined;
+}) {
   if (entries.length === 0) return <p data-testid="local-search-empty">일치하는 항목이 없습니다. 검색어나 연결 분류를 바꿔 보세요.</p>;
   return <ol className="relationship-list">
     {entries.map((entry) => <li key={entry.reference}>
@@ -58,6 +64,7 @@ export function LocalCatalogResults({ entries }: { readonly entries: readonly Lo
           </li>)}
         </ul>
       )}
+      {renderEntryActions?.(entry)}
     </li>)}
   </ol>;
 }

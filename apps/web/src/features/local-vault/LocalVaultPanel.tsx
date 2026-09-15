@@ -3,7 +3,7 @@ import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertex
 import { SyntheticVaultSession } from "./SyntheticVaultSession";
 import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
 import { bindVaultAutoLock } from "./bindVaultAutoLock";
-import { LocalCatalogSearch } from "./LocalCatalogSearch";
+import { SyntheticEditableCatalog } from "./SyntheticConnectionEditor";
 import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import "../../styles.css";
@@ -21,6 +21,7 @@ export function LocalVaultPanel() {
   useEffect(() => bindVaultAutoLock(session), [session]);
 
   const busy = state.phase === "busy";
+  const generation = session.viewGeneration;
   return (
     <main className="local-vault">
       <header>
@@ -50,7 +51,7 @@ export function LocalVaultPanel() {
       </section>
 
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
-      {state.phase === "open" && <LocalCatalogSearch key={`catalog-${session.viewGeneration}`} entries={state.entries} />}
+      {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">
         <h2 id="local-explanation-heading">로컬 저장은 ‘이 브라우저 안 서랍’이에요</h2>

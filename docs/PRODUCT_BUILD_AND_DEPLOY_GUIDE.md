@@ -23,8 +23,8 @@
 | SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
 | Web 합성 금고 화면 | 로컬 구현·범위별 실제 브라우저 검증 | React에서 선택형 등록/목록/issuer 검색/자동 잠금/IndexedDB 재열기/백업 연습을 제공합니다. 최종 디자인은 별도이며 운영 서비스가 아닙니다. |
-| Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·편집 화면·회전은 아직 미구현입니다. |
-| Web 합성 연결 편집 내부 API | 구현·합성 자동 검사 완료, UI 미연결 | 기존 record/비밀 필드 보존 successor → v3 선형 이력/heads → 화면 bytes+generation 결합·CAS/재인증. 과거 기록도 인증합니다. 전체 웹 762 tests, 실제 demo WASM 973 checks. 실제 브라우저 편집·durable conflict outbox·rollback anchor는 미완료입니다. |
+| Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·회전은 아직 미구현입니다. |
+| Web 합성 연결 편집 | 내부 API 검증, UI 자동 검사 통과·브라우저 검증 미완료 | 기존 record/비밀 필드 보존 successor → v3 선형 이력/heads → 화면 bytes+generation 결합·CAS/재인증. UI 포함 전체 웹 839 tests와 타입/빌드 통과. 실제 demo WASM 973 checks는 내부 경로 증거입니다. 실제 브라우저 편집 저장·durable conflict outbox·rollback anchor는 미완료입니다. |
 | Android 화면 | 미구현 | 웹 구현이 Android 앱 구현을 의미하지 않습니다. 생체 인증·Keystore·앱 수명 주기 검증이 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
@@ -140,6 +140,8 @@ Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 
 - 위 Phase 0A 조건을 충족하거나 별도로 승인된 새 권위 검증 계약과 그 gate를 통과하기 전에는 Draft PR을 Ready로 전환하거나 `main`에 병합하지 않음
 
 ## 9. 작업 로그
+
+- 2026-09-15 — 합성 연결 편집 UI를 연결하고 모델 58/SSR 19를 포함한 웹 839 tests 및 타입/빌드 exit 0을 확인했습니다. 독립 리뷰의 행 전환 포커스 문제를 수정했으나 실제 포커스 검사는 미완료입니다. 격리 Comet에서 금고 안 항목 3개와 편집 폼 초기 상태까지 관찰한 후 브라우저 도구의 CDP 연결 종료로 저장/취소/잠금 검증을 마치지 못했습니다. 사용자 현황 요청에 따라 새 구현과 개발 서버를 중단하고 부분 체크포인트로 기록합니다. [UI 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md), [일정·기기·AI 협업 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md). 원격 설정은 다른 기기 안티그래비티 담당이며 이 작업에서 변경하지 않았습니다.
 
 - 2026-09-15 19시대 KST — 선택형 등록 폼과 계정/workspace/project/환경의 local-only projection·검색을 연결했습니다. 네이티브 core catalog 3/3·projection 1/1, bridge 8/8+doctests 4/4, WASM 19/19와 demo 771/default 20 checks가 통과했습니다. 웹 최종 635/635·타입 검사·빌드 통과, 실제 격리 Comet에서 3→6개 등록/검색/잠금·재열기/탭 전환/360px 및 콘솔 오류 없음 확인. 기존 대용량 테스트 2개의 timeout은 전체 byte 비교를 유지한 테스트 전용 비교 개선으로 해결했습니다. 디자인·배포·실제 Secret/Phase 0A 게이트는 유지합니다. [등록 화면·RED/BLUE 검증 기록](verification/2026-09-15-synthetic-registration-ui.md).
 
