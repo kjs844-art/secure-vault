@@ -1,9 +1,12 @@
 :root {
-  --ground: #08090b;
-  --ink: #f2f3f5;
-  --ink-2: #a3a8b1;
-  --ink-3: #62676f;
+  --ground: #070708;
+  --ink: #f3f2ee;
+  --ink-2: #a5a39c;
+  --ink-3: #66645d;
   --line: rgba(255, 255, 255, 0.09);
+  --gold: #d4b06a;
+  --gold-hi: #f1d9a3;
+  --gold-lo: #8a7440;
   --display: "Space Grotesk", "IBM Plex Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
   --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -56,7 +59,7 @@ a:hover { color: var(--ink); }
 
 .mark {
   font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 3.2px;
-  color: var(--ink);
+  color: var(--gold-hi);
 }
 .bar-nav { display: flex; gap: 26px; margin-left: 18px; font-size: 13px; color: var(--ink-2); }
 .bar-nav a { transition: color 0.25s; }
@@ -71,9 +74,9 @@ a:hover { color: var(--ink); }
   background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px);
   transition: transform 0.35s var(--ease), background 0.35s, border-color 0.35s;
 }
-.btn:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.06); }
-.btn-solid { background: var(--ink); color: #0b0c0f; border-color: var(--ink); }
-.btn-solid:hover { background: #fff; border-color: #fff; }
+.btn:hover { transform: translateY(-1px); border-color: rgba(212, 176, 106, 0.4); background: rgba(212, 176, 106, 0.06); }
+.btn-solid { background: var(--gold); color: #141108; border-color: var(--gold); }
+.btn-solid:hover { background: var(--gold-hi); border-color: var(--gold-hi); }
 .btn-sm { height: 40px; padding: 0 18px; font-size: 13px; }
 
 /* ---------- 첫 화면: 열쇠뿐 ---------- */
@@ -88,10 +91,27 @@ a:hover { color: var(--ink); }
 .is-ready .cue { opacity: 1; }
 .cue-line { display: block; width: 1px; height: 44px; background: var(--ink-3); overflow: hidden; position: relative; }
 .cue-line::after {
-  content: ""; position: absolute; left: 0; top: -44px; width: 1px; height: 44px; background: var(--ink);
+  content: ""; position: absolute; left: 0; top: -44px; width: 1px; height: 44px; background: var(--gold);
   animation: fall 2.2s var(--ease) infinite;
 }
 @keyframes fall { 0% { top: -44px; } 60%, 100% { top: 44px; } }
+
+/* ---------- 이야기 구간: 화면 4장, 자막 하나씩 ---------- */
+.story { position: relative; z-index: 2; }
+.slot { height: 100svh; position: relative; }
+.captions { position: fixed; left: 0; right: 0; top: 60svh; z-index: 2; pointer-events: none; }
+.caption {
+  position: absolute; left: 0; top: 0; margin: 0;
+  padding: 0 clamp(16px, 4vw, 40px);
+  max-width: 560px;
+  font-size: clamp(17px, 1.6vw, 22px); line-height: 1.5; font-weight: 400; color: var(--ink);
+  word-break: keep-all; text-wrap: pretty;
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.9s var(--ease), transform 0.9s var(--ease);
+}
+.caption.on { opacity: 1; transform: none; }
+.caption b { font-weight: 600; }
+.caption small { display: block; margin-top: 10px; font-family: var(--display); font-size: 10.5px; letter-spacing: 2.6px; color: var(--gold-lo); }
 
 /* ---------- 챕터 ---------- */
 .chapter {
@@ -110,7 +130,7 @@ a:hover { color: var(--ink); }
 .chapter-inner.in > :nth-child(4) { transition-delay: 0.28s; }
 
 .eyebrow {
-  margin: 0 0 22px; font-family: var(--display); font-size: 11px; letter-spacing: 3px; color: var(--ink-3);
+  margin: 0 0 22px; font-family: var(--display); font-size: 11px; letter-spacing: 3px; color: var(--gold);
 }
 h1 {
   margin: 0; font-family: var(--sans); font-weight: 600;
@@ -132,6 +152,6 @@ h1 {
   .actions .btn { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .alpha, .bar, .cue, .chapter-inner > * { transition: none; opacity: 1; transform: none; }
+  .alpha, .bar, .cue, .caption, .chapter-inner > * { transition: none; opacity: 1; transform: none; }
   .cue-line::after { animation: none; }
 }

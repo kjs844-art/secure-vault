@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "screenshot": "node scripts/screenshot.mjs",
-    "build:single": "vite build -c vite.single.config.ts"
+    "build:single": "vite build -c vite.single.config.ts && node scripts/stitch-single.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
