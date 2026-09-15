@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
 import { SyntheticVaultSession } from "./SyntheticVaultSession";
 import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
+import { bindVaultAutoLock } from "./bindVaultAutoLock";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -20,17 +21,7 @@ export function LocalVaultPanel() {
   const state = useSyncExternalStore(
     (listener) => session.subscribe(listener), () => session.state,
   );
-  useEffect(() => {
-    const lock = () => session.lock();
-    const onVisibility = () => { if (document.hidden) lock(); };
-    window.addEventListener("pagehide", lock);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("pagehide", lock);
-      document.removeEventListener("visibilitychange", onVisibility);
-      lock();
-    };
-  }, [session]);
+  useEffect(() => bindVaultAutoLock(session), [session]);
 
   const busy = state.phase === "busy";
   return (
@@ -58,7 +49,7 @@ export function LocalVaultPanel() {
           {state.phase === "open" && `열림 · 저장된 암호문에서 ${state.entries.length}개 합성 항목을 인증하고 복원했습니다.`}
           {state.phase === "error" && `열지 못했습니다 (${state.errorCode}). 기존 저장 내용은 자동 삭제하거나 덮어쓰지 않습니다.`}
         </p>
-        <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기면 잠깁니다.</small>
+        <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠길 수 있습니다.</small>
       </section>
 
       {state.phase === "open" && (
