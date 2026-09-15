@@ -16,12 +16,12 @@ const WARM = "#e8e2d4";
 const LOCK_Y = 0.7;
 const LOCK_START_Y = 4.6;
 const KEY_SCALE_OPEN = 0.88;
-const KEY_SCALE_IN = 0.62;
-const KEY_Y_IN = -0.36;
+const KEY_SCALE_IN = 0.52;
+const KEY_Y_IN = -0.3;
 
-const GLOBE_R = 4.4;
-const NODES = 96;   // 구 표면에 흩어진 서비스·개인정보
-const LINKED = 34;  // 그중 자물쇠로 이어지는 것
+const GLOBE_R = 2.95;
+const NODES = 150;   // 구 표면에 흩어진 서비스·개인정보
+const LINKED = 46;  // 그중 자물쇠로 이어지는 것
 const SEG = 34;     // 연결선 분할
 const TAU = Math.PI * 2;
 
@@ -72,7 +72,7 @@ function Network({ scroll }: { scroll: MutableRefObject<number> }) {
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const wireMat = useMemo(
-    () => new THREE.LineBasicMaterial({ color: "#8e8a82", transparent: true, opacity: 0.05, depthWrite: false }), []);
+    () => new THREE.LineBasicMaterial({ color: "#9aa3b2", transparent: true, opacity: 0.1, depthWrite: false }), []);
   const linkMat = useMemo(
     () => new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }), []);
 
@@ -107,8 +107,8 @@ function Network({ scroll }: { scroll: MutableRefObject<number> }) {
       const rad = GLOBE_R * (0.97 + r() * 0.06);
       return {
         pos: new THREE.Vector3(Math.cos(th) * ring * rad, y * rad, Math.sin(th) * ring * rad),
-        size: 0.035 + r() * 0.05,
-        bright: r() < 0.22,
+        size: 0.028 + r() * 0.038,
+        bright: r() < 0.3,
         delay: r(),
       };
     });
@@ -121,8 +121,8 @@ function Network({ scroll }: { scroll: MutableRefObject<number> }) {
     const end = new THREE.Vector3(0, 0, 0);
     for (let i = 0; i < LINKED; i++) {
       const a = nodes[i].pos;
-      const mid = a.clone().multiplyScalar(0.5);
-      mid.y += 0.9; mid.x += a.z * 0.16; mid.z -= a.x * 0.16; // 살짝 비틀어 궤도처럼
+      const mid = a.clone().multiplyScalar(0.92);
+      mid.x += a.z * 0.42; mid.z -= a.x * 0.42; mid.y += 0.35; // 구 바깥으로 휘감았다 들어온다
       const pts = new THREE.QuadraticBezierCurve3(a, mid, end).getPoints(SEG);
       curves.push(pts);
       for (let j = 0; j < SEG; j++) {
@@ -146,8 +146,11 @@ function Network({ scroll }: { scroll: MutableRefObject<number> }) {
     const t = state.clock.elapsedTime;
     const { tWire, c, tLock } = beats(scroll.current);
 
-    spin.current.rotation.y += d * 0.022;
-    wireMat.opacity = 0.03 + 0.055 * tWire;
+    spin.current.rotation.y += d * 0.03;
+    // 모여드는 동안 구가 안으로 조여든다 — "한 곳으로"를 형태로 말한다
+    const shrink = THREE.MathUtils.lerp(1, 0.45, c);
+    spin.current.scale.setScalar(THREE.MathUtils.damp(spin.current.scale.x, shrink, 4, d));
+    wireMat.opacity = 0.085 + 0.13 * tWire;
 
     /* 선: 표면에서 중심 쪽으로 그어지고, 그 위를 빛이 흘러 내려간다 */
     const col = linkGeo.attributes.color.array as Float32Array;
@@ -162,8 +165,8 @@ function Network({ scroll }: { scroll: MutableRefObject<number> }) {
           const on = u <= draw ? 1 : 0;
           const dd = u - head;
           const pulse = Math.exp(-(dd * dd) / 0.0022);
-          const base = on * fade * 0.14;
-          const beam = on * fade * 1.35 * pulse * (0.25 + 0.75 * c);
+          const base = on * fade * 0.2;
+          const beam = on * fade * 1.7 * pulse * (0.3 + 0.7 * c);
           // 선은 따뜻한 흰빛, 지나가는 빛줄기만 금기를 띤다
           col[k++] = base * 0.91 + beam * 0.83;
           col[k++] = base * 0.89 + beam * 0.69;
@@ -279,19 +282,19 @@ function Key({ scroll }: { scroll: MutableRefObject<number> }) {
 
 /** 금속 장식은 유리 표면 바로 앞에 둔다 — 유리 안에 넣으면 굴절에 뭉개진다. */
 function Face({ z }: { z: number }) {
-  const rivets: [number, number][] = [[-0.94, 0.82], [0.94, 0.82], [-0.94, -0.82], [0.94, -0.82]];
+  const rivets: [number, number][] = [[-0.79, 0.69], [0.79, 0.69], [-0.79, -0.69], [0.79, -0.69]];
   return (
     <group position={[0, 0, z]} scale={[1, 1, Math.sign(z)]}>
-      <mesh><torusGeometry args={[0.92, 0.008, 8, 80]} /><meshStandardMaterial color={STEEL_LO} metalness={1} roughness={0.4} /></mesh>
-      <mesh><torusGeometry args={[0.62, 0.034, 14, 72]} /><meshStandardMaterial color={GOLD} metalness={1} roughness={0.2} /></mesh>
-      <mesh><torusGeometry args={[0.55, 0.007, 8, 64]} /><meshStandardMaterial color={STEEL} metalness={1} roughness={0.3} /></mesh>
+      <mesh><torusGeometry args={[0.78, 0.007, 8, 80]} /><meshStandardMaterial color={STEEL_LO} metalness={1} roughness={0.4} /></mesh>
+      <mesh><torusGeometry args={[0.53, 0.03, 14, 72]} /><meshStandardMaterial color={GOLD} metalness={1} roughness={0.2} /></mesh>
+      <mesh><torusGeometry args={[0.47, 0.006, 8, 64]} /><meshStandardMaterial color={STEEL} metalness={1} roughness={0.3} /></mesh>
       {rivets.map(([x, y], i) => (
         <mesh key={i} position={[x, y, 0.012]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.052, 0.052, 0.024, 14]} />
           <meshStandardMaterial color={STEEL} metalness={1} roughness={0.28} />
         </mesh>
       ))}
-      <mesh position={[0, -0.86, 0.01]}><boxGeometry args={[1.5, 0.006, 0.006]} /><meshStandardMaterial color={STEEL_LO} metalness={1} roughness={0.45} /></mesh>
+      <mesh position={[0, -0.73, 0.01]}><boxGeometry args={[1.26, 0.005, 0.005]} /><meshStandardMaterial color={STEEL_LO} metalness={1} roughness={0.45} /></mesh>
     </group>
   );
 }
@@ -308,18 +311,18 @@ function Lock({ scroll }: { scroll: MutableRefObject<number> }) {
 
   /* 걸쇠: 오른쪽 다리를 축으로 돌아 열린다. 실제 자물쇠처럼 몸통에서 떨어지지 않는다. */
   const shackleGeo = useMemo(() => {
-    const arc = new THREE.TorusGeometry(0.66, 0.105, 22, 56, Math.PI); arc.translate(0, 0.86, 0);
-    const l = new THREE.CylinderGeometry(0.105, 0.105, 0.9, 22); l.translate(-0.66, 0.41, 0);
-    const r = new THREE.CylinderGeometry(0.105, 0.105, 0.9, 22); r.translate(0.66, 0.41, 0);
+    const arc = new THREE.TorusGeometry(0.56, 0.092, 22, 56, Math.PI); arc.translate(0, 0.76, 0);
+    const l = new THREE.CylinderGeometry(0.092, 0.092, 0.8, 22); l.translate(-0.56, 0.36, 0);
+    const r = new THREE.CylinderGeometry(0.092, 0.092, 0.8, 22); r.translate(0.56, 0.36, 0);
     const m = mergeGeometries([arc, l, r], false)!;
     [arc, l, r].forEach((g) => g.dispose());
-    m.translate(-0.66, 0, 0); // 축을 오른쪽 다리로
+    m.translate(-0.56, 0, 0); // 축을 오른쪽 다리로
     return m;
   }, []);
 
   const stars = useMemo(() => {
     const r = rng(7);
-    return Array.from({ length: 18 }, () => [(r() - 0.5) * 1.6, (r() - 0.5) * 1.3, (r() - 0.5) * 0.45, 0.02 + r() * 0.02] as const);
+    return Array.from({ length: 18 }, () => [(r() - 0.5) * 1.35, (r() - 0.5) * 1.1, (r() - 0.5) * 0.4, 0.018 + r() * 0.018] as const);
   }, []);
 
   useFrame((state, dt) => {
@@ -348,14 +351,14 @@ function Lock({ scroll }: { scroll: MutableRefObject<number> }) {
 
   return (
     <group ref={group} position={[0, LOCK_START_Y, 0]}>
-      <RoundedBox args={[2.4, 2.1, 0.9]} radius={0.16} smoothness={5}><Glass soft /></RoundedBox>
-      <Face z={0.455} />
-      <Face z={-0.455} />
+      <RoundedBox args={[2.0, 1.78, 0.78]} radius={0.14} smoothness={5}><Glass soft /></RoundedBox>
+      <Face z={0.395} />
+      <Face z={-0.395} />
 
       {/* 열쇠길과 그 둘레의 금 테 */}
-      <mesh position={[0, -0.35, 0]}><cylinderGeometry args={[0.2, 0.2, 1.45, 20]} /><meshBasicMaterial color="#05060a" /></mesh>
-      <mesh position={[0, -1.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.26, 0.028, 12, 40]} />
+      <mesh position={[0, -0.3, 0]}><cylinderGeometry args={[0.17, 0.17, 1.25, 20]} /><meshBasicMaterial color="#05060a" /></mesh>
+      <mesh position={[0, -0.88, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.22, 0.024, 12, 40]} />
         <meshStandardMaterial color={STEEL} metalness={1} roughness={0.24} />
       </mesh>
 
@@ -363,10 +366,10 @@ function Lock({ scroll }: { scroll: MutableRefObject<number> }) {
       {stars.map(([x, y, z, s], i) => (
         <mesh key={i} position={[x, y, z]} material={starMat}><sphereGeometry args={[s, 12, 12]} /></mesh>
       ))}
-      <mesh><sphereGeometry args={[0.55, 24, 24]} /><meshBasicMaterial ref={glowMat} color="#ddd3bb" transparent opacity={0.03} toneMapped={false} depthWrite={false} /></mesh>
+      <mesh><sphereGeometry args={[0.47, 24, 24]} /><meshBasicMaterial ref={glowMat} color="#ddd3bb" transparent opacity={0.03} toneMapped={false} depthWrite={false} /></mesh>
 
       {/* 걸쇠 */}
-      <group position={[0.66, 1.03, 0]}>
+      <group position={[0.56, 0.87, 0]}>
         <group ref={hinge}>
           <mesh geometry={shackleGeo}><meshStandardMaterial color={STEEL} metalness={1} roughness={0.16} envMapIntensity={0.8} /></mesh>
         </group>
@@ -386,7 +389,7 @@ function Dial({ scroll }: { scroll: MutableRefObject<number> }) {
     const d = new THREE.Object3D();
     for (let i = 0; i < N; i++) {
       const a = (i / N) * TAU;
-      d.position.set(Math.cos(a) * 2.42, Math.sin(a) * 2.42, 0);
+      d.position.set(Math.cos(a) * 1.98, Math.sin(a) * 1.98, 0);
       d.rotation.set(0, 0, a);
       d.scale.set(i % 6 === 0 ? 0.11 : 0.05, 1, 1);
       d.updateMatrix();
@@ -401,7 +404,7 @@ function Dial({ scroll }: { scroll: MutableRefObject<number> }) {
   });
   return (
     <group ref={group} position={[0, LOCK_Y, -0.2]}>
-      <mesh material={mat}><torusGeometry args={[2.35, 0.006, 6, 160]} /></mesh>
+      <mesh material={mat}><torusGeometry args={[1.92, 0.005, 6, 160]} /></mesh>
       <instancedMesh ref={ticks} args={[undefined, undefined, N]} material={mat}>
         <boxGeometry args={[1, 0.012, 0.01]} />
       </instancedMesh>
