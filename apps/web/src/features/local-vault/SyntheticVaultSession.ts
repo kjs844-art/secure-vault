@@ -84,6 +84,11 @@ export class SyntheticVaultSession {
 
   get state(): SyntheticVaultSessionState { return this.#state; }
 
+  // Ephemeral UI identity only, never a stored record ID or authorization token.
+  // A fresh key lets React discard view-local search state even if it batches
+  // an intervening lock and reopen into one committed render.
+  get viewGeneration(): number { return this.#generation; }
+
   subscribe(listener: () => void): () => void {
     this.#listeners.add(listener);
     return () => { this.#listeners.delete(listener); };

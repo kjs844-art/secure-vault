@@ -35,6 +35,23 @@ function fixture() {
 }
 
 describe("SyntheticVaultSession", () => {
+  it("changes the ephemeral view identity across lock/reopen even for identical data", async () => {
+    const { session, store } = fixture();
+    store.read.mockResolvedValue(new Uint8Array([1]));
+    const initial = session.viewGeneration;
+    await session.open();
+    expect(session.state.phase).toBe("open");
+    const opened = session.viewGeneration;
+    expect(opened).toBeGreaterThan(initial);
+    session.lock();
+    const locked = session.viewGeneration;
+    expect(locked).toBeGreaterThan(opened);
+    await session.open();
+    expect(session.state.phase).toBe("open");
+    expect(session.viewGeneration).toBeGreaterThan(locked);
+    expect(session.viewGeneration).toBe(session.viewGeneration);
+  });
+
   it("starts locked with a stable frozen empty snapshot and no side effects", () => {
     const { session, store, worker } = fixture();
     expect(session.state).toEqual({ phase: "locked", entries: [], errorCode: null });

@@ -11,3 +11,6 @@
 .relationship-list ul { list-style: none; padding-left: 12px; border-left: 2px solid #b3c4cf; }
 .relationship-list ul li { padding: 8px; overflow-wrap: anywhere; }
 .consumer-type { display: inline-block; font-size: 0.85rem; padding: 3px 8px; margin-left: 12px; background: #edf2f5; border-radius: 6px; }
+.local-catalog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.local-catalog-controls input, .local-catalog-controls select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.local-catalog-controls input:focus-visible, .local-catalog-controls select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }

@@ -77,3 +77,12 @@ node scripts/test-wasm.mjs --demo
 
 브라우저 저장 제약은 [MDN 저장 용량과 자동 삭제 설명](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria),
 저장 완료 판정은 [IndexedDB transaction complete](https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction/complete_event)를 기준으로 합니다.
+
+## 로컬 검색과 자동 잠금
+
+열린 합성 금고의 서비스·항목·연결처·표시 유형/상태를 검색할 수 있습니다.
+단어를 여러 개 입력하면 모두 일치하는 항목을 표시하며 연결 있음/없음/MCP로 좁힐 수 있습니다.
+검색어는 최대 256 UTF-16 코드 단위이며 앱 저장소, URL, 서버 또는 AI에 전송하지 않습니다.
+잠금·재열기 시 검색어와 분류가 초기화됩니다. 시계/수명 주기 자동 잠금은
+[자동 잠금 기록](../../docs/verification/2026-09-15-local-session-hardening.md),
+검색 동작과 검증 경계는 [로컬 검색 기록](../../docs/verification/2026-09-15-local-catalog-search.md)을 참고하세요.
