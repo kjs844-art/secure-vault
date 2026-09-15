@@ -61,6 +61,61 @@ export const CATALOG_ERROR_CODES_V1 = [
 ] as const;
 export type CatalogErrorCodeV1 = (typeof CATALOG_ERROR_CODES_V1)[number];
 
+export const SYNTHETIC_TOOL_ERROR_CODES_V1 = [
+  "VAULT_LOCKED", "INVALID_TOOL", "INVALID_PAYLOAD", "LIMIT_EXCEEDED", "OPERATION_FAILED",
+] as const;
+export type SyntheticToolErrorCodeV1 = (typeof SYNTHETIC_TOOL_ERROR_CODES_V1)[number];
+
+export const SYNTHETIC_TOOL_QUERY_MAX_BYTES = 128;
+export const SYNTHETIC_TOOL_MAX_RESULTS = 500;
+export const SYNTHETIC_TOOL_FILTERS_V1 = ["all", "no_connection", "mcp_connection"] as const;
+export type SyntheticToolFilterV1 = (typeof SYNTHETIC_TOOL_FILTERS_V1)[number];
+
+export interface SyntheticSearchCatalogActionV1 {
+  readonly op: "search_catalog";
+  readonly query: string;
+  readonly maxResults?: number;
+}
+
+export interface SyntheticFilterCatalogActionV1 {
+  readonly op: "filter_catalog";
+  readonly filter: SyntheticToolFilterV1;
+}
+
+export interface SyntheticLockVaultActionV1 {
+  readonly op: "lock_vault";
+}
+
+export type SyntheticToolActionV1 =
+  | SyntheticSearchCatalogActionV1
+  | SyntheticFilterCatalogActionV1
+  | SyntheticLockVaultActionV1;
+
+export type SyntheticToolResultKindV1 = "catalog" | "ok" | "error";
+
+export interface SyntheticCatalogToolCatalogResultV1 {
+  readonly kind: "catalog";
+  readonly entries: readonly LocalCatalogEntryV1[];
+  readonly query: string;
+  readonly filter: SyntheticToolFilterV1;
+  readonly count: number;
+}
+
+export interface SyntheticCatalogToolOkResultV1 {
+  readonly kind: "ok";
+  readonly action: "lock_vault";
+}
+
+export interface SyntheticCatalogToolErrorResultV1 {
+  readonly kind: "error";
+  readonly code: SyntheticToolErrorCodeV1;
+}
+
+export type SyntheticCatalogToolResultV1 =
+  | SyntheticCatalogToolCatalogResultV1
+  | SyntheticCatalogToolOkResultV1
+  | SyntheticCatalogToolErrorResultV1;
+
 /** Untrusted thrown values never become UI messages or Error.cause. */
 export class CatalogAdapterError extends Error {
   readonly code: CatalogErrorCodeV1;
