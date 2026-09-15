@@ -4,9 +4,71 @@ use super::{
     StoredPaddingBucketV0Alpha1, SyntheticRecordMutation, open_credential_record_v1,
     seal_synthetic_fixture_v1, select_bucket, synthetic_tamper_case_v1,
 };
-use crate::codec::preservation_tests::assert_item_preserved;
+use crate::codec::preservation_tests::{assert_item_preserved, synthetic_preservation_item};
 use crate::synthetic::build_synthetic_fixture_v1;
 use crate::{LocalVaultError, LocalVaultErrorCode, SyntheticCredentialFixtureId};
+
+#[test]
+fn populated_record_preserves_fields_after_rejected_unlock_and_repeated_reunlock() {
+    let password =
+        MasterPassword::from_utf8("DEMO_VALUE_ONLY_populated_record_password".to_owned()).unwrap();
+    let wrong_password =
+        MasterPassword::from_utf8("DEMO_VALUE_ONLY_wrong_record_password".to_owned()).unwrap();
+    let created = create_vault_v0alpha1(&password).unwrap();
+    let expected = synthetic_preservation_item().unwrap();
+    assert!(
+        expected.rotation_state.is_some(),
+        "fixture must include rotation"
+    );
+
+    // Test-only construction: the public writer continues to accept only the
+    // three approved fixtures. No free-form secret input API is introduced.
+    let identity = crate::ids::generate_record_identity().unwrap();
+    let plaintext = crate::codec::encode_current_item(&expected, identity.revision_id).unwrap();
+    let bucket = select_bucket(plaintext.expose_secret().len()).unwrap();
+    let context = super::record_context(
+        &created.session,
+        identity.record_id,
+        identity.revision_id,
+        created.session.key_epoch().get(),
+        bucket,
+    )
+    .unwrap();
+    let envelope =
+        vault_crypto::seal_record_v0alpha1(&created.session, &context, &plaintext).unwrap();
+    let sealed = super::sealed_from_current_envelope(envelope).unwrap();
+    drop(plaintext);
+    let password_envelope = created.password_envelope;
+    drop(created.session);
+    let envelope_before = sealed.envelope.clone();
+
+    let error = match unlock_vault_v0alpha1(&wrong_password, &password_envelope) {
+        Ok(_) => panic!("wrong synthetic password was accepted"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error.code(),
+        vault_crypto::CryptoErrorCode::AuthenticationFailed
+    );
+
+    for _ in 0..3 {
+        let reopened = unlock_vault_v0alpha1(&password, &password_envelope).unwrap();
+        let super::OpenCredentialOutcome::Current(opened) =
+            open_credential_record_v1(&reopened, &sealed).unwrap()
+        else {
+            panic!("populated synthetic record must retain current schema");
+        };
+        assert_item_preserved(&expected, &opened.item);
+        assert!(
+            sealed.envelope == envelope_before,
+            "read must preserve ciphertext"
+        );
+        // Drop both decoded model and session before the next unlock. The
+        // expected fixture remains in memory; this is not a memory-erasure test.
+        drop(opened);
+        drop(reopened);
+    }
+}
 
 #[test]
 fn all_synthetic_fixtures_preserve_fields_after_session_reunlock() {
