@@ -61,10 +61,22 @@ rustup toolchain install 1.95.0 --profile minimal --component clippy rustfmt --t
 
 수정 후 `npm ci --ignore-scripts --no-audit --no-fund`, `npm run typecheck`, `npm test`(25파일 932/932), `npm run build`가 로컬에서 exit 0이었다. 타입 목록의 Node 선언 66개가 모두 해당 프로젝트 `apps/web/node_modules/@types/node` 아래임을 검증했고 빌드 후 Secret scan 및 `git diff --check`도 exit 0이었다. package/lock 정합성에 대한 독립 검토에서도 추가 문제는 발견되지 않았다. 이 의존성 수정판의 전체 원격 실행 결과는 다음 run에서 확인해야 한다.
 
+### 후속 전체 원격 성공 확인
+
+2026-09-16 GitHub에서 다음 두 실행이 `completed/success`인 것을 다시 확인했다.
+
+| 정확한 커밋 | 실행 | 결과 |
+|---|---|---|
+| `ce518ee71c203dc7cb70b7c448a9338cd3129ebb` | [35106625311](https://github.com/kjs844-art/secure-vault/actions/runs/35106625311) | 전체 success, 기존 PR #4의 Node 타입 수정 포함 |
+| `06349e83186b43068d90a79b9ccf40b7b5a8c753` | [35106829156](https://github.com/kjs844-art/secure-vault/actions/runs/35106829156) | 전체 success, 합성 rotation core/SQLite 회귀 포함 |
+
+두 실행 모두 Secret 검사와 scanner 회귀, workflow 정책 10개, 전체 Rust verifier,
+기본/합성 release WASM 생성 및 runtime 22/973 checks, 웹 25파일 932 tests,
+typecheck/build와 최종 Secret scan까지 통과했다. 앞 문단의 재검증 대기 상태는 이
+후속 결과로 해소됐다. 이후 atomic-backup 변경은 새 SHA의 CI 증거가 필요하다.
+
 아래 항목은 계속 미검증이거나 별도 승인 대상이다.
 
-- GitHub 호스팅 `windows-latest` 이미지에서 전체 작업의 실제 성공 여부
-- Node 타입 의존성 수정 후 `npm ci --ignore-scripts` 뒤의 실제 GitHub 러너 웹 빌드와 최종 Secret scan
 - 명시적으로 ignored인 별도 보안/feasibility gate 및 실제 Secret 사용 승인(일반 CI 통과로 대체하지 않는다)
 - 저장소 설정에서 이 워크플로를 필수 브랜치 보호 검사로 지정하는 절차
 

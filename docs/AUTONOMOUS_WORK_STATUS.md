@@ -1,9 +1,11 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-16, `codex/firstvibe-local-session-hardening`.
+기준: 2026-09-17, 현재 작업 브랜치 `codex/firstvibe-atomic-backup-snapshot`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
-별도 `codex/firstvibe-synthetic-rotation-checklist` 체크포인트: 합성 연결처의 필수 완료 조건을 확인하고 최종 암호문 후보만 생성하는 코어를 추가했다. 독립 소스 리뷰 뒤 `a68c3a1`의 원격 run `35102816889`에서 새 코어 11 tests와 SQLite 충돌/재실행 테스트를 포함한 전체 Rust verifier, WASM·웹 932 tests가 통과했다. 이후 Node 타입 누락으로 전체 CI는 실패해 공통 의존성 수정 뒤 재검증한다. 로컬 Windows 앱 제어 4551 정책은 변경하지 않았다. 단발성 코어이며 후속 회전·연결 편집·UI는 미지원이다. [검증 기록](verification/2026-09-16-synthetic-rotation-cutover.md)을 참고한다.
+별도 `codex/firstvibe-synthetic-rotation-checklist` 체크포인트: 합성 연결처의 필수 완료 조건을 확인하고 최종 암호문 후보만 생성하는 코어를 추가했다. 새 코어 11 tests와 SQLite 충돌/재실행 테스트를 포함해 Node 타입 수정판 `06349e8`의 원격 run `35106829156`이 전체 성공했다. 기존 PR #4의 `ce518ee`도 run `35106625311` 전체 성공을 확인했다. 로컬 Windows 앱 제어 4551 정책은 변경하지 않았다. 단발성 코어이며 후속 회전·연결 편집·UI는 미지원이다. [검증 기록](verification/2026-09-16-synthetic-rotation-cutover.md)을 참고한다.
+
+현재 후속 작업: archive와 conflicts의 원자 snapshot 및 인증 후 exact-byte 재확인으로 백업 중 저장 경합을 닫았다. 로컬 22파일 965 tests와 독립 소스 리뷰를 통과했다. 새 WASM 생성은 Windows App Control 4551로 차단되어 이번 SHA의 전체 WASM/typecheck/build는 원격 검증 대기다. [구현·검증 경계](verification/2026-09-17-atomic-backup-snapshot.md)를 참고한다.
 
 ## 현재 확인한 것
 
@@ -13,14 +15,14 @@
 | 로컬 웹 저장/복원 | IndexedDB·Worker·WASM 구현, 통합 웹 전체 932 tests; 합성 등록 후 저장본 재열기·새로고침 확인, v3 편집·충돌 보존·검토 UI·백업 guard는 실제 WASM+fake IndexedDB 검증 | 파일 다운로드 경로, 실제 브라우저 다중 writer/오프라인 통합 검사 |
 | 자동 잠금 | 5분/숨김/절전 후 만료/시계 오류 처리, 신규 18 tests | 실제 브라우저·모바일 수명 주기 확인 |
 | 키와 연결처 목록 | 계정/workspace/project/환경 private projection·검색; 실제 Comet에서 3→6개 등록, 0/1/3 연결과 순서 보존, 검색·잠금·재열기·360px 검사 | 임의 데이터 수동 등록/편집, 회전 체크리스트, 실제 모바일/큰 목록 검증 |
-| 합성 백업/복원 | 기존 경로에 미해결 conflict export fail-closed guard 추가; 집중 192 tests, 전체 웹 932 tests, 별도 브라우저 복원 후 암호문 SHA-256 일치 | 목록 확인 직후 새 conflict가 생기는 비원자 TOCTOU, 디스크 다운로드·네이티브 파일 선택 왕복 미검증. 실제 데이터용 기능 아님 |
+| 합성 백업/복원 | 기존 guard 후속으로 한 readonly transaction의 archive+conflicts snapshot 2회와 인증 bytes 비교, raw 원본 보존; Store 122/Backup 167/Session 47 tests 통과 | 이번 변경의 actual-WASM·전체 CI, 실제 브라우저 경합·다운로드·네이티브 파일 선택 왕복 미검증. 마지막 snapshot 이후 변경은 포함하지 않음. 실제 데이터용 기능 아님 |
 | 로컬 도구 경계 | 입력 64 tests + 세션 62 tests; 격리 Comet 검색/분류/잠금/재열기/숨김 검사, 중복 React key 수정 후 콘솔 경고 0 | 외부 AI/MCP 연결·개인 projection 승인 아님; 실제 모바일 검증 별도 |
 | 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 편집 UI 실제 저장/회전·rollback/누락 보장은 아직 없음 |
 | 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·후보 사전 인증·원자 CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 실제 브라우저 편집 Worker/IDB 미검증, 회전·signed rollback/누락 anchor 미구현 |
 | 암호문 conflict outbox | DB v1/store 유지, 최대 8개 무퇴거 후보, CAS loser 보존, 전체 인증 뒤 위치 기반 검토, exact-byte 2단계 폐기, 미해결 후보 backup 차단 | 자동 병합·승격 정책과 outbox 포함 백업 형식, 실제 브라우저 멀티탭·모바일 검증 |
 | 웹 연결 편집 UI | 검토 UI 포함 통합 웹 932 tests, typecheck/build exit 0; 독립 보안 리뷰 Critical/Important 0 | 저장/취소/포커스/잠금·멀티탭 충돌의 실제 브라우저 검증과 모바일 검증 |
 | 공유 메모리 입력 경계 | Store·Session·Worker client/worker·Backup에서 SharedArrayBuffer를 DB/Worker/WASM 작업 전에 고정 오류로 거부 | cross-origin-isolated 실제 브라우저의 동시 변경 통합 검사는 미실행 |
-| 원격 CI 보안 gate | 내장 Secret scan, Rust 설치 명령 수정과 정책 10 tests 반영. `3a17d91`의 원격 run `35102459554`에서 전체 Rust·WASM(22/973 checks)·웹 932 tests 통과 후 누락된 Node 타입에서 실패. 타입 devDependency/lock 수정 후 로컬 typecheck·932 tests·build·최종 scan exit 0 | 타입 의존성 수정판의 전체 원격 재검증. branch protection과 ignored 보안 gate 승인은 별도 |
+| 원격 CI 보안 gate | `ce518ee`와 `06349e8`의 전체 원격 성공 확인: Secret/정책/Rust/WASM/웹 932 tests/typecheck/build/최종 scan | 후속 atomic-backup SHA의 전체 원격 검증. branch protection과 ignored 보안 gate 승인은 별도 |
 | SQLite 읽기 전용 preflight | 8 DB_CONFIG를 첫 SQL 전에 적용하고 query_only와 공통 hardening을 읽기 전용 연결에도 강제; 패키지 91 passed/1 ignored, 독립 재리뷰 Critical/Important 0 | 악성 schema 실제 통합 fixture와 WR 대칭 profile assertion은 residual |
 | 네이티브 전체 QA | `5d439eb` 기능 묶음 기준 Workspace Secret scan·format·Clippy·tests·ordinary VFS·doctests exit 0. 후속 scanner-only 트리는 집중 회귀와 실제 저장소 scan 통과 | 후속판 전체 Workspace 재실행과 명시적으로 ignored인 Phase 0A 보안 gate·권위 승인은 별도 필요 |
 

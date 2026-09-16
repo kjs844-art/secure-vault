@@ -76,6 +76,19 @@ export interface SyntheticConflictArchive {
   readonly bytes: Uint8Array;
 }
 
+export interface SyntheticBackupSnapshot {
+  readonly archive: Uint8Array | null;
+  readonly conflicts: readonly SyntheticConflictArchive[];
+}
+
+/**
+ * One completed readonly transaction, not a promise about later writes.
+ * The returned arrays own their bytes and never alias stored records.
+ */
+export interface SyntheticBackupSnapshotStore extends SyntheticCiphertextStore {
+  readBackupSnapshot(): Promise<SyntheticBackupSnapshot>;
+}
+
 export type SyntheticConflictPreservingCasResult =
   | { readonly kind: "updated" }
   | { readonly kind: "conflict-preserved"; readonly conflictId: string }
@@ -240,6 +253,7 @@ function openDatabase(factory: IDBFactory | undefined): Promise<IDBDatabase> {
 
 type Operation =
   | { kind: "read" }
+  | { kind: "read-backup-snapshot" }
   | { kind: "create"; bytes: Uint8Array }
   | { kind: "compare-and-swap"; expected: Uint8Array; next: Uint8Array }
   | { kind: "compare-and-swap-preserving-conflict"; expected: Uint8Array; next: Uint8Array }
@@ -249,6 +263,7 @@ type Operation =
 type OperationResult = Uint8Array | null | "created" | "exists" | "updated" | "conflict" | "missing"
   | "deleted" | "changed" | SyntheticConflictPreservingCasResult
   | SyntheticConflictPreservationResult
+  | SyntheticBackupSnapshot
   | readonly SyntheticConflictArchive[];
 
 interface StoredConflictArchive {
@@ -281,7 +296,8 @@ async function transact(
     try {
       transaction = database.transaction(
         OBJECT_STORE_NAME,
-        operation.kind === "read" || operation.kind === "list-conflicts" ? "readonly" : "readwrite",
+        operation.kind === "read" || operation.kind === "list-conflicts"
+          || operation.kind === "read-backup-snapshot" ? "readonly" : "readwrite",
       );
     } catch (error) {
       database.close();
@@ -422,6 +438,16 @@ async function transact(
             result = bytes === null ? null : new Uint8Array(bytes);
             return;
           }
+          if (operation.kind === "read-backup-snapshot") {
+            result = Object.freeze({
+              archive: bytes === null ? null : new Uint8Array(bytes),
+              conflicts: Object.freeze(keyspace.conflicts.map((conflict) => Object.freeze({
+                conflictId: conflict.conflictId,
+                bytes: new Uint8Array(conflict.bytes),
+              }))),
+            });
+            return;
+          }
           if (operation.kind === "list-conflicts") {
             result = Object.freeze(keyspace.conflicts.map((conflict) => Object.freeze({
               conflictId: conflict.conflictId,
@@ -484,7 +510,7 @@ async function transact(
 export function createSyntheticCiphertextStore(
   factory?: IDBFactory,
   conflictIdSource: SyntheticConflictIdSource = defaultConflictIdSource,
-): SyntheticConflictCiphertextStore {
+): SyntheticConflictCiphertextStore & SyntheticBackupSnapshotStore {
   const resolveFactory = () => {
     try {
       return factory ?? globalThis.indexedDB;
@@ -495,6 +521,11 @@ export function createSyntheticCiphertextStore(
   return {
     async read() {
       return await transact(resolveFactory(), { kind: "read" }, conflictIdSource) as Uint8Array | null;
+    },
+    async readBackupSnapshot() {
+      return await transact(resolveFactory(), {
+        kind: "read-backup-snapshot",
+      }, conflictIdSource) as SyntheticBackupSnapshot;
     },
     async createIfAbsent(bytes) {
       // Snapshot and validate synchronously before any asynchronous database work.

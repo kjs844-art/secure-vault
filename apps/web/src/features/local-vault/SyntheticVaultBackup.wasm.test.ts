@@ -253,6 +253,58 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
       expect(await source.read()).toEqual(edited);
     }, 90_000);
 
+    it("refuses a stale export when another store commits a valid v3 successor during authentication", async () => {
+      const database = new IDBFactory();
+      const source = createSyntheticCiphertextStore(database);
+      const writer = createSyntheticCiphertextStore(database);
+      await source.createIfAbsent(archive);
+      const real = actualWasmWorker();
+      const worker = {
+        ...real,
+        open: vi.fn(async (bytes: Uint8Array) => {
+          const rows = await real.open(bytes);
+          expect(await writer.compareAndSwapArchive(archive, edited)).toBe("updated");
+          return rows;
+        }),
+      };
+      const create = vi.spyOn(source, "createIfAbsent");
+      await expect(new SyntheticVaultBackup(source, worker).exportArchive())
+        .rejects.toHaveProperty("code", "STALE_BACKUP");
+      expect(worker.open).toHaveBeenCalledOnce();
+      expect(create).not.toHaveBeenCalled();
+      expect(await createSyntheticCiphertextStore(database).read()).toEqual(edited);
+      expect(await source.listConflictArchives()).toEqual([]);
+      expect(await real.open(edited)).toEqual(expected);
+    }, 90_000);
+
+    it("authenticates and preserves a valid late conflict instead of exporting only the canonical archive", async () => {
+      const database = new IDBFactory();
+      const source = createSyntheticCiphertextStore(database);
+      const writer = createSyntheticCiphertextStore(database);
+      await source.createIfAbsent(archive);
+      const real = actualWasmWorker();
+      let inserted = false;
+      const worker = {
+        ...real,
+        open: vi.fn(async (bytes: Uint8Array) => {
+          const rows = await real.open(bytes);
+          if (!inserted) {
+            inserted = true;
+            expect(await writer.preserveConflictArchiveIfCurrentDiffers(edited))
+              .toHaveProperty("kind", "conflict-preserved");
+          }
+          return rows;
+        }),
+      };
+      await expect(new SyntheticVaultBackup(source, worker).exportArchive())
+        .rejects.toHaveProperty("code", "UNRESOLVED_CONFLICTS");
+      expect(worker.open).toHaveBeenCalledTimes(2);
+      const saved = await createSyntheticCiphertextStore(database).readBackupSnapshot();
+      expect(saved.archive).toEqual(archive);
+      expect(saved.conflicts).toHaveLength(1);
+      expect(saved.conflicts[0]!.bytes).toEqual(edited);
+    }, 90_000);
+
     it("refuses corrupted historical revision ciphertext, not just visible heads", async () => {
       // First original envelope begins after the password frame and its own
       // length. Its final byte is authenticated even if that revision is old.

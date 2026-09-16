@@ -163,6 +163,7 @@ describe("synthetic backup UI session", () => {
     const f = fixture(); f.session.acknowledge(true); const initial = f.session.state;
     f.session.markDownloadRequested(); expect(f.session.state).toBe(initial);
     await f.session.prepareExport(); expect(f.session.state.message).toContain("아직 디스크 저장을 확인한 것은 아닙니다");
+    expect(f.session.state.message).toContain("이후 변경은 포함되지 않습니다");
     f.session.markDownloadRequested(); expect(f.session.state.message).toContain("브라우저 다운로드 목록에서");
     expect(f.session.state.message).toContain("자동으로 보증하지 않습니다");
   });
@@ -199,6 +200,24 @@ describe("synthetic backup UI session", () => {
     expect(f.session.state.downloadUrl).toBeNull();
     expect(f.session.state.message).toContain("충돌 암호문");
     expect(f.port.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("revokes an old download and never creates a replacement when the archive changed during validation", async () => {
+    const f = fixture();
+    f.session.acknowledge(true);
+    await f.session.prepareExport();
+    const oldUrl = f.session.state.downloadUrl;
+    const error = new SyntheticBackupError("STALE_BACKUP");
+    error.message = "PRIVATE_UNTRUSTED_DETAILS";
+    f.backend.exportArchive.mockRejectedValueOnce(error);
+    await f.session.prepareExport();
+    expect(f.session.state.downloadUrl).toBeNull();
+    expect(f.session.state.message).toContain("저장된 금고가 바뀌어");
+    expect(f.session.state.message).toContain("백업을 다시 준비");
+    expect(f.session.state.message).not.toContain("PRIVATE");
+    expect(f.port.revokeObjectURL).toHaveBeenCalledWith(oldUrl);
+    expect(f.port.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(f.backend.restoreArchive).not.toHaveBeenCalled();
   });
 
   it("a reentrant error-code getter cannot reopen a locked session", async () => {

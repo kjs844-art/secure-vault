@@ -587,6 +587,203 @@ describe("synthetic ciphertext IndexedDB storage", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  describe("atomic ciphertext backup snapshots", () => {
+    it("returns the exact empty snapshot shape without creating archive records", async () => {
+      const snapshot = await createSyntheticCiphertextStore(factory).readBackupSnapshot();
+      expect(snapshot).toEqual({ archive: null, conflicts: [] });
+      expect(Object.keys(snapshot).sort()).toEqual(["archive", "conflicts"]);
+      expect(Object.isFrozen(snapshot)).toBe(true);
+      expect(Object.isFrozen(snapshot.conflicts)).toBe(true);
+      expect(await rawRecords()).toEqual({ keys: [], values: [] });
+    });
+
+    it.each([false, true])("reads a committed archive/conflict pair from another store (conflict: %s)", async (withConflict) => {
+      const writer = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      const archive = new Uint8Array([1, 2]);
+      const candidate = new Uint8Array([3, 4]);
+      await writer.createIfAbsent(archive);
+      if (withConflict) await writer.preserveConflictArchiveIfCurrentDiffers(candidate);
+      const reader = createSyntheticCiphertextStore(factory);
+      expect(await reader.readBackupSnapshot()).toEqual({
+        archive,
+        conflicts: withConflict ? [{ conflictId: hexConflictId(1), bytes: candidate }] : [],
+      });
+    });
+
+    it("reads each bounded key once in one readonly transaction without mutations", async () => {
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(new Uint8Array([1]));
+      await store.preserveConflictArchiveIfCurrentDiffers(new Uint8Array([2]));
+      const transaction = vi.spyOn(FakeDatabase.prototype, "transaction");
+      const keys = vi.spyOn(FakeObjectStore.prototype, "getAllKeys");
+      const get = vi.spyOn(FakeObjectStore.prototype, "get");
+      const add = vi.spyOn(FakeObjectStore.prototype, "add");
+      const put = vi.spyOn(FakeObjectStore.prototype, "put");
+      const remove = vi.spyOn(FakeObjectStore.prototype, "delete");
+      const clear = vi.spyOn(FakeObjectStore.prototype, "clear");
+      await store.readBackupSnapshot();
+      expect(transaction).toHaveBeenCalledExactlyOnceWith("bundle", "readonly");
+      expect(keys).toHaveBeenCalledExactlyOnceWith(undefined, MAX_SYNTHETIC_CONFLICT_ARCHIVES + 2);
+      expect(get.mock.calls).toEqual([["archive"], [`conflict:${hexConflictId(1)}`]]);
+      expect(add).not.toHaveBeenCalled();
+      expect(put).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+      expect(clear).not.toHaveBeenCalled();
+    });
+
+    it("resolves only after its readonly transaction completes", async () => {
+      await seed(new Uint8Array([1]));
+      const events: string[] = [];
+      const originalGet = FakeObjectStore.prototype.get;
+      vi.spyOn(FakeObjectStore.prototype, "get").mockImplementationOnce(function (
+        this: globalThis.IDBObjectStore, key,
+      ) {
+        const request = originalGet.call(this, key);
+        request.addEventListener("success", () => { events.push("read-success"); });
+        this.transaction.addEventListener("complete", () => { events.push("complete"); });
+        return request;
+      });
+      await createSyntheticCiphertextStore(factory).readBackupSnapshot();
+      events.push("resolved");
+      expect(events).toEqual(["read-success", "complete", "resolved"]);
+    });
+
+    it.each(["before", "after"] as const)("observes one consistent pair when a writer transaction starts %s the snapshot", async (ordering) => {
+      await seed(new Uint8Array([1]));
+      const writerDatabase = await openRaw();
+      const updated = new Uint8Array([2]);
+      const conflict = new Uint8Array([3]);
+      const writePair = () => new Promise<void>((resolve, reject) => {
+        const transaction = writerDatabase.transaction("bundle", "readwrite");
+        const records = transaction.objectStore("bundle");
+        records.put(updated, "archive");
+        records.add(conflict, `conflict:${hexConflictId(1)}`);
+        transaction.oncomplete = () => { writerDatabase.close(); resolve(); };
+        transaction.onabort = () => { writerDatabase.close(); reject(transaction.error); };
+      });
+      let pendingWrite: Promise<void> | undefined;
+      if (ordering === "before") {
+        pendingWrite = writePair();
+      } else {
+        const originalKeys = FakeObjectStore.prototype.getAllKeys;
+        vi.spyOn(FakeObjectStore.prototype, "getAllKeys").mockImplementationOnce(function (
+          this: globalThis.IDBObjectStore, query, count,
+        ) {
+          const request = originalKeys.call(this, query, count);
+          pendingWrite = writePair();
+          return request;
+        });
+      }
+      const reader = createSyntheticCiphertextStore(factory);
+      const snapshot = await reader.readBackupSnapshot();
+      expect(snapshot).toEqual(ordering === "before"
+        ? { archive: updated, conflicts: [{ conflictId: hexConflictId(1), bytes: conflict }] }
+        : { archive: new Uint8Array([1]), conflicts: [] });
+      expect(pendingWrite).toBeDefined();
+      await pendingWrite;
+      // A snapshot never promises to include transactions created after it.
+      expect(await createSyntheticCiphertextStore(factory).readBackupSnapshot()).toEqual({
+        archive: updated, conflicts: [{ conflictId: hexConflictId(1), bytes: conflict }],
+      });
+    });
+
+    it("never returns a snapshot if its transaction aborts after all read requests succeed", async () => {
+      await seed(new Uint8Array([1]));
+      await seed(new Uint8Array([2]), `conflict:${hexConflictId(1)}`);
+      const before = await rawRecords();
+      const originalGet = FakeObjectStore.prototype.get;
+      vi.spyOn(FakeObjectStore.prototype, "get").mockImplementation(function (
+        this: globalThis.IDBObjectStore, key,
+      ) {
+        const request = originalGet.call(this, key);
+        if (key === `conflict:${hexConflictId(1)}`) {
+          request.addEventListener("success", () => {
+            queueMicrotask(() => { request.transaction?.abort(); });
+          });
+        }
+        return request;
+      });
+      const resolved = vi.fn();
+      await expect(createSyntheticCiphertextStore(factory).readBackupSnapshot().then(resolved))
+        .rejects.toEqual(new SyntheticStorageError("aborted"));
+      expect(resolved).not.toHaveBeenCalled();
+      expect(await rawRecords()).toEqual(before);
+    });
+
+    it("normalizes read request failures without returning a partial snapshot", async () => {
+      await seed(new Uint8Array([1]));
+      const before = await rawRecords();
+      const originalGet = FakeObjectStore.prototype.get;
+      vi.spyOn(FakeObjectStore.prototype, "get").mockImplementationOnce(function (
+        this: globalThis.IDBObjectStore, key,
+      ) {
+        const request = originalGet.call(this, key);
+        request.addEventListener("success", () => {
+          Object.defineProperty(request, "error", {
+            value: new DOMException("private browser diagnostic", "QuotaExceededError"),
+          });
+          request.onerror?.call(request, new Event("error"));
+          request.transaction?.abort();
+        });
+        return request;
+      });
+      await expect(createSyntheticCiphertextStore(factory).readBackupSnapshot())
+        .rejects.toEqual(new SyntheticStorageError("quota"));
+      expect(await rawRecords()).toEqual(before);
+    });
+
+    it.each(["archive", "oversized-archive", "conflict", "oversized-conflict", "orphan", "key", "over-limit"] as const)("preserves the raw %s corruption and refuses a snapshot", async (kind) => {
+      if (kind === "archive") await seed("saved-unknown-value");
+      else if (kind === "oversized-archive") await seed(new Uint8Array(MAX_SYNTHETIC_ARCHIVE_BYTES + 1));
+      else if (kind !== "orphan") await seed(new Uint8Array([1]));
+      if (kind === "conflict") await seed(new Uint8Array(), `conflict:${hexConflictId(1)}`);
+      if (kind === "oversized-conflict") {
+        await seed(new Uint8Array(MAX_SYNTHETIC_ARCHIVE_BYTES + 1), `conflict:${hexConflictId(1)}`);
+      }
+      if (kind === "orphan") await seed(new Uint8Array([2]), `conflict:${hexConflictId(1)}`);
+      if (kind === "key") await seed(new Uint8Array([2]), "future-key");
+      if (kind === "over-limit") {
+        for (let index = 1; index <= MAX_SYNTHETIC_CONFLICT_ARCHIVES + 1; index += 1) {
+          await seed(new Uint8Array([index]), `conflict:${hexConflictId(index)}`);
+        }
+      }
+      const before = await rawRecords();
+      await expect(createSyntheticCiphertextStore(factory).readBackupSnapshot())
+        .rejects.toEqual(new SyntheticStorageError("corrupt"));
+      expect(await rawRecords()).toEqual(before);
+    });
+
+    it("refuses a future database version without migrating or deleting it", async () => {
+      await seed(new Uint8Array([9]), "archive", 2);
+      const before = await rawRecords(2);
+      await expect(createSyntheticCiphertextStore(factory).readBackupSnapshot())
+        .rejects.toEqual(new SyntheticStorageError("incompatible"));
+      expect(await rawRecords(2)).toEqual(before);
+    });
+
+    it("returns owned byte copies independent of storage, each other and later snapshots", async () => {
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      const archive = new Uint8Array([1, 2]);
+      const conflict = new Uint8Array([3, 4]);
+      await store.createIfAbsent(archive);
+      await store.preserveConflictArchiveIfCurrentDiffers(conflict);
+      const first = await store.readBackupSnapshot();
+      const second = await store.readBackupSnapshot();
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(Object.isFrozen(first.conflicts)).toBe(true);
+      expect(Object.isFrozen(first.conflicts[0])).toBe(true);
+      expect(first.archive?.buffer).not.toBe(first.conflicts[0]!.bytes.buffer);
+      first.archive?.fill(0);
+      first.conflicts[0]!.bytes.fill(0);
+      const expected = { archive, conflicts: [{ conflictId: hexConflictId(1), bytes: conflict }] };
+      expect(second).toEqual(expected);
+      expect(await store.readBackupSnapshot()).toEqual(expected);
+      expect(await rawRecords()).toEqual({
+        keys: ["archive", `conflict:${hexConflictId(1)}`], values: [archive, conflict],
+      });
+    });
+  });
+
   describe("durable ciphertext-only conflict outbox", () => {
     it("rejects SharedArrayBuffer-backed inputs before opening IndexedDB", async () => {
       const open = vi.spyOn(factory, "open");

@@ -6,6 +6,11 @@ fail-closed로 중단한다. 실제 자격 증명 또는 제품용 백업 승인
 
 `REAL_SECRET_GATE=CLOSED`, `PHASE_0A_VERDICT=UNCHANGED`.
 
+> 2026-09-17 후속 변경: 아래는 분리 읽기를 사용하던 이전 체크포인트의 기록이다.
+> 현재 브랜치에서는 [원자 snapshot 후속 기록](2026-09-17-atomic-backup-snapshot.md)에
+> 따라 같은 transaction 읽기와 인증 후 exact-byte 재확인을 사용한다. adapter raw 버퍼를
+> 직접 지우던 동작도 제거해 원본 alias를 보존한다. 아래 수치는 후속 변경의 검증 수치가 아니다.
+
 ## 구현 경계
 
 - export 시작 전과 main archive 인증 뒤 반환 직전에 conflict 목록을 다시 확인한다.

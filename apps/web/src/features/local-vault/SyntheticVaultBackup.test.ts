@@ -83,6 +83,10 @@ function fakeWorker() {
   };
 }
 
+function backupSnapshot(archive: unknown = fakeArchive(), conflicts: unknown = []) {
+  return { archive, conflicts };
+}
+
 function fixture(initial: Uint8Array | null = null) {
   let saved = initial;
   const store = {
@@ -92,6 +96,8 @@ function fixture(initial: Uint8Array | null = null) {
       saved = new Uint8Array(bytes);
       return "created";
     }),
+    readBackupSnapshot: vi.fn<() => Promise<unknown>>()
+      .mockImplementation(async () => backupSnapshot(saved)),
     listConflictArchives: vi.fn().mockResolvedValue([]),
   };
   const worker = fakeWorker();
@@ -148,6 +154,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
   it("constructs without reading, writing, validating, or cancelling", () => {
     const { store, worker } = fixture();
     expect(store.read).not.toHaveBeenCalled();
+    expect(store.readBackupSnapshot).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
     expect(worker.cancel).not.toHaveBeenCalled();
@@ -164,11 +171,11 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     void pending.then(completed);
     await flush();
     expect(completed).not.toHaveBeenCalled();
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
     const workerBytes = worker.open.mock.calls[0]![0];
     expect(workerBytes).toEqual(expected);
     expect(workerBytes).not.toBe(saved);
-    saved.fill(0);
     workerBytes.fill(9);
     validation.resolve([]);
     const exported = await pending;
@@ -177,20 +184,21 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(exported).not.toBe(workerBytes);
     expect(exported.buffer).not.toBe(workerBytes.buffer);
     exported.fill(4);
-    expect(saved).toEqual(new Uint8Array(32));
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(saved).toEqual(expected);
+    expect(store.read).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
-    expect(store.listConflictArchives).toHaveBeenCalledTimes(2);
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(2);
+    expect(store.listConflictArchives).not.toHaveBeenCalled();
   });
 
-  it("authenticates an unresolved conflict, clears returned copies, and refuses export before reading the main archive", async () => {
+  it("authenticates an unresolved conflict and refuses export while preserving adapter-owned bytes", async () => {
     const conflictBytes = fakeArchive(32, 41);
     const expected = conflictBytes.slice();
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives.mockResolvedValueOnce([{
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), [{
       conflictId: "00112233445566778899aabbccddeeff",
       bytes: conflictBytes,
-    }]);
+    }]));
     await expect(backup.exportArchive()).rejects.toMatchObject({
       code: "UNRESOLVED_CONFLICTS",
       message: new SyntheticBackupError("UNRESOLVED_CONFLICTS").message,
@@ -200,7 +208,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(worker.open).toHaveBeenCalledOnce();
     expect(worker.open.mock.calls[0]![0]).toEqual(expected);
     expect(worker.open.mock.calls[0]![0]).not.toBe(conflictBytes);
-    expect(conflictBytes).toEqual(new Uint8Array(expected.byteLength));
+    expect(conflictBytes).toEqual(expected);
   });
 
   it.each([
@@ -213,21 +221,22 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     ["missing bytes", [{ conflictId: "00112233445566778899aabbccddeeff" }]],
   ] as const)("fails closed for a malformed conflict list with %s", async (_label, conflicts) => {
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives.mockResolvedValueOnce(conflicts as never);
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), conflicts));
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
     expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
   });
 
-  it("clears ordinary returned bytes even when another conflict field is malformed", async () => {
+  it("preserves adapter-owned bytes when another conflict field is malformed", async () => {
     const bytes = fakeArchive();
+    const expected = bytes.slice();
     const { backup, store } = fixture(fakeArchive());
-    store.listConflictArchives.mockResolvedValueOnce([{ conflictId: "bad", bytes }]);
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), [{ conflictId: "bad", bytes }]));
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
-    expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+    expect(bytes).toEqual(expected);
   });
 
-  it("rejects conflict accessors without invoking them and clears an ordinary own bytes field", async () => {
+  it("rejects conflict accessors without invoking them or changing an ordinary own bytes field", async () => {
     const bytes = fakeArchive();
     const accessor = vi.fn(() => { throw new Error("PRIVATE_CONFLICT_ACCESSOR"); });
     const entry = Object.defineProperties({}, {
@@ -235,16 +244,16 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
       bytes: { value: bytes, enumerable: true },
     });
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives.mockResolvedValueOnce([entry] as never);
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), [entry]));
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
     expect(accessor).not.toHaveBeenCalled();
-    expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+    expect(bytes).toEqual(fakeArchive());
     expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
   });
 
   it.each(["entry-extra-field", "array-extra-field"] as const)(
-    "rejects an exact-shape violation (%s), clears bytes, and exports nothing", async (kind) => {
+    "rejects an exact-shape violation (%s), preserves bytes, and exports nothing", async (kind) => {
       const bytes = fakeArchive();
       const entry = {
         conflictId: "00112233445566778899aabbccddeeff",
@@ -254,9 +263,9 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
       const list = [entry];
       if (kind === "array-extra-field") Object.defineProperty(list, "extra", { value: true, enumerable: true });
       const { backup, store, worker } = fixture(fakeArchive());
-      store.listConflictArchives.mockResolvedValueOnce(list as never);
+      store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), list));
       await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
-      expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+      expect(bytes).toEqual(fakeArchive());
       expect(store.read).not.toHaveBeenCalled();
       expect(worker.open).not.toHaveBeenCalled();
     },
@@ -275,7 +284,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
       getOwnPropertyDescriptor: descriptorRead,
     });
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives.mockResolvedValueOnce(raw as never);
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), raw));
     await expect(backup.exportArchive()).rejects.toMatchObject({
       code: "STORAGE_FAILED",
       message: new SyntheticBackupError("STORAGE_FAILED").message,
@@ -286,22 +295,24 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(worker.open).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the conflict-list capability is missing", async () => {
+  it("fails closed when the atomic snapshot capability is missing without falling back to separate reads", async () => {
     const stored = fakeArchive();
-    const store: SyntheticCiphertextStore = {
+    const store = {
       read: vi.fn().mockResolvedValue(stored),
-      createIfAbsent: vi.fn().mockResolvedValue("exists"),
+      createIfAbsent: vi.fn<SyntheticCiphertextStore["createIfAbsent"]>().mockResolvedValue("exists"),
+      listConflictArchives: vi.fn().mockResolvedValue([]),
     };
     const worker = fakeWorker();
     await expect(new SyntheticVaultBackup(store, worker).exportArchive())
       .rejects.toMatchObject({ code: "STORAGE_FAILED" });
     expect(store.read).not.toHaveBeenCalled();
+    expect(store.listConflictArchives).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
   });
 
-  it("fails closed when conflict listing rejects without reading or exporting the main archive", async () => {
+  it("fails closed when the atomic snapshot rejects without falling back or exporting", async () => {
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives.mockRejectedValueOnce(new Error("PRIVATE_CONFLICT_STORAGE_FAILURE"));
+    store.readBackupSnapshot.mockRejectedValueOnce(new Error("PRIVATE_CONFLICT_STORAGE_FAILURE"));
     await expect(backup.exportArchive()).rejects.toMatchObject({
       code: "STORAGE_FAILED",
       message: new SyntheticBackupError("STORAGE_FAILED").message,
@@ -313,23 +324,172 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
   it("rechecks immediately before returning and blocks a conflict inserted during main validation", async () => {
     const lateConflict = fakeArchive(32, 53);
     const { backup, store, worker } = fixture(fakeArchive());
-    store.listConflictArchives
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{
+    store.readBackupSnapshot
+      .mockResolvedValueOnce(backupSnapshot())
+      .mockResolvedValueOnce(backupSnapshot(fakeArchive(), [{
         conflictId: "ffeeddccbbaa99887766554433221100",
         bytes: lateConflict,
-      }]);
+      }]));
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "UNRESOLVED_CONFLICTS" });
-    expect(store.listConflictArchives).toHaveBeenCalledTimes(2);
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(2);
+    expect(store.listConflictArchives).not.toHaveBeenCalled();
+    expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).toHaveBeenCalledTimes(2);
-    expect(lateConflict).toEqual(new Uint8Array(lateConflict.byteLength));
+    expect(lateConflict).toEqual(fakeArchive(32, 53));
+  });
+
+  it.each([
+    ["missing", null],
+    ["changed value", fakeArchive(32, 61)],
+    ["matching prefix with an extra byte", fakeArchive(33)],
+    ["shorter archive", fakeArchive(31)],
+  ] as const)("rejects a %s final archive as STALE_BACKUP without writing or changing either result", async (_label, finalArchive) => {
+    const initial = fakeArchive();
+    const expectedFinal = finalArchive?.slice() ?? null;
+    const { backup, store, worker } = fixture(initial);
+    store.readBackupSnapshot
+      .mockResolvedValueOnce(backupSnapshot(initial))
+      .mockResolvedValueOnce(backupSnapshot(finalArchive));
+    await expect(backup.exportArchive()).rejects.toMatchObject({
+      code: "STALE_BACKUP", message: new SyntheticBackupError("STALE_BACKUP").message,
+    });
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(2);
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.listConflictArchives).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(initial).toEqual(fakeArchive());
+    expect(finalArchive).toEqual(expectedFinal);
+  });
+
+  it("detects adapter-owned archive mutation during validation and preserves the updated bytes", async () => {
+    const saved = fakeArchive();
+    const { backup, store, worker } = fixture(saved);
+    worker.open.mockImplementationOnce(async () => {
+      saved[saved.length - 1] = 62;
+      return [];
+    });
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STALE_BACKUP" });
+    expect(saved[saved.length - 1]).toBe(62);
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+  });
+
+  describe.each(["initial", "final"] as const)("%s atomic snapshot boundary", (stage) => {
+    const badSnapshots: readonly [string, unknown][] = [
+      ["null wrapper", null],
+      ["array wrapper", []],
+      ["missing archive", { conflicts: [] }],
+      ["missing conflicts", { archive: fakeArchive() }],
+      ["extra field", { ...backupSnapshot(), extra: "PRIVATE_EXTRA" }],
+      ["symbol field", { ...backupSnapshot(), [Symbol("private")]: true }],
+      ["inherited fields", Object.create(backupSnapshot())],
+      ["non-array conflicts", backupSnapshot(fakeArchive(), {})],
+      ["sparse conflicts", backupSnapshot(fakeArchive(), new Array(1))],
+      ["too many conflicts", backupSnapshot(fakeArchive(), Array.from({ length: 9 }, (_, index) => ({
+        conflictId: index.toString(16).padStart(32, "0"), bytes: fakeArchive(),
+      })))],
+      ["conflicts without an archive", backupSnapshot(null, [{
+        conflictId: "00112233445566778899aabbccddeeff", bytes: fakeArchive(),
+      }])],
+    ];
+
+    it.each(badSnapshots)("rejects %s with a fixed storage error", async (_label, raw) => {
+      const { backup, store, worker } = fixture(fakeArchive());
+      if (stage === "final") store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot());
+      store.readBackupSnapshot.mockResolvedValueOnce(raw);
+      await expect(backup.exportArchive()).rejects.toMatchObject({
+        code: "STORAGE_FAILED", message: new SyntheticBackupError("STORAGE_FAILED").message,
+      });
+      expect(worker.open).toHaveBeenCalledTimes(stage === "final" ? 1 : 0);
+      expect(store.read).not.toHaveBeenCalled();
+      expect(store.listConflictArchives).not.toHaveBeenCalled();
+      expect(store.createIfAbsent).not.toHaveBeenCalled();
+    });
+
+    it.each(["archive", "conflicts"] as const)("rejects a %s accessor without executing it", async (field) => {
+      const raw = backupSnapshot();
+      const getter = vi.fn(() => { throw new Error("PRIVATE_SNAPSHOT_GETTER"); });
+      Object.defineProperty(raw, field, { get: getter, enumerable: true });
+      const { backup, store, worker } = fixture(fakeArchive());
+      if (stage === "final") store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot());
+      store.readBackupSnapshot.mockResolvedValueOnce(raw);
+      await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+      expect(getter).not.toHaveBeenCalled();
+      expect(worker.open).toHaveBeenCalledTimes(stage === "final" ? 1 : 0);
+    });
+
+    it("normalizes descriptor failures without reading arbitrary wrapper values", async () => {
+      const valueRead = vi.fn(() => { throw new Error("PRIVATE_WRAPPER_GET"); });
+      const raw = new Proxy(backupSnapshot(), {
+        get(_target, key) { return key === "then" ? undefined : valueRead(); },
+        getOwnPropertyDescriptor() { throw new Error("PRIVATE_WRAPPER_DESCRIPTOR"); },
+      });
+      const { backup, store } = fixture(fakeArchive());
+      if (stage === "final") store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot());
+      store.readBackupSnapshot.mockResolvedValueOnce(raw);
+      await expect(backup.exportArchive()).rejects.toMatchObject({
+        code: "STORAGE_FAILED", message: new SyntheticBackupError("STORAGE_FAILED").message,
+      });
+      expect(valueRead).not.toHaveBeenCalled();
+    });
+
+    it("rejects a shared conflict backing buffer without mutating it", async () => {
+      const bytes = sharedArchive();
+      const expected = new Uint8Array(bytes);
+      const { backup, store } = fixture(fakeArchive());
+      if (stage === "final") store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot());
+      store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(fakeArchive(), [{
+        conflictId: "00112233445566778899aabbccddeeff", bytes,
+      }]));
+      await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+      expect(bytes).toEqual(expected);
+    });
+
+    it("preserves raw conflict and archive buffers when conflict authentication fails", async () => {
+      const archive = fakeArchive();
+      const bytes = fakeArchive(32, 68);
+      const { backup, store, worker } = fixture(archive);
+      if (stage === "final") {
+        store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(archive));
+        worker.open.mockResolvedValueOnce([]);
+      }
+      store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(archive, [{
+        conflictId: "00112233445566778899aabbccddeeff", bytes,
+      }]));
+      worker.open.mockRejectedValueOnce(new Error("PRIVATE_INVALID_CONFLICT"));
+      await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+      expect(archive).toEqual(fakeArchive());
+      expect(bytes).toEqual(fakeArchive(32, 68));
+      expect(store.createIfAbsent).not.toHaveBeenCalled();
+    });
+  });
+
+  it("honors cancellation queued during final snapshot inspection before returning an archive", async () => {
+    const rawArchive = fakeArchive();
+    const { backup, store, worker } = fixture(rawArchive);
+    let queued = false;
+    const raw = new Proxy(backupSnapshot(rawArchive), {
+      getOwnPropertyDescriptor(target, key) {
+        if (!queued) {
+          queued = true;
+          queueMicrotask(() => backup.cancel());
+        }
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(rawArchive)).mockResolvedValueOnce(raw);
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "CANCELLED" });
+    expect(queued).toBe(true);
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(rawArchive).toEqual(fakeArchive());
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
 
   it("returns EMPTY for absent storage without validating or creating", async () => {
     const { backup, store, worker } = fixture();
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "EMPTY" });
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
@@ -422,7 +582,8 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
   it("rejects a SharedArrayBuffer-backed stored archive before worker validation", async () => {
     const { backup, store, worker } = fixture(sharedArchive());
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "INVALID_BACKUP" });
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
   });
@@ -536,7 +697,8 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     const { backup, store, worker } = fixture(bytes);
     await expect(backup.exportArchive()).rejects.toMatchObject({ code });
     expectArchiveBytesEqual(new Uint8Array(bytes), expected);
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
@@ -600,12 +762,14 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
       Object.assign(failure, { message: "SYNTHETIC_PRIVATE_STORAGE_MESSAGE", code: "SYNTHETIC_PRIVATE_STORAGE_CODE" });
       if (stage === "create") store.createIfAbsent.mockRejectedValueOnce(failure);
       else if (stage === "readback") store.read.mockResolvedValueOnce(null).mockRejectedValueOnce(failure);
+      else if (stage === "export-read") store.readBackupSnapshot.mockRejectedValueOnce(failure);
       else store.read.mockRejectedValueOnce(failure);
       const operation = stage === "export-read" ? backup.exportArchive() : backup.restoreArchive(fakeArchive());
       await expect(operation).rejects.toMatchObject({
         name: "SyntheticBackupError", code: "STORAGE_FAILED", message: new SyntheticBackupError("STORAGE_FAILED").message,
       });
-      expect(store.read).toHaveBeenCalledTimes(stage === "readback" ? 2 : 1);
+      expect(store.read).toHaveBeenCalledTimes(stage === "export-read" ? 0 : stage === "readback" ? 2 : 1);
+      expect(store.readBackupSnapshot).toHaveBeenCalledTimes(stage === "export-read" ? 1 : 0);
       expect(store.createIfAbsent).toHaveBeenCalledTimes(stage === "create" || stage === "readback" ? 1 : 0);
       expect(worker.open).toHaveBeenCalledTimes(stage === "create" || stage === "readback" ? 1 : 0);
     },
@@ -672,22 +836,69 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     },
   );
 
-  it.each(["initial-read", "validation"])("cancel during export %s never yields an archive", async (stage) => {
-    const { backup, store, worker } = fixture(fakeArchive());
+  it.each(["initial-read", "validation", "final-read"])("cancel during export %s never yields an archive", async (stage) => {
+    const raw = fakeArchive();
+    const { backup, store, worker } = fixture(raw);
     const blocked = stageGate<unknown>();
-    if (stage === "initial-read") store.read.mockImplementationOnce(() => blocked.run() as Promise<Uint8Array | null>);
+    if (stage === "initial-read") store.readBackupSnapshot.mockImplementationOnce(blocked.run);
+    else if (stage === "final-read") store.readBackupSnapshot
+      .mockResolvedValueOnce(backupSnapshot(raw)).mockImplementationOnce(blocked.run);
     else worker.open.mockImplementationOnce(() => blocked.run() as Promise<readonly LocalCatalogEntryV1[]>);
     const pending = backup.exportArchive();
     const rejection = expect(pending).rejects.toMatchObject({ code: "CANCELLED" });
     await blocked.entered;
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(stage === "final-read" ? 2 : 1);
+    expect(store.read).not.toHaveBeenCalled();
     expect(worker.open).toHaveBeenCalledTimes(stage === "initial-read" ? 0 : 1);
     expect(store.createIfAbsent).not.toHaveBeenCalled();
     backup.cancel();
-    blocked.resolve(stage === "initial-read" ? fakeArchive() : []);
+    blocked.resolve(stage === "validation" ? [] : backupSnapshot(raw));
     await rejection;
     expect(worker.open).toHaveBeenCalledTimes(stage === "initial-read" ? 0 : 1);
     expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(raw).toEqual(fakeArchive());
+  });
+
+  it("normalizes a rejected final snapshot after cancellation without leaking adapter text", async () => {
+    const raw = fakeArchive();
+    const { backup, store } = fixture(raw);
+    const blocked = stageGate<unknown>();
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(raw)).mockImplementationOnce(blocked.run);
+    const pending = backup.exportArchive();
+    const rejection = expect(pending).rejects.toMatchObject({
+      code: "CANCELLED", message: new SyntheticBackupError("CANCELLED").message,
+    });
+    await blocked.entered;
+    backup.cancel();
+    blocked.reject(new Error("PRIVATE_FINAL_SNAPSHOT_FAILURE"));
+    await rejection;
+    expect(raw).toEqual(fakeArchive());
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it.each(["initial", "final"] as const)("cancels during %s conflict authentication without clearing raw conflict bytes", async (stage) => {
+    const archive = fakeArchive();
+    const conflict = fakeArchive(32, 75);
+    const { backup, store, worker } = fixture(archive);
+    if (stage === "final") {
+      store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(archive));
+      worker.open.mockResolvedValueOnce([]);
+    }
+    store.readBackupSnapshot.mockResolvedValueOnce(backupSnapshot(archive, [{
+      conflictId: "00112233445566778899aabbccddeeff", bytes: conflict,
+    }]));
+    const blocked = stageGate<readonly LocalCatalogEntryV1[]>();
+    worker.open.mockImplementationOnce(blocked.run);
+    const pending = backup.exportArchive();
+    const rejection = expect(pending).rejects.toMatchObject({ code: "CANCELLED" });
+    await blocked.entered;
+    backup.cancel();
+    blocked.resolve([]);
+    await rejection;
+    expect(archive).toEqual(fakeArchive());
+    expect(conflict).toEqual(fakeArchive(32, 75));
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(stage === "initial" ? 1 : 2);
   });
 
   it("allows an already-started commit to finish but does not report late success or readback", async () => {
@@ -740,37 +951,39 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 
   it.each(["export", "restore"] as const)("rejects a concurrent %s as BUSY without invalidating the first operation", async (second) => {
     const { backup, store, worker } = fixture(fakeArchive());
-    const read = deferred<Uint8Array | null>();
-    store.read.mockReturnValueOnce(read.promise);
+    const read = deferred<ReturnType<typeof backupSnapshot>>();
+    store.readBackupSnapshot.mockReturnValueOnce(read.promise);
     const first = backup.exportArchive();
     await expect(second === "export" ? backup.exportArchive() : backup.restoreArchive(fakeArchive()))
       .rejects.toMatchObject({ code: "BUSY" });
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.readBackupSnapshot).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
     expect(worker.cancel).not.toHaveBeenCalled();
-    read.resolve(fakeArchive());
+    read.resolve(backupSnapshot());
     await expect(first).resolves.toEqual(fakeArchive());
     await expect(backup.exportArchive()).resolves.toEqual(fakeArchive());
   });
 
   it.each(["resolve", "reject"] as const)("a stale %s cannot clear BUSY on a newer operation", async (outcome) => {
     const { backup, store } = fixture(fakeArchive());
-    const oldList = deferred<readonly []>();
-    const newList = deferred<readonly []>();
-    store.listConflictArchives
+    const oldList = deferred<ReturnType<typeof backupSnapshot>>();
+    const newList = deferred<ReturnType<typeof backupSnapshot>>();
+    store.readBackupSnapshot
       .mockReturnValueOnce(oldList.promise)
       .mockReturnValueOnce(newList.promise);
     const oldOperation = backup.exportArchive();
     const oldRejection = expect(oldOperation).rejects.toMatchObject({ code: "CANCELLED" });
     backup.cancel();
     const newOperation = backup.exportArchive();
-    if (outcome === "resolve") oldList.resolve([]);
+    if (outcome === "resolve") oldList.resolve(backupSnapshot());
     else oldList.reject(new Error("SYNTHETIC_PRIVATE_OLD_FAILURE"));
     await oldRejection;
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "BUSY" });
     expect(store.read).not.toHaveBeenCalled();
-    newList.resolve([]);
+    newList.resolve(backupSnapshot());
     await expect(newOperation).resolves.toEqual(fakeArchive());
-    expect(store.read).toHaveBeenCalledOnce();
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.readBackupSnapshot).toHaveBeenCalledTimes(3);
   });
 
   it("allows a new operation after validation failure", async () => {
@@ -782,13 +995,13 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 
   it("cancel remains safe when worker cleanup throws and a new operation can begin", async () => {
     const { backup, store, worker } = fixture(fakeArchive());
-    const read = deferred<Uint8Array | null>();
-    store.read.mockReturnValueOnce(read.promise);
+    const read = deferred<ReturnType<typeof backupSnapshot>>();
+    store.readBackupSnapshot.mockReturnValueOnce(read.promise);
     worker.cancel.mockImplementation(() => { throw new Error("SYNTHETIC_PRIVATE_CLEANUP_FAILURE"); });
     const pending = backup.exportArchive();
     const rejection = expect(pending).rejects.toMatchObject({ code: "CANCELLED" });
     expect(() => backup.cancel()).not.toThrow();
-    read.resolve(fakeArchive());
+    read.resolve(backupSnapshot());
     await rejection;
     await expect(backup.exportArchive()).resolves.toEqual(fakeArchive());
   });
@@ -807,6 +1020,47 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 });
 
 describe("SyntheticVaultBackup with fake IndexedDB and fake validation (not real WASM proof)", () => {
+  it("rejects a canonical update committed by another store during validation and preserves the winner", async () => {
+    const factory = new IDBFactory();
+    const source = createSyntheticCiphertextStore(factory);
+    const competitor = createSyntheticCiphertextStore(factory);
+    const original = fakeArchive();
+    const winner = fakeArchive(32, 82);
+    await source.createIfAbsent(original);
+    const worker = fakeWorker();
+    worker.open.mockImplementationOnce(async () => {
+      expect(await competitor.compareAndSwapArchive(original, winner)).toBe("updated");
+      return [];
+    });
+    await expect(new SyntheticVaultBackup(source, worker).exportArchive())
+      .rejects.toMatchObject({ code: "STALE_BACKUP" });
+    expect(await source.read()).toEqual(winner);
+    expect(await source.listConflictArchives()).toEqual([]);
+    expect(worker.open).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a conflict committed by another store during validation without deleting either archive", async () => {
+    const factory = new IDBFactory();
+    const source = createSyntheticCiphertextStore(factory);
+    const competitor = createSyntheticCiphertextStore(factory);
+    const original = fakeArchive();
+    const candidate = fakeArchive(32, 83);
+    await source.createIfAbsent(original);
+    const worker = fakeWorker();
+    worker.open.mockImplementationOnce(async () => {
+      expect(await competitor.compareAndSwapArchivePreservingConflict(fakeArchive(32, 84), candidate))
+        .toMatchObject({ kind: "conflict-preserved" });
+      return [];
+    });
+    await expect(new SyntheticVaultBackup(source, worker).exportArchive())
+      .rejects.toMatchObject({ code: "UNRESOLVED_CONFLICTS" });
+    expect(await source.read()).toEqual(original);
+    const conflicts = await source.listConflictArchives();
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]!.bytes).toEqual(candidate);
+    expect(worker.open).toHaveBeenCalledTimes(2);
+  });
+
   it.each([[1, 3], [2, 4], [3, 4]])("round-trips v%i count %i exact bytes across separate database factories and new store instances", async (version, count) => {
     const sourceFactory = new IDBFactory();
     const destinationFactory = new IDBFactory();

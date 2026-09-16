@@ -82,8 +82,12 @@ affected the pre-rotation branch and was not a rotation test failure.
 
 The separately reviewed fix pins Node 24 types and their lockfile dependency;
 it does not change any Rust source. Local typecheck, 932 web tests, build and
-post-build Secret scan passed for that fix. The complete follow-up CI result must
-still be checked separately. See the [CI record](2026-09-16-remote-ci-security-gate.md).
+post-build Secret scan passed for that fix. The complete follow-up
+[run `35106829156`](https://github.com/kjs844-art/secure-vault/actions/runs/35106829156)
+at `06349e83186b43068d90a79b9ccf40b7b5a8c753` subsequently completed successfully,
+including web typecheck/build and the final Secret scan. This was rechecked on
+2026-09-16. See the [CI record](2026-09-16-remote-ci-security-gate.md). This evidence
+applies to that SHA, not the subsequent atomic-backup changes.
 
 ## Known limits and follow-up
 

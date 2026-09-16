@@ -31,6 +31,7 @@ const messages: Record<SyntheticBackupErrorCode, string> = {
   VALIDATION_FAILED: "백업을 인증하지 못해 저장하지 않았습니다. 손상되었거나 지원하지 않는 파일일 수 있습니다.",
   STORAGE_FAILED: "저장소 작업에 실패했습니다. 자동 삭제·덮어쓰기는 하지 않았습니다. 저장된 금고 열기로 상태를 확인하세요.",
   UNRESOLVED_CONFLICTS: "검토하지 않은 충돌 암호문이 있어 백업 파일을 만들지 않았습니다. 합성 금고 화면에서 충돌을 먼저 검토하세요.",
+  STALE_BACKUP: "백업 검증 중 저장된 금고가 바뀌어 파일을 만들지 않았습니다. 다른 탭의 저장이 끝난 뒤 백업을 다시 준비하세요. 기존 금고는 변경하지 않았습니다.",
   READBACK_FAILED: "저장 후 동일한 바이트인지 확인하지 못했습니다. 저장소를 자동으로 초기화하지 않았습니다.",
   CANCELLED: "작업을 취소했습니다. 이미 시작된 암호문 저장은 완료되었을 수 있습니다.",
   BUSY: "진행 중인 작업이 있습니다. 완료를 기다리거나 취소해 주세요.",
@@ -145,7 +146,7 @@ export class SyntheticBackupSession {
         if (!this.#isCurrent(generation)) { this.#revoke(url); return; }
         this.#objectUrl = url;
         this.#publish(generation, state("open", true,
-          "파일 준비 완료 · 아래 ‘백업 파일 다운로드’를 직접 눌러 저장하세요. 아직 디스크 저장을 확인한 것은 아닙니다.", null, url));
+          "파일 준비 완료 · 마지막 저장소 확인 시점의 백업이며 이후 변경은 포함되지 않습니다. 아래 ‘백업 파일 다운로드’를 직접 눌러 저장하세요. 아직 디스크 저장을 확인한 것은 아닙니다.", null, url));
       } else {
         const bytes = await this.#port.readFile(selected!);
         if (!this.#isCurrent(generation)) return;

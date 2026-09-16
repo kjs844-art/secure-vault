@@ -29,6 +29,7 @@ const ERROR_MESSAGES = {
   VALIDATION_FAILED: "The synthetic backup could not be authenticated.",
   STORAGE_FAILED: "Local storage failed; no automatic repair was attempted.",
   UNRESOLVED_CONFLICTS: "Unresolved encrypted conflicts must be reviewed before backup export.",
+  STALE_BACKUP: "The saved archive changed during backup validation; prepare a new backup.",
   READBACK_FAILED: "Saved bytes could not be confirmed; no repair was attempted.",
   CANCELLED: "The synthetic backup operation was cancelled.",
   BUSY: "A synthetic backup operation is already running.",
@@ -152,30 +153,40 @@ function snapshotConflictList(value: unknown): Uint8Array[] {
   }
 }
 
-/** Best-effort clearing for ordinary owned copies returned by the store contract. */
-function zeroReturnedConflictBytes(value: unknown): void {
+interface OwnedBackupSnapshot {
+  readonly archive: Uint8Array | null;
+  readonly conflicts: Uint8Array[];
+}
+
+/** Do not trust a store adapter's shape, byte ownership, or property accessors. */
+function snapshotBackupResult(value: unknown): OwnedBackupSnapshot {
+  let archive: Uint8Array | null = null;
+  let conflicts: Uint8Array[] = [];
   try {
-    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return;
-    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
-    if (!lengthDescriptor || !("value" in lengthDescriptor)
-        || !Number.isSafeInteger(lengthDescriptor.value) || lengthDescriptor.value < 0) return;
-    const count = Math.min(lengthDescriptor.value, MAX_SYNTHETIC_CONFLICT_ARCHIVES + 1);
-    for (let index = 0; index < count; index += 1) {
-      try {
-        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-        if (!descriptor || !("value" in descriptor)) continue;
-        const entry = descriptor.value;
-        if (entry === null || typeof entry !== "object") continue;
-        const bytesDescriptor = Object.getOwnPropertyDescriptor(entry, "bytes");
-        if (!bytesDescriptor || !("value" in bytesDescriptor)) continue;
-        const bytes = bytesDescriptor.value;
-        if (!(bytes instanceof Uint8Array) || Object.getPrototypeOf(bytes) !== Uint8Array.prototype) continue;
-        const buffer = typedArrayBuffer.call(bytes);
-        arrayBufferByteLength.call(buffer);
-        bytes.fill(0);
-      } catch { /* Invalid or shared values are rejected, not mutated. */ }
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error();
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw new Error();
+    const fields = Object.getOwnPropertyDescriptors(value);
+    if (Reflect.ownKeys(fields).length !== 2) throw new Error();
+    const archiveField = fields.archive;
+    const conflictsField = fields.conflicts;
+    if (!archiveField || !("value" in archiveField) || !archiveField.enumerable
+        || !conflictsField || !("value" in conflictsField) || !conflictsField.enumerable) throw new Error();
+    // Copy all inputs synchronously before authentication can yield. Raw adapter
+    // buffers might alias canonical state, so never clear or mutate them.
+    conflicts = snapshotConflictList(conflictsField.value);
+    if (archiveField.value === null) {
+      if (conflicts.length !== 0) throw new Error();
+    } else {
+      archive = snapshotArchive(archiveField.value);
     }
-  } catch { /* Cleanup cannot replace the stable public failure. */ }
+    return { archive, conflicts };
+  } catch (error) {
+    archive?.fill(0);
+    for (const bytes of conflicts) bytes.fill(0);
+    if (error instanceof SyntheticBackupError) throw error;
+    throw new SyntheticBackupError("STORAGE_FAILED");
+  }
 }
 
 /**
@@ -201,27 +212,43 @@ export class SyntheticVaultBackup {
   }
 
   async exportArchive(): Promise<Uint8Array> {
-    return this.#run(async (check) => {
-      await this.#assertNoUnresolvedConflicts(check);
-      const stored = await this.#storage(() => this.#store.read());
-      check();
-      if (stored === null) throw new SyntheticBackupError("EMPTY");
-      const snapshot = snapshotArchive(stored);
-      let exported = false;
-      try {
-        await this.#validate(snapshot);
+    let first: OwnedBackupSnapshot | undefined;
+    let last: OwnedBackupSnapshot | undefined;
+    let transferred = false;
+    let finalCheck: (() => void) | undefined;
+    try {
+      const result = await this.#run(async (check) => {
+        finalCheck = check;
+        first = await this.#readBackupSnapshot(check);
         check();
-        // This second read narrows the non-atomic window while keeping the
-        // existing store and backup wire formats unchanged. Exact exclusion of
-        // another tab requires a future single IndexedDB transaction API.
-        await this.#assertNoUnresolvedConflicts(check);
+        await this.#assertNoUnresolvedConflicts(first.conflicts, check);
         check();
-        exported = true;
-        return snapshot;
-      } finally {
-        if (!exported) snapshot.fill(0);
-      }
-    });
+        if (first.archive === null) throw new SyntheticBackupError("EMPTY");
+        await this.#validate(first.archive);
+        check();
+        last = await this.#readBackupSnapshot(check);
+        check();
+        await this.#assertNoUnresolvedConflicts(last.conflicts, check);
+        check();
+        if (last.archive === null || !sameSnapshotBytes(first.archive, last.archive)) {
+          throw new SyntheticBackupError("STALE_BACKUP");
+        }
+        // Linearization point: the final readonly transaction. Later writes are
+        // allowed and are not included in this point-in-time archive. This is
+        // not a rollback/omission proof or a filesystem download confirmation.
+        return first.archive;
+      });
+      // Cancellation can also occur between #run's completion and this outer
+      // continuation. Keep ownership (and cleanup) until the final check.
+      finalCheck!();
+      transferred = true;
+      return result;
+    } finally {
+      if (!transferred) first?.archive?.fill(0);
+      for (const bytes of first?.conflicts ?? []) bytes.fill(0);
+      last?.archive?.fill(0);
+      for (const bytes of last?.conflicts ?? []) bytes.fill(0);
+    }
   }
 
   async restoreArchive(input: Uint8Array): Promise<void> {
@@ -265,38 +292,31 @@ export class SyntheticVaultBackup {
     }
   }
 
-  async #assertNoUnresolvedConflicts(check: () => void): Promise<void> {
-    let raw: unknown;
-    let snapshots: Uint8Array[] = [];
-    try {
-      raw = await this.#storage(async () => {
-        let capability: unknown;
-        try {
-          capability = (this.#store as SyntheticCiphertextStore & {
-            listConflictArchives?: unknown;
-          }).listConflictArchives;
-        } catch {
-          throw new Error("CONFLICT_LIST_UNAVAILABLE");
-        }
-        if (typeof capability !== "function") throw new Error("CONFLICT_LIST_UNAVAILABLE");
-        return await capability.call(this.#store);
-      });
+  async #readBackupSnapshot(check: () => void): Promise<OwnedBackupSnapshot> {
+    const raw: unknown = await this.#storage(async () => {
+      const capability = (this.#store as SyntheticCiphertextStore & {
+        readBackupSnapshot?: unknown;
+      }).readBackupSnapshot;
       check();
-      snapshots = snapshotConflictList(raw);
-      check();
-      for (const snapshot of snapshots) {
-        try {
-          await this.#worker.open(new Uint8Array(snapshot));
-        } catch {
-          throw new SyntheticBackupError("STORAGE_FAILED");
-        }
-        check();
+      if (typeof capability !== "function") throw new Error("ATOMIC_SNAPSHOT_UNAVAILABLE");
+      return await capability.call(this.#store);
+    });
+    check();
+    // No fallback to separate archive/list reads: that would reintroduce a
+    // torn snapshot when another tab commits between those transactions.
+    return snapshotBackupResult(raw);
+  }
+
+  async #assertNoUnresolvedConflicts(snapshots: readonly Uint8Array[], check: () => void): Promise<void> {
+    for (const snapshot of snapshots) {
+      try {
+        await this.#worker.open(new Uint8Array(snapshot));
+      } catch {
+        throw new SyntheticBackupError("STORAGE_FAILED");
       }
-      if (snapshots.length > 0) throw new SyntheticBackupError("UNRESOLVED_CONFLICTS");
-    } finally {
-      for (const snapshot of snapshots) snapshot.fill(0);
-      zeroReturnedConflictBytes(raw);
+      check();
     }
+    if (snapshots.length > 0) throw new SyntheticBackupError("UNRESOLVED_CONFLICTS");
   }
 
   async #storage<T>(operation: () => Promise<T>): Promise<T> {
