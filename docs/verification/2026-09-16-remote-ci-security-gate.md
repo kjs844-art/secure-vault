@@ -41,10 +41,24 @@ Pester도 PowerShell Gallery의 정확한 `5.7.1` 버전으로 제한했지만 �
 
 기존 `rg` 의존판 commit `5d439eb`은 GitHub Actions run `35046207820`에서 첫 Secret 단계가 `SECRET_SCAN_FAILED setup_or_execution`, `REAL_SECRET_GATE=CLOSED`, exit `1`로 종료됐다. 의존성 설치·Rust·Node 단계는 시작하지 않았다. 오류 원문과 경로를 출력하지 않는 실패-폐쇄 정책 때문에 그 실행만으로 내부 예외 원인을 단정하지 않는다.
 
-후속 built-in scanner는 로컬 PowerShell 7과 Windows PowerShell 5.1에서 각각 99/99, workflow 구조 정책 9/9, 실제 저장소 scan exit 0을 확인했다. 이 기록 시점에는 후속판을 아직 원격에서 실행하지 않았으므로 아래는 계속 미검증이다.
+후속 built-in scanner는 로컬 PowerShell 7과 Windows PowerShell 5.1에서 각각 99/99, workflow 구조 정책 9/9, 실제 저장소 scan exit 0을 확인했다.
+
+후속 commit `e400d25`의 [GitHub Actions run `35054302430`](https://github.com/kjs844-art/secure-vault/actions/runs/35054302430)을 확인한 결과, 첫 Secret 검사와 PowerShell 7/5.1 scanner 회귀, Pester workflow 정책 9개는 원격에서도 통과했다. 이후 `Provision the pinned Rust toolchain` 단계가 아래 명령에서 실패했다.
+
+```text
+rustup toolchain install 1.95.0 --profile minimal --component clippy rustfmt --target wasm32-unknown-unknown
+```
+
+`--component`에 `clippy`만 전달되고 뒤의 `rustfmt`가 별도 toolchain 이름으로 해석되어 `invalid toolchain name: 'rustfmt'` 오류가 발생했다. 이 실행에서 Secret 검사 실패는 재발하지 않았지만, Rust 의존성 준비 이후의 Rust/WASM/웹 검증은 실행되지 않았다.
+
+수정판은 `--component clippy --component rustfmt`로 각 component의 옵션을 명시한다. workflow 정책도 정확한 수정 명령을 검증하고, `rustfmt`를 bare argument로 되돌린 회귀 입력이 거부되는지 확인하도록 보강했다. 로컬 `rustup ... --help`는 수정 명령의 반복 옵션을 받아들였지만, 이는 설치나 원격 실행 성공 증거가 아니다. 수정판의 실제 원격 성공은 후속 run에서 별도로 확인해야 한다.
+
+수정판 로컬 검증은 Pester 3.4.0과 CI와 동일한 Pester 5.7.1에서 각각 workflow 정책 10/10, PowerShell AST 문법 검사와 `git diff --check` exit 0을 확인했다. Pester 5.7.1은 PSGallery에서 프로젝트의 무시되는 `target/verification-modules`에만 저장해 사용했다. 실제 저장소 Secret scan도 `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED`, exit 0이었다. 이 결과는 수정판 전체 원격 실행 성공을 대신하지 않는다.
+
+아래 항목은 계속 미검증이다.
 
 - GitHub 호스팅 `windows-latest` 이미지에서 전체 작업의 실제 성공 여부
-- 러너가 Rust 1.95.0, PowerShell Gallery, Node.js 배포 서버에 접근할 수 있는지
+- 러너가 Rust 1.95.0 및 Node.js 배포 서버에 접근해 설치를 완료할 수 있는지(PowerShell Gallery의 Pester 5.7.1 준비는 위 run에서 통과)
 - `npm ci --ignore-scripts` 뒤의 실제 GitHub 러너 웹 빌드 호환성
 - CI에서 source-built `wasm-bindgen-cli` 0.2.128과 Rust 1.95.0 조합의 실제 소요 시간 및 호환성
 - 저장소 설정에서 이 워크플로를 필수 브랜치 보호 검사로 지정하는 절차

@@ -23,6 +23,14 @@ Describe 'KeyAtlas security-gates workflow policy' {
             param([bool]$Condition, [string]$Message)
             if (-not $Condition) { throw $Message }
         }
+
+        function Assert-PinnedRustProvisioning {
+            param([string]$Workflow)
+            $commands = @([regex]::Matches($Workflow, '(?m)^\s*run: (rustup toolchain install[^\r\n]*)\s*$'))
+            Assert-Condition ($commands.Count -eq 1) 'Exactly one Rust toolchain provisioning command is required.'
+            $expected = 'rustup toolchain install 1.95.0 --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown'
+            Assert-Condition ([string]::Equals($commands[0].Groups[1].Value.Trim(), $expected, [StringComparison]::Ordinal)) 'Rust provisioning must pin the toolchain and pass each component with its own option.'
+        }
     }
 
     It 'uses only safe unprivileged triggers and least permissions' {
@@ -114,7 +122,7 @@ Describe 'KeyAtlas security-gates workflow policy' {
 
     It 'runs the full Rust and locked web verification commands' {
         Assert-Condition ($script:Workflow -match '(?m)^    env:\s*\r?\n      # rustup merely installing a toolchain does not select it for later\s*\r?\n      # cargo/rustc subprocesses\. Pin every Rust proxy in this job explicitly\.\s*\r?\n      RUSTUP_TOOLCHAIN: 1\.95\.0\s*$') 'The job must select Rust 1.95.0 for every cargo/rustc subprocess.'
-        Assert-Condition ($script:Workflow -match '(?m)^\s*run: rustup toolchain install 1\.95\.0 --profile minimal --component clippy rustfmt --target wasm32-unknown-unknown\s*$') 'The exact Rust toolchain and WASM target provisioning command is missing.'
+        Assert-PinnedRustProvisioning $script:Workflow
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: cargo fetch --locked\s*$') 'Locked Rust dependency fetch is missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: cargo install wasm-bindgen-cli --version 0\.2\.128 --locked --root "\$env:RUNNER_TEMP\\wasm-bindgen-cli"\s*$') 'The exact locked wasm-bindgen CLI installation is missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\scripts\\verify-local\.ps1 -Scope Workspace\s*$') 'Full Rust workspace verification is missing.'
@@ -126,6 +134,19 @@ Describe 'KeyAtlas security-gates workflow policy' {
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm test\s*$') 'Web tests are missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm run typecheck\s*$') 'Web typecheck is missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm run build\s*$') 'Web build is missing.'
+    }
+
+    It 'rejects a bare rustfmt argument that rustup would interpret as another toolchain' {
+        $invalidWorkflow = $script:Workflow.Replace('--component clippy --component rustfmt', '--component clippy rustfmt')
+        $rejected = $false
+        try {
+            Assert-PinnedRustProvisioning $invalidWorkflow
+        }
+        catch {
+            Assert-Condition ($_.Exception.Message -eq 'Rust provisioning must pin the toolchain and pass each component with its own option.') 'The invalid component syntax must fail the provisioning assertion.'
+            $rejected = $true
+        }
+        Assert-Condition $rejected 'A bare rustfmt argument must be rejected.'
     }
 
     It 'cannot silently continue or upload repository contents' {

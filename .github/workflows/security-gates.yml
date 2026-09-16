@@ -65,7 +65,7 @@ jobs:
 
       - name: Provision the pinned Rust toolchain
         shell: pwsh
-        run: rustup toolchain install 1.95.0 --profile minimal --component clippy rustfmt --target wasm32-unknown-unknown
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
 
       - name: Fetch locked Rust dependencies after Secret scan
         shell: pwsh
