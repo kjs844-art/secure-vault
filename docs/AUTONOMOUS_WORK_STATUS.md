@@ -3,6 +3,8 @@
 기준: 2026-09-16, `codex/firstvibe-local-session-hardening`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
+별도 `codex/firstvibe-synthetic-rotation-checklist` 체크포인트: 합성 연결처의 필수 완료 조건을 확인하고 최종 암호문 후보만 생성하는 코어를 추가했다. 독립 소스 리뷰와 코어 Clippy/format/Secret scan은 통과했으나 Windows 앱 제어 4551로 최종 테스트 실행은 보류됐다. 단발성 코어이며 후속 회전·연결 편집·UI는 미지원이다. [검증 기록](verification/2026-09-16-synthetic-rotation-cutover.md)의 원격 검증 상태를 확인한다.
+
 ## 현재 확인한 것
 
 | 항목 | 현재 증거 | 남은 일 |

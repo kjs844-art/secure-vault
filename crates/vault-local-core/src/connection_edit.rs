@@ -60,14 +60,14 @@ pub fn create_synthetic_connection_successor_v1(
     })
 }
 
-struct ConnectionProfile {
+pub(crate) struct ConnectionProfile {
     registration: &'static RegistrationProfile,
     catalog: bool,
     field_id: EntityIdV1,
 }
 
 impl ConnectionProfile {
-    fn from_item(item: &CredentialItemV1) -> Result<Self, LocalVaultError> {
+    pub(crate) fn from_item(item: &CredentialItemV1) -> Result<Self, LocalVaultError> {
         if item.credential_type != CredentialTypeV1::ApiKey
             || item.rotation_state.is_some()
             || item.status == CredentialStatusV1::Rotating
@@ -121,7 +121,14 @@ impl ConnectionProfile {
         }
     }
 
-    fn classify(&self, connection: &ConnectionV1) -> Result<ConnectionFixture, LocalVaultError> {
+    pub(crate) const fn field_id(&self) -> EntityIdV1 {
+        self.field_id
+    }
+
+    pub(crate) fn classify(
+        &self,
+        connection: &ConnectionV1,
+    ) -> Result<ConnectionFixture, LocalVaultError> {
         let fixture = match (connection.consumer_type, connection.consumer_name.as_str()) {
             (ConsumerTypeV1::McpServer, "Example MCP") => ConnectionFixture::Mcp,
             (ConsumerTypeV1::Cli, "Example CLI") => ConnectionFixture::Cli,

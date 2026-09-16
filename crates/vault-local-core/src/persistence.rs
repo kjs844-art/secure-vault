@@ -269,7 +269,7 @@ fn create_synthetic_successor_with_revision_fill(
     create_synthetic_edited_successor_with_revision_fill(
         session,
         predecessor,
-        |_| Ok(()),
+        |_, _| Ok(()),
         fill_revision,
     )
 }
@@ -279,15 +279,51 @@ pub(crate) fn create_synthetic_edited_successor_v1(
     predecessor: &SealedCredentialRecordV0Alpha1,
     edit: impl FnOnce(&mut CredentialItemV1) -> Result<(), LocalVaultError>,
 ) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
-    create_synthetic_edited_successor_with_revision_fill(session, predecessor, edit, |revision| {
-        getrandom::fill(revision).map_err(|_| LocalVaultError::RngUnavailable)
+    create_synthetic_edited_successor_with_predecessor_v1(session, predecessor, |item, _| {
+        edit(item)
     })
+}
+
+pub(crate) fn inspect_synthetic_predecessor_v1<T>(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    inspect: impl FnOnce(&CredentialItemV1, RevisionIdV1) -> Result<T, LocalVaultError>,
+) -> Result<T, LocalVaultError> {
+    let AuthenticatedItem::Current { metadata, item } =
+        authenticate_current_envelope(session, &predecessor.envelope)?
+    else {
+        return Err(LocalVaultError::CryptoFailure);
+    };
+
+    inspect(&item, metadata.revision_id)
+}
+
+pub(crate) fn create_synthetic_edited_successor_with_predecessor_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_predecessor_and_revision_fill_v1(
+        session,
+        predecessor,
+        edit,
+        |revision| getrandom::fill(revision).map_err(|_| LocalVaultError::RngUnavailable),
+    )
+}
+
+pub(crate) fn create_synthetic_edited_successor_with_predecessor_and_revision_fill_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+    fill_revision: impl FnOnce(&mut [u8; 32]) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_revision_fill(session, predecessor, edit, fill_revision)
 }
 
 fn create_synthetic_edited_successor_with_revision_fill(
     session: &VaultSession,
     predecessor: &SealedCredentialRecordV0Alpha1,
-    edit: impl FnOnce(&mut CredentialItemV1) -> Result<(), LocalVaultError>,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
     fill_revision: impl FnOnce(&mut [u8; 32]) -> Result<(), LocalVaultError>,
 ) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
     let AuthenticatedItem::Current { metadata, mut item } =
@@ -296,12 +332,14 @@ fn create_synthetic_edited_successor_with_revision_fill(
         return Err(LocalVaultError::CryptoFailure);
     };
 
-    edit(&mut item)?;
     let expected_revision_id = metadata.revision_id;
+    edit(&mut item, expected_revision_id)?;
+    // The persistence boundary, not an edit closure, is authoritative for the
+    // immutable revision chain linkage.
+    item.parent_revision_id = Some(expected_revision_id);
     let mut revision_bytes = [0_u8; 32];
     fill_revision(&mut revision_bytes)?;
     let revision_id = RevisionIdV1::from_bytes(revision_bytes);
-    item.parent_revision_id = Some(expected_revision_id);
     let plaintext = encode_current_item(&item, revision_id)?;
     let padding_bucket = select_bucket(plaintext.expose_secret().len())?;
     let context = record_context(
