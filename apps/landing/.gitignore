@@ -3,3 +3,4 @@ dist/
 screenshots/
 *.local
 dist-single/
+*.tsbuildinfo

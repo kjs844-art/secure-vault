@@ -23,7 +23,12 @@ const shots = [
   { name: "phone", width: 390, height: 844, pointer: null },
 ];
 
-for (const s of shots) {
+/* 스크롤이 이야기를 진행하니 한 장으로는 볼 수 없다. FRACS로 구간을 찍는다.
+   예: FRACS=0,0.45,0.75,0.9 SHOTS=desktop npm run screenshot */
+const fracs = (process.env.FRACS ?? "0").split(",").map(Number);
+const only = process.env.SHOTS?.split(",");
+
+for (const s of shots.filter((x) => !only || only.includes(x.name))) {
   const page = await browser.newPage({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: 2 });
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
@@ -41,7 +46,14 @@ for (const s of shots) {
     return ctx ? `canvas ${c.width}x${c.height} · ${ctx.getParameter(ctx.VERSION)}` : "NO GL CONTEXT";
   });
 
-  await page.screenshot({ path: `${OUT}/${s.name}.png` });
+  for (const f of fracs) {
+    if (f > 0 || fracs.length > 1) {
+      await page.evaluate((v) => window.scrollTo(0, v * (document.body.scrollHeight - window.innerHeight)), f);
+      await page.waitForTimeout(3200);
+    }
+    const tag = fracs.length > 1 ? `-${String(Math.round(f * 100)).padStart(2, "0")}` : "";
+    await page.screenshot({ path: `${OUT}/${s.name}${tag}.png` });
+  }
   console.log(`${s.name.padEnd(13)} ${gl}`);
   if (errors.length) console.log(`  !! ${errors.slice(0, 4).join(" | ")}`);
   await page.close();

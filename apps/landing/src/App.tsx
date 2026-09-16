@@ -58,17 +58,21 @@ export default function App() {
       <div className="gl"><Scene scroll={scroll} eventSource={page} /></div>
       <div className="grain" />
 
-      <p className="alpha">v0alpha1 · 합성 데이터 전용 · 실제 비밀번호나 API 키를 넣지 마세요</p>
+      {/* 배너와 바를 한 기둥에 쌓는다. 따로 fixed로 두면 좁은 화면에서 배너가
+          두 줄로 접히며 로고를 덮는다. */}
+      <div className="top">
+        <p className="alpha">v0alpha1 · 합성 데이터 전용 · 실제 비밀번호나 API 키를 넣지 마세요</p>
 
-      <header className="bar">
-        <span className="mark">KEYATLAS</span>
-        <nav className="bar-nav">
-          <a href="#map">연결 지도</a>
-          <a href="#vault">금고</a>
-          <a href="#security">보안 설계</a>
-        </nav>
-        <a className="btn btn-ghost btn-sm" href="#start">시작하기</a>
-      </header>
+        <header className="bar">
+          <span className="mark">KEYATLAS</span>
+          <nav className="bar-nav">
+            <a href="#map">연결 지도</a>
+            <a href="#vault">금고</a>
+            <a href="#security">보안 설계</a>
+          </nav>
+          <a className="btn btn-ghost btn-sm" href="#start">시작하기</a>
+        </header>
+      </div>
 
       {/* 첫 화면: 열쇠뿐. */}
       <section className="opener" aria-label="KeyAtlas">

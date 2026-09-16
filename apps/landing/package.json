@@ -9,16 +9,20 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "screenshot": "node scripts/screenshot.mjs",
-    "build:single": "vite build -c vite.single.config.ts && node scripts/stitch-single.mjs"
+    "build:single": "vite build -c vite.single.config.ts && node scripts/stitch-single.mjs",
+    "gen:globe": "node scripts/gen-globe.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "d3-geo": "^3.1.1",
     "playwright": "^1.63.0",
+    "topojson-client": "^3.1.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "world-atlas": "^2.0.2"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

@@ -4,6 +4,8 @@ import { Environment, Lightformer, MeshTransmissionMaterial, RoundedBox } from "
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { landPoints } from "./land";
+import { REGIONS } from "./regions";
 
 const GROUND = "#070708";
 const GOLD = "#d4b06a";
@@ -14,15 +16,16 @@ const STEEL_LO = "#63666c";
 const WARM = "#e8e2d4";
 
 const LOCK_Y = 0.7;
-const LOCK_START_Y = 4.6;
+const LOCK_START_Y = 6.2;   // 세로 화면은 무대가 0.68배라, 4.6이면 첫 화면 위에 걸친다
 const KEY_SCALE_OPEN = 0.88;
 const KEY_SCALE_IN = 0.52;
 const KEY_Y_IN = -0.3;
 
-const GLOBE_R = 2.95;
-const NODES = 150;   // 구 표면에 흩어진 서비스·개인정보
-const LINKED = 46;  // 그중 자물쇠로 이어지는 것
-const SEG = 34;     // 연결선 분할
+const GLOBE_R = 4.05;                                  // 뒤에 뜬 지구본
+const GLOBE_AT = new THREE.Vector3(0, -0.35, -6.4);    // 자물쇠 뒤, 아래로 조금
+const TILT = (23.4 * Math.PI) / 180;                   // 지구의 자전축 기울기
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
+const SEG = 34;                                        // 연결선 분할
 const TAU = Math.PI * 2;
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
@@ -59,147 +62,237 @@ function Glass({ soft = false }: { soft?: boolean }) {
   );
 }
 
-/* ---------------------------------------------------------------- 네트워크 */
+/* ---------------------------------------------------------------- 지구본 */
 
-/**
- * 뒤에 도는 격자 구, 그 표면에 흩어진 정보, 그리고 자물쇠로 이어지는 연결선.
- * 전부 한 그룹 안에서 함께 돈다 — 중심(0,0,0)은 회전해도 제자리라 선이 어긋나지 않는다.
- */
+/** 위경도(도) → 구 위의 점. 경도 0이 +x, 북극이 +y. */
+function onSphere(lat: number, lon: number, r: number, out: THREE.Vector3) {
+  const a = (lat * Math.PI) / 180;
+  const b = (lon * Math.PI) / 180;
+  return out.set(Math.cos(a) * Math.cos(b) * r, Math.sin(a) * r, Math.cos(a) * Math.sin(b) * r);
+}
+
+/** 사각 픽셀 대신 동그란 점을 찍으려고 스프라이트를 즉석에서 굽는다. 외부 요청은 없다. */
+function dotSprite() {
+  const s = 32;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = s;
+  const g = cv.getContext("2d")!;
+  const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  grd.addColorStop(0, "rgba(255,255,255,1)");
+  grd.addColorStop(0.5, "rgba(255,255,255,0.9)");
+  grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, s, s);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const bez = (a: THREE.Vector3, m: THREE.Vector3, b: THREE.Vector3, u: number, out: THREE.Vector3) => {
+  const v = 1 - u, k0 = v * v, k1 = 2 * v * u, k2 = u * u;
+  return out.set(k0 * a.x + k1 * m.x + k2 * b.x, k0 * a.y + k1 * m.y + k2 * b.y, k0 * a.z + k1 * m.z + k2 * b.z);
+};
+
 function Network({ scroll }: { scroll: MutableRefObject<number> }) {
   const spin = useRef<THREE.Group>(null!);
-  const dots = useRef<THREE.InstancedMesh>(null!);
-  const lines = useRef<THREE.LineSegments>(null!);
+  const body = useRef<THREE.Group>(null!);
+  const marks = useRef<THREE.InstancedMesh>(null!);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const angle = useRef(0.9);
 
-  const wireMat = useMemo(
-    () => new THREE.LineBasicMaterial({ color: "#9aa3b2", transparent: true, opacity: 0.1, depthWrite: false }), []);
-  const linkMat = useMemo(
-    () => new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }), []);
+  const qTilt = useMemo(() => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), TILT), []);
+  const qSpin = useMemo(() => new THREE.Quaternion(), []);
+  const q = useMemo(() => new THREE.Quaternion(), []);
+  const vA = useMemo(() => new THREE.Vector3(), []);
+  const vM = useMemo(() => new THREE.Vector3(), []);
+  const vP = useMemo(() => new THREE.Vector3(), []);
+  const vN = useMemo(() => new THREE.Vector3(), []);
+  const LOCK = useMemo(() => new THREE.Vector3(0, 0, 0), []);
 
-  /* 경위선 격자 — 삼각형 대각선 없이 지구본처럼 */
-  const globeGeo = useMemo(() => {
-    const p: number[] = [];
-    for (let i = 1; i < 8; i++) {
-      const phi = (i / 8) * Math.PI, r = Math.sin(phi) * GLOBE_R, y = Math.cos(phi) * GLOBE_R;
-      for (let j = 0; j < 72; j++) {
-        const a0 = (j / 72) * TAU, a1 = ((j + 1) / 72) * TAU;
-        p.push(Math.cos(a0) * r, y, Math.sin(a0) * r, Math.cos(a1) * r, y, Math.sin(a1) * r);
-      }
+  const landMat = useMemo(() => new THREE.PointsMaterial({
+    size: 0.075, sizeAttenuation: true, vertexColors: true, map: dotSprite(),
+    transparent: true, depthWrite: false, toneMapped: false,
+  }), []);
+  const seaMat = useMemo(() => new THREE.PointsMaterial({
+    size: 0.05, sizeAttenuation: true, color: "#2a2f39", map: dotSprite(),
+    transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false,
+  }), []);
+  const ringMat = useMemo(() => new THREE.LineBasicMaterial({
+    color: GOLD_LO, transparent: true, opacity: 0.3, depthWrite: false,
+  }), []);
+  const linkMat = useMemo(() => new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending,
+  }), []);
+
+  /* 육지 — 빌드 때 구워둔 Natural Earth 격자를 구 위에 얹는다 */
+  const landGeo = useMemo(() => {
+    const ll = landPoints();
+    const n = ll.length / 2;
+    const pos = new Float32Array(n * 3);
+    const t = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      onSphere(ll[i * 2 + 1] / 100, ll[i * 2] / 100, GLOBE_R, t);
+      pos[i * 3] = t.x; pos[i * 3 + 1] = t.y; pos[i * 3 + 2] = t.z;
     }
-    for (let k = 0; k < 12; k++) {
-      const th = (k / 12) * TAU;
-      for (let j = 0; j < 36; j++) {
-        const b0 = (j / 36) * Math.PI, b1 = ((j + 1) / 36) * Math.PI;
-        p.push(Math.sin(b0) * Math.cos(th) * GLOBE_R, Math.cos(b0) * GLOBE_R, Math.sin(b0) * Math.sin(th) * GLOBE_R,
-               Math.sin(b1) * Math.cos(th) * GLOBE_R, Math.cos(b1) * GLOBE_R, Math.sin(b1) * Math.sin(th) * GLOBE_R);
-      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    return g;
+  }, []);
+
+  /* 바다 — 피보나치 구면 분포. 육지만으로는 구의 아래쪽이 비어 잘려 보인다 */
+  const seaGeo = useMemo(() => {
+    const n = 2600, golden = Math.PI * (3 - Math.sqrt(5));
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const y = 1 - (i / (n - 1)) * 2, ring = Math.sqrt(Math.max(0, 1 - y * y)), th = golden * i;
+      pos[i * 3] = Math.cos(th) * ring * GLOBE_R;
+      pos[i * 3 + 1] = y * GLOBE_R;
+      pos[i * 3 + 2] = Math.sin(th) * ring * GLOBE_R;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    return g;
+  }, []);
+
+  /* 자전축과 어긋나게 걸친 금 테 하나 — 혼천의처럼, 칠이 아니라 테두리로 */
+  const ringGeo = useMemo(() => {
+    const p: number[] = [];
+    const r = GLOBE_R * 1.045;
+    for (let i = 0; i < 180; i++) {
+      const a0 = (i / 180) * TAU, a1 = ((i + 1) / 180) * TAU;
+      p.push(Math.cos(a0) * r, 0, Math.sin(a0) * r, Math.cos(a1) * r, 0, Math.sin(a1) * r);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
     return g;
   }, []);
 
-  /* 피보나치 구면 분포 — 뭉침 없이 고르게 */
-  const nodes = useMemo(() => {
-    const r = rng(11), golden = Math.PI * (3 - Math.sqrt(5));
-    return Array.from({ length: NODES }, (_, i) => {
-      const y = 1 - (i / (NODES - 1)) * 2, ring = Math.sqrt(Math.max(0, 1 - y * y)), th = golden * i;
-      const rad = GLOBE_R * (0.97 + r() * 0.06);
-      return {
-        pos: new THREE.Vector3(Math.cos(th) * ring * rad, y * rad, Math.sin(th) * ring * rad),
-        size: 0.028 + r() * 0.038,
-        bright: r() < 0.3,
-        delay: r(),
-      };
-    });
+  /* 거점 — 실제 리전 좌표. 구 표면에서 살짝 띄운다 */
+  const sites = useMemo(() => {
+    const r = rng(29);
+    return REGIONS.map(([lat, lon, major]) => ({
+      at: onSphere(lat, lon, GLOBE_R * 1.012, new THREE.Vector3()),
+      size: major ? 0.052 : 0.032,
+      major,
+      delay: r(),
+    }));
   }, []);
 
-  /* 연결선: 표면의 점에서 중심으로 휘어 들어가는 곡선 */
-  const { linkGeo, curves } = useMemo(() => {
-    const pos: number[] = [];
-    const curves: THREE.Vector3[][] = [];
-    const end = new THREE.Vector3(0, 0, 0);
-    for (let i = 0; i < LINKED; i++) {
-      const a = nodes[i].pos;
-      const mid = a.clone().multiplyScalar(0.92);
-      mid.x += a.z * 0.42; mid.z -= a.x * 0.42; mid.y += 0.35; // 구 바깥으로 휘감았다 들어온다
-      const pts = new THREE.QuadraticBezierCurve3(a, mid, end).getPoints(SEG);
-      curves.push(pts);
-      for (let j = 0; j < SEG; j++) {
-        pos.push(pts[j].x, pts[j].y, pts[j].z, pts[j + 1].x, pts[j + 1].y, pts[j + 1].z);
-      }
-    }
+  /* 연결선은 자전하지 않는 공간에 있다 — 끝점이 자물쇠에 붙어 있어야 하므로
+     매 프레임 시작점을 자전시킨 위치로 다시 굽는다 */
+  const linkGeo = useMemo(() => {
+    const n = sites.length * SEG * 2;
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3));
-    return { linkGeo: g, curves };
-  }, [nodes]);
+    g.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    return g;
+  }, [sites]);
 
   useLayoutEffect(() => {
     const col = new THREE.Color();
-    nodes.forEach((n, i) => dots.current.setColorAt(i, col.set(n.bright ? WARM : "#6f6c66")));
-    if (dots.current.instanceColor) dots.current.instanceColor.needsUpdate = true;
-  }, [nodes]);
+    sites.forEach((s, i) => marks.current.setColorAt(i, col.set(s.major ? WARM : "#8d949f")));
+    if (marks.current.instanceColor) marks.current.instanceColor.needsUpdate = true;
+  }, [sites]);
 
   useFrame((state, dt) => {
     const d = Math.min(dt, 0.1);
     const t = state.clock.elapsedTime;
     const { tWire, c, tLock } = beats(scroll.current);
 
-    spin.current.rotation.y += d * 0.03;
-    // 모여드는 동안 구가 안으로 조여든다 — "한 곳으로"를 형태로 말한다
-    const shrink = THREE.MathUtils.lerp(1, 0.45, c);
-    spin.current.scale.setScalar(THREE.MathUtils.damp(spin.current.scale.x, shrink, 4, d));
-    wireMat.opacity = 0.085 + 0.13 * tWire;
+    angle.current += d * 0.045;
+    spin.current.rotation.y = angle.current;
+    const sa = Math.sin(angle.current), ca = Math.cos(angle.current);
 
-    /* 선: 표면에서 중심 쪽으로 그어지고, 그 위를 빛이 흘러 내려간다 */
-    const col = linkGeo.attributes.color.array as Float32Array;
+    // 모여드는 동안 지구본은 뒤로 물러나 자물쇠에 자리를 내준다
+    const recede = THREE.MathUtils.lerp(1, 0.84, c);
+    body.current.scale.setScalar(THREE.MathUtils.damp(body.current.scale.x, recede, 4, d));
+
+    /* 육지: 앞면은 밝게, 뒷면은 비칠 만큼만. 이 명암차가 공을 공으로 읽히게 한다 */
+    const lc = landGeo.attributes.color.array as Float32Array;
+    const lp = landGeo.attributes.position.array as Float32Array;
+    const dim = 1 - 0.8 * c;
+    for (let i = 0, n = lc.length; i < n; i += 3) {
+      const nz = (-lp[i] * sa + lp[i + 2] * ca) / GLOBE_R;
+      const f = smooth(Math.min(1, Math.max(0, (nz + 0.6) / 1.45)));
+      const b = (0.14 + 0.92 * f) * dim;
+      lc[i] = b * 0.74; lc[i + 1] = b * 0.78; lc[i + 2] = b * 0.88;
+    }
+    landGeo.attributes.color.needsUpdate = true;
+    seaMat.opacity = 0.85 * dim;
+    ringMat.opacity = 0.3 * dim;
+
+    /* 거점을 자전시켜 세계 좌표로 옮기고, 거기서 자물쇠까지 선을 굽는다 */
+    qSpin.setFromAxisAngle(AXIS_Y, angle.current);
+    q.copy(qTilt).multiply(qSpin);
+
+    const lk = linkGeo.attributes.position.array as Float32Array;
+    const kc = linkGeo.attributes.color.array as Float32Array;
     const fade = 1 - ph(scroll.current, 0.88, 0.97);
     let k = 0;
-    for (let i = 0; i < LINKED; i++) {
-      const stagger = (i / LINKED) * 0.5;
+
+    for (let i = 0; i < sites.length; i++) {
+      const s = sites[i];
+      vA.copy(s.at).applyQuaternion(q).add(GLOBE_AT);
+
+      // 지구 반대편의 거점은 선도 점도 희미하다 — 돌면서 이쪽으로 넘어올 때 켜진다
+      const nz = (-s.at.x * sa + s.at.z * ca) / (GLOBE_R * 1.012);
+      const face = THREE.MathUtils.lerp(smooth(Math.min(1, Math.max(0, (nz + 0.25) / 0.9))), 1, c);
+
+      // 표면에서 한 번 부풀었다가 자물쇠로 빨려 들어간다
+      vN.copy(vA).sub(GLOBE_AT).normalize();
+      vM.copy(vA).lerp(LOCK, 0.44).addScaledVector(vN, 1.15);
+      vM.y += 0.5;
+
+      const stagger = (i / sites.length) * 0.5;
       const draw = Math.min(1, Math.max(0, (tWire - stagger) / (1 - stagger)));
       const head = (t * 0.55 + i * 0.19) % 1;
+
       for (let j = 0; j < SEG; j++) {
         for (const u of [j / SEG, (j + 1) / SEG]) {
+          bez(vA, vM, LOCK, u, vP);
+          lk[k] = vP.x; lk[k + 1] = vP.y; lk[k + 2] = vP.z;
+
           const on = u <= draw ? 1 : 0;
           const dd = u - head;
           const pulse = Math.exp(-(dd * dd) / 0.0022);
-          const base = on * fade * 0.2;
-          const beam = on * fade * 1.7 * pulse * (0.3 + 0.7 * c);
+          const base = on * fade * face * 0.17;
+          const beam = on * fade * face * 1.7 * pulse * (0.3 + 0.7 * c);
           // 선은 따뜻한 흰빛, 지나가는 빛줄기만 금기를 띤다
-          col[k++] = base * 0.91 + beam * 0.83;
-          col[k++] = base * 0.89 + beam * 0.69;
-          col[k++] = base * 0.83 + beam * 0.42;
+          kc[k] = base * 0.91 + beam * 0.83;
+          kc[k + 1] = base * 0.89 + beam * 0.69;
+          kc[k + 2] = base * 0.83 + beam * 0.42;
+          k += 3;
         }
       }
-    }
-    linkGeo.attributes.color.needsUpdate = true;
 
-    /* 점: 연결된 것은 선을 타고 중심으로 빨려들고, 나머지는 자리를 지키다 사그라든다 */
-    nodes.forEach((n, i) => {
-      if (i < LINKED) {
-        const local = smooth(Math.min(1, Math.max(0, (c - n.delay * 0.45) / 0.55)));
-        const idx = Math.min(SEG, Math.round(local * SEG));
-        dummy.position.copy(curves[i][idx]);
-        const absorb = smooth(Math.max(0, (local - 0.86) / 0.14));
-        dummy.scale.setScalar(n.size * (1 - absorb));
-      } else {
-        dummy.position.copy(n.pos);
-        dummy.position.y += Math.sin(t * 0.4 + i) * 0.06;
-        dummy.scale.setScalar(n.size * (1 - 0.75 * c) * (1 - tLock * 0.8));
-      }
+      /* 거점: 선을 타고 자물쇠로 내려가 흡수된다 */
+      const local = smooth(Math.min(1, Math.max(0, (c - s.delay * 0.45) / 0.55)));
+      bez(vA, vM, LOCK, local, vP);
+      dummy.position.copy(vP);
+      const absorb = smooth(Math.max(0, (local - 0.86) / 0.14));
+      const idle = 1 + (s.major ? Math.sin(t * 1.2 + i) * 0.12 : 0);
+      dummy.scale.setScalar(s.size * idle * face * (1 - absorb) * (1 - tLock * 0.6));
       dummy.updateMatrix();
-      dots.current.setMatrixAt(i, dummy.matrix);
-    });
-    dots.current.instanceMatrix.needsUpdate = true;
+      marks.current.setMatrixAt(i, dummy.matrix);
+    }
+
+    linkGeo.attributes.position.needsUpdate = true;
+    linkGeo.attributes.color.needsUpdate = true;
+    marks.current.instanceMatrix.needsUpdate = true;
   });
 
   return (
-    <group ref={spin} position={[0, LOCK_Y, 0]}>
-      <lineSegments geometry={globeGeo} material={wireMat} />
-      <lineSegments ref={lines} geometry={linkGeo} material={linkMat} />
-      <instancedMesh ref={dots} args={[undefined, undefined, NODES]} frustumCulled={false}>
+    <group ref={body} position={[0, LOCK_Y, 0]}>
+      <group position={GLOBE_AT} rotation-z={TILT}>
+        <group ref={spin}>
+          <points geometry={seaGeo} material={seaMat} />
+          <points geometry={landGeo} material={landMat} />
+        </group>
+        <lineSegments geometry={ringGeo} material={ringMat} rotation-x={0.3} />
+      </group>
+      <lineSegments geometry={linkGeo} material={linkMat} frustumCulled={false} />
+      <instancedMesh ref={marks} args={[undefined, undefined, REGIONS.length]} frustumCulled={false}>
         <sphereGeometry args={[1, 10, 10]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
@@ -438,8 +531,11 @@ function Rig({ scroll }: { scroll: MutableRefObject<number> }) {
     const nx = Math.sin(t * 0.21) * 0.6 + Math.sin(t * 0.53 + 1.3) * 0.3 + Math.sin(t * 1.1 + 2.1) * 0.1;
     const ny = Math.cos(t * 0.17 + 0.7) * 0.5 + Math.sin(t * 0.47 + 2.9) * 0.25 + Math.cos(t * 0.97) * 0.08;
     const cam = state.camera;
-    cam.position.x = THREE.MathUtils.damp(cam.position.x, nx * 0.5 + state.pointer.x * 1.1, 1.6, d);
-    cam.position.y = THREE.MathUtils.damp(cam.position.y, ny * 0.4 + state.pointer.y * 0.7 + 0.5 * tIn, 1.6, d);
+    // 카메라가 움직이면 멀리 있는 지구본이 가장 크게 흔들린다. 좁은 화면에서는
+    // 그 폭만큼 지구본이 화면 밖으로 밀려나므로 흔들림을 줄인다.
+    const amp = state.viewport.aspect < 0.8 ? 0.34 : 1;
+    cam.position.x = THREE.MathUtils.damp(cam.position.x, (nx * 0.5 + state.pointer.x * 1.1) * amp, 1.6, d);
+    cam.position.y = THREE.MathUtils.damp(cam.position.y, (ny * 0.4 + state.pointer.y * 0.7) * amp + 0.5 * tIn, 1.6, d);
     cam.position.z = THREE.MathUtils.damp(cam.position.z, THREE.MathUtils.lerp(9.5, 8.7, tLock), 3, d);
     look.y = THREE.MathUtils.damp(look.y, THREE.MathUtils.lerp(0.2, 0.7, tIn), 4, d);
     cam.lookAt(look);

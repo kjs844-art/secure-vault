@@ -38,8 +38,13 @@ a:hover { color: var(--ink); }
 }
 
 /* ---------- 실험 표시: 크게 외치지 않고 한 줄 ---------- */
-.alpha {
+.top {
   position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 3;
+  pointer-events: none;  /* 캔버스가 포인터를 계속 받아야 한다 */
+}
+.top a { pointer-events: auto; }
+
+.alpha {
   margin: 0; padding: 7px clamp(16px, 4vw, 40px);
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.4px;
   color: var(--ink-3); text-align: center;
@@ -49,7 +54,7 @@ a:hover { color: var(--ink); }
 
 /* ---------- 상단 바 ---------- */
 .bar {
-  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 26px); left: 0; right: 0; z-index: 3;
+  margin-top: 18px;
   display: flex; align-items: center; gap: clamp(16px, 3vw, 40px);
   padding: 0 clamp(16px, 4vw, 40px);
   opacity: 0; transform: translateY(-6px);
@@ -100,6 +105,11 @@ a:hover { color: var(--ink); }
 .story { position: relative; z-index: 2; }
 .slot { height: 100svh; position: relative; }
 .captions { position: fixed; left: 0; right: 0; top: 60svh; z-index: 2; pointer-events: none; }
+.captions::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -80px; height: 340px;
+  background: linear-gradient(to bottom, rgba(7, 7, 8, 0) 0%, rgba(7, 7, 8, 0.78) 34%, rgba(7, 7, 8, 0.86) 100%);
+  opacity: 0;
+}
 .caption {
   position: absolute; left: 0; top: 0; margin: 0;
   padding: 0 clamp(16px, 4vw, 40px);
@@ -146,10 +156,16 @@ h1 {
 
 /* ---------- 좁은 화면 ---------- */
 @media (max-width: 720px) {
+  .captions::before { opacity: 1; }
   .bar-nav { display: none; }
   .mark { font-size: 12px; letter-spacing: 2.6px; }
   h1 { letter-spacing: -1.2px; }
   .actions .btn { flex: 1 1 auto; }
+  .alpha { font-size: 9.5px; letter-spacing: 0.2px; }
+  .bar { margin-top: 10px; }
+  /* 자물쇠 몸통 위에 글자가 얹히면 둘 다 안 읽힌다. 아래로 내리고 바닥을 깐다 */
+  .captions { top: auto; bottom: 13svh; }
+  .caption { font-size: 16.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .alpha, .bar, .cue, .caption, .chapter-inner > * { transition: none; opacity: 1; transform: none; }
