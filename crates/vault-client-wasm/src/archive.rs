@@ -37,6 +37,13 @@ const DEMO_PASSWORD: &str = "DEMO_VALUE_ONLY_wasm_catalog";
 #[path = "archive_history.rs"]
 mod history;
 
+#[path = "archive_rotation.rs"]
+mod rotation;
+pub(crate) use rotation::{
+    ArchiveRotationChecklistV1, ArchiveRotationFixtureV1, ArchiveRotationGenerationV1,
+    ArchiveRotationReadinessStateV1, create_rotation_cutover_candidate, inspect_rotation_checklist,
+};
+
 #[cfg(test)]
 #[path = "archive_history_tests.rs"]
 mod history_tests;

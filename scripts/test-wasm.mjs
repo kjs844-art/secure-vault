@@ -8,6 +8,9 @@ let archiveRejections = 0;
 let catalogsVerified = 0;
 let registrationsVerified = 0;
 let connectionEditsVerified = 0;
+let rotationChecklistsVerified = 0;
+let rotationCutoversVerified = 0;
+let rotationRejections = 0;
 
 function check(condition) {
   checks++;
@@ -33,6 +36,46 @@ const issuerGetters = ['issuerAccountIdentifier', 'issuerOrganizationOrWorkspace
 const rowGetters = ['itemName', 'providerName', ...issuerGetters, 'credentialType', 'status',
   'connectionCount', 'secretFieldCount', 'mcpConnectionCount'];
 const connectionGetters = ['connectionLabel', 'connectionType'];
+const rotationValueGetters = ['generation', 'readinessState', 'entryCount',
+  'remainingRequired', 'remainingOptional'];
+const rotationEntryGetters = ['entryFixture', 'entryRequiredForCutover'];
+
+function verifyRotationChecklist(checklist, expected, verifyInvalidReferences = false) {
+  try {
+    check(checklist.isLocked() === false);
+    check(checklist.generation() === expected.generation);
+    check(checklist.readinessState() === expected.readinessState);
+    check(checklist.entryCount() === expected.entries.length);
+    check(checklist.remainingRequired() === expected.remainingRequired);
+    check(checklist.remainingOptional() === expected.remainingOptional);
+    expected.entries.forEach(({ fixture, requiredForCutover }, index) => {
+      check(checklist.entryFixture(index) === fixture);
+      check(checklist.entryRequiredForCutover(index) === requiredForCutover);
+    });
+    if (verifyInvalidReferences) {
+      for (const value of [-0, -1, 0.5, expected.entries.length, 2 ** 32,
+        NaN, Infinity, -Infinity, '0', true, false, null, undefined]) {
+        for (const name of rotationEntryGetters) {
+          expectCode(() => checklist[name](value), 'INVALID_REFERENCE');
+        }
+      }
+    }
+    checklist.lock();
+    checklist.lock();
+    check(checklist.isLocked() === true);
+    for (const name of rotationValueGetters) {
+      expectCode(() => checklist[name](), 'LOCKED');
+    }
+    for (const name of rotationEntryGetters) {
+      expectCode(() => checklist[name](0), 'LOCKED');
+      expectCode(() => checklist[name](NaN), 'LOCKED');
+    }
+    rotationChecklistsVerified++;
+  } finally {
+    checklist.lock();
+    checklist.free();
+  }
+}
 
 function verifyCatalog(catalog, previousRows) {
   const rows = [];
@@ -211,10 +254,18 @@ async function run() {
   const wasmExports = api.initSync({ module: bytes });
   check(typeof api.WasmCatalogV1 === 'function');
   check(typeof api.WasmCatalogV1.from_snapshot === 'undefined');
-  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive', 'appendSyntheticRegistration', 'editSyntheticConnections']) {
+  for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive',
+    'appendSyntheticRegistration', 'editSyntheticConnections',
+    'inspectSyntheticRotationChecklist', 'createSyntheticRotationCutover']) {
     check(typeof api[name] === (demo ? 'function' : 'undefined'));
     check(typeof wasmExports[name] === (demo ? 'function' : 'undefined'));
   }
+  for (const name of ['inspectSyntheticRotationChecklist', 'createSyntheticRotationCutover']) {
+    check(Object.prototype.hasOwnProperty.call(api, name) === demo);
+    check(Object.prototype.hasOwnProperty.call(wasmExports, name) === demo);
+  }
+  check(typeof api.WasmRotationChecklistV1 === (demo ? 'function' : 'undefined'));
+  check(Object.prototype.hasOwnProperty.call(api, 'WasmRotationChecklistV1') === demo);
   // wasm-bindgen emits an ownership helper. It is not a secret getter;
   // WASM is not a hostile-JavaScript security sandbox.
   const expected = ['constructor', '__destroy_into_raw', 'free', 'length', 'isLocked', 'lock',
@@ -227,20 +278,177 @@ async function run() {
   }
   if (!demo) return;
 
+  let directChecklistConstructionRejected = false;
+  try { new api.WasmRotationChecklistV1(); }
+  catch (error) {
+    directChecklistConstructionRejected = error instanceof Error
+      && error.message === 'CONSTRUCTOR_DISABLED';
+  }
+  check(directChecklistConstructionRejected);
+
+  // wasm-bindgen emits the same ownership helper used by WasmCatalogV1. Apart
+  // from that generated helper, the checklist surface is the exact allowlist.
+  const expectedRotationPrototype = ['constructor', '__destroy_into_raw', 'free', 'isLocked',
+    'lock', ...rotationValueGetters, ...rotationEntryGetters].sort();
+  const actualRotationPrototype = Object.getOwnPropertyNames(
+    api.WasmRotationChecklistV1.prototype,
+  ).sort();
+  check(actualRotationPrototype.length === expectedRotationPrototype.length
+    && actualRotationPrototype.every((name, index) => name === expectedRotationPrototype[index]));
+  for (const denied of ['secretValue', 'secretFields', 'rawEvidence', 'evidence',
+    'verificationEvidence', 'supersededRevocationEvidence', 'userConfirmed',
+    'providerVerified', 'record', 'recordId', 'revision', 'revisionId',
+    'parentRevisionId', 'expectedRevisionId', 'archiveBytes']) {
+    check(typeof api.WasmRotationChecklistV1.prototype[denied] === 'undefined');
+  }
+
   const rows = verifyCatalog(api.syntheticCatalog());
   const archive = api.createSyntheticArchive();
   check(archive instanceof Uint8Array && archive.length > 0 && archive.length <= 512 * 1_024);
   const original = archive.slice();
-  const archiveBuffer = Buffer.from(archive);
-  for (const plaintext of [
+  const syntheticPlaintextMarkers = [
     'Example Workshop API Credential', 'Example AI Workshop',
     'Example MCP', 'Example CLI', 'Example CI',
     'DEMO_VALUE_ONLY_API_KEY_0001', 'DEMO_VALUE_ONLY_TOKEN_0002',
+    'DEMO_VALUE_ONLY_ROTATED_API_KEY_0002',
+    'DEMO_VALUE_ONLY_ROTATED_API_KEY_0003',
     'DEMO_VALUE_ONLY_wasm_catalog',
-  ]) {
-    check(!archiveBuffer.includes(Buffer.from(plaintext)));
+  ];
+  function verifyNoSyntheticPlaintext(input) {
+    const buffer = Buffer.from(input);
+    for (const plaintext of syntheticPlaintextMarkers) {
+      check(!buffer.includes(Buffer.from(plaintext)));
+    }
   }
+  verifyNoSyntheticPlaintext(archive);
   verifyCatalog(api.openSyntheticArchive(archive), rows);
+  check(Buffer.from(archive).equals(Buffer.from(original)));
+
+  const pendingRotationArgs = [1, false, false, false, false, false, false, 0];
+  const userReadyRotationArgs = [1, true, false, false, false, false, false, 0];
+  const providerReadyRotationArgs = [1, false, false, false, true, false, false, 1];
+
+  function inspectRotation(input, args) {
+    return api.inspectSyntheticRotationChecklist(input, ...args);
+  }
+
+  function cutoverRotation(input, args) {
+    return api.createSyntheticRotationCutover(input, ...args);
+  }
+
+  function rejectRotationArgs(input, args, code = 'INVALID_ARCHIVE') {
+    const before = input.slice();
+    expectCode(() => inspectRotation(input, args), code);
+    check(Buffer.from(input).equals(Buffer.from(before)));
+    expectCode(() => cutoverRotation(input, args), code);
+    check(Buffer.from(input).equals(Buffer.from(before)));
+    rotationRejections++;
+  }
+
+  const beforePendingInspection = archive.slice();
+  verifyRotationChecklist(inspectRotation(archive, pendingRotationArgs), {
+    generation: 'initial_0001', readinessState: 'required_pending',
+    remainingRequired: 1, remainingOptional: 0,
+    entries: [{ fixture: 'mcp', requiredForCutover: true }],
+  }, true);
+  check(Buffer.from(archive).equals(Buffer.from(beforePendingInspection)));
+  const beforePendingCutover = archive.slice();
+  expectCode(() => cutoverRotation(archive, pendingRotationArgs), 'INVALID_ARCHIVE');
+  check(Buffer.from(archive).equals(Buffer.from(beforePendingCutover)));
+  rotationRejections++;
+
+  const beforeReadyInspection = archive.slice();
+  verifyRotationChecklist(inspectRotation(archive, userReadyRotationArgs), {
+    generation: 'initial_0001', readinessState: 'ready',
+    remainingRequired: 0, remainingOptional: 0,
+    entries: [{ fixture: 'mcp', requiredForCutover: true }],
+  });
+  check(Buffer.from(archive).equals(Buffer.from(beforeReadyInspection)));
+
+  const optionalRotationArgs = [2, false, false, false, false, false, false, 0];
+  const beforeOptionalInspection = archive.slice();
+  verifyRotationChecklist(inspectRotation(archive, optionalRotationArgs), {
+    generation: 'initial_0001', readinessState: 'ready',
+    remainingRequired: 0, remainingOptional: 3,
+    entries: [
+      { fixture: 'mcp', requiredForCutover: false },
+      { fixture: 'cli', requiredForCutover: false },
+      { fixture: 'ci', requiredForCutover: false },
+    ],
+  });
+  check(Buffer.from(archive).equals(Buffer.from(beforeOptionalInspection)));
+
+  // The first cutover migrates a v1 genesis archive directly to v3 while
+  // preserving every existing envelope and changing only the selected head.
+  const initialEnvelopes = splitFrame(archive);
+  const beforeFirstCutover = archive.slice();
+  const rotated0002 = cutoverRotation(archive, userReadyRotationArgs);
+  check(rotated0002 instanceof Uint8Array && rotated0002.length <= 512 * 1_024);
+  verifyNoSyntheticPlaintext(rotated0002);
+  check(Buffer.from(archive).equals(Buffer.from(beforeFirstCutover)));
+  const parsed0002 = splitHistory(rotated0002);
+  check(parsed0002.envelopes.length === initialEnvelopes.length + 1);
+  initialEnvelopes.forEach((envelope, index) => {
+    check(Buffer.from(envelope).equals(Buffer.from(parsed0002.envelopes[index])));
+  });
+  check(parsed0002.heads[0] === 0 && parsed0002.heads[2] === 2);
+  check(parsed0002.heads[1] === parsed0002.envelopes.length - 2);
+  verifyRotationChecklist(inspectRotation(rotated0002, userReadyRotationArgs), {
+    generation: 'rotated_0002', readinessState: 'ready',
+    remainingRequired: 0, remainingOptional: 0,
+    entries: [{ fixture: 'mcp', requiredForCutover: true }],
+  });
+  rotationCutoversVerified++;
+
+  const beforeSecondCutover = rotated0002.slice();
+  const terminal0003 = cutoverRotation(rotated0002, providerReadyRotationArgs);
+  check(terminal0003 instanceof Uint8Array && terminal0003.length <= 512 * 1_024);
+  verifyNoSyntheticPlaintext(terminal0003);
+  check(Buffer.from(rotated0002).equals(Buffer.from(beforeSecondCutover)));
+  const parsed0003 = splitHistory(terminal0003);
+  check(parsed0003.envelopes.length === parsed0002.envelopes.length + 1);
+  parsed0002.envelopes.forEach((envelope, index) => {
+    check(Buffer.from(envelope).equals(Buffer.from(parsed0003.envelopes[index])));
+  });
+  check(parsed0003.heads[0] === 0 && parsed0003.heads[2] === 2);
+  check(parsed0003.heads[1] === parsed0003.envelopes.length - 2);
+  verifyRotationChecklist(inspectRotation(terminal0003, pendingRotationArgs), {
+    generation: 'terminal_0003', readinessState: 'terminal',
+    remainingRequired: 0, remainingOptional: 0,
+    entries: [{ fixture: 'mcp', requiredForCutover: true }],
+  });
+  rotationCutoversVerified++;
+
+  const beforeRejectedThirdCutover = terminal0003.slice();
+  expectCode(() => cutoverRotation(terminal0003, userReadyRotationArgs), 'INVALID_ARCHIVE');
+  check(Buffer.from(terminal0003).equals(Buffer.from(beforeRejectedThirdCutover)));
+  rotationRejections++;
+
+  for (const invalid of [-0, -1, 0.5, 3, 2 ** 32, NaN, Infinity, -Infinity,
+    '1', true, false, null, undefined]) {
+    const args = pendingRotationArgs.slice();
+    args[0] = invalid;
+    rejectRotationArgs(archive, args);
+  }
+  for (let argument = 1; argument <= 6; argument++) {
+    for (const invalid of [0, 1, 'true', null, undefined, NaN]) {
+      const args = pendingRotationArgs.slice();
+      args[argument] = invalid;
+      rejectRotationArgs(archive, args);
+    }
+  }
+  for (const invalid of [-0, -1, 0.5, 2, 2 ** 32, NaN, Infinity, -Infinity,
+    true, false, '0', null, undefined]) {
+    const args = pendingRotationArgs.slice();
+    args[7] = invalid;
+    rejectRotationArgs(archive, args);
+  }
+  for (let fixture = 0; fixture < 3; fixture++) {
+    const args = [2, false, false, false, false, false, false, 0];
+    args[1 + fixture] = true;
+    args[4 + fixture] = true;
+    rejectRotationArgs(archive, args);
+  }
   check(Buffer.from(archive).equals(Buffer.from(original)));
 
   function reject(input, code) {
@@ -248,8 +456,16 @@ async function run() {
     expectCode(() => api.openSyntheticArchive(input), code);
     expectCode(() => api.appendSyntheticRegistration(input, 0, 0, new Float64Array()), code);
     expectCode(() => api.editSyntheticConnections(input, 0, new Float64Array()), code);
+    // Every malformed/corrupt archive fixture must also fail through the new
+    // rotation boundaries. This prevents a parser/authentication regression
+    // from being hidden by coverage of only the older archive operations.
+    expectCode(() => inspectRotation(input, [0, false, false, false,
+      false, false, false, 0]), code);
+    expectCode(() => cutoverRotation(input, [0, false, false, false,
+      false, false, false, 0]), code);
     check(Buffer.from(input).equals(Buffer.from(before)));
     archiveRejections++;
+    rotationRejections++;
   }
 
   for (const end of [0, 7, 8, 11, 12, 15, 16, 19, archive.length - 1]) {
@@ -400,12 +616,14 @@ try {
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: true,
     checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
+    rotationChecklistsVerified, rotationCutoversVerified, rotationRejections,
   }));
 } catch {
   // Do not print thrown values, assertion operands, rows, archive bytes or keys.
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: false,
     code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
+    rotationChecklistsVerified, rotationCutoversVerified, rotationRejections,
   }));
   process.exitCode = 1;
 }
