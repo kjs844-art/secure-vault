@@ -2,8 +2,9 @@
 
 Date: 2026-09-16. Branch: `codex/firstvibe-synthetic-rotation-checklist`.
 
-Status: implementation and independent source review completed; final runtime
-verification pending. This is not release approval. `REAL_SECRET_GATE=CLOSED`.
+Status: implementation, independent source review and the complete Rust verifier
+passed on GitHub at `a68c3a1`. Full CI revalidation after the separate Node type
+dependency fix is pending. This is not release approval. `REAL_SECRET_GATE=CLOSED`.
 
 ## Scope
 
@@ -55,14 +56,34 @@ flowchart LR
 | `pwsh -NoProfile -NonInteractive -File scripts/check-repository-secrets.ps1 -Root .` | exit 0, `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED` |
 | `cargo test --locked --offline -p vault-local-core -- --test-threads=1` | Compiled; executable never started: Windows Application Control error 4551, also outside sandbox |
 | Combined core/SQLite Clippy | SQLite/blake3 dependency build executables blocked by error 4551; no full-pass claim |
-| SQLite new integration test | Source reviewed; final compilation/runtime not yet verified |
+| SQLite new integration test | Passed on GitHub at `a68c3a1`; see the subsequent remote evidence below |
 | Independent review | Original Important test-oracle issue fixed; rereview reports no remaining Critical/Important source findings |
 
-The earlier 10-test focused pass preceded the independent-oracle and additional
-tests in this checkpoint. It is not evidence that the final version passed.
-No Windows protection was changed. The existing GitHub Windows workflow is the
-next runtime verification environment. A pushed checkpoint remains pending until
-its exact commit has completed the required checks.
+The earlier 10-test local focused pass preceded the independent-oracle and
+additional tests in this checkpoint. It is not evidence that the final version
+passed. No Windows protection was changed.
+
+### Subsequent remote evidence
+
+[Run `35102816889`](https://github.com/kjs844-art/secure-vault/actions/runs/35102816889)
+tested exact commit `a68c3a18ec6ef5ab45ddb4d17b58d6cda1c27f6c` on GitHub Windows.
+The complete workspace verifier emitted `LOCAL_CHECKS_PASSED`, with exit 0 for
+repository scan, format, Clippy, default tests, ordinary VFS tests and doctests.
+All 11 `rotation::tests` cases and
+`rotation_cutover_siblings_preserve_exact_history_and_reauthenticate_after_restart`
+passed. This is execution evidence for the final core and SQLite test code, not
+just a source review or compile-only check. Explicitly ignored gates remain ignored.
+
+Both release WASM builds and actual runtime smoke tests passed (22 default and
+973 synthetic-demo checks). Web unit tests passed: 25 files, 932 tests.
+The overall job nevertheless failed at web typecheck because `@types/node` was
+absent from the project; web build and final scan were not run. The same issue
+affected the pre-rotation branch and was not a rotation test failure.
+
+The separately reviewed fix pins Node 24 types and their lockfile dependency;
+it does not change any Rust source. Local typecheck, 932 web tests, build and
+post-build Secret scan passed for that fix. The complete follow-up CI result must
+still be checked separately. See the [CI record](2026-09-16-remote-ci-security-gate.md).
 
 ## Known limits and follow-up
 
