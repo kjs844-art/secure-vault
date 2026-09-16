@@ -43,6 +43,8 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 - 의미 있는 평문 metadata를 두지 않는 SQLite schema와 bounded read-only preflight
 - immutable revision, expected-head CAS, stale candidate의 암호문 충돌 보존
 - 올바른 합성 비밀번호 인증 후 같은 process lock을 유지하는 writable 승격과 current-head 복원
+- 완료된 합성 회전 event를 해당 immutable revision에 남기고, 실제 post-cutover 세대·세대별 timestamp·모든 non-removed 연결 상태까지 다시 확인한 successor에서만 새 payload의 event를 비우는 lifecycle. metadata만 조작한 `0001`, 비정상 optional 연결과 legacy incomplete event는 읽을 수 있지만 mutation과 RNG 전에 거부합니다. 닫힌 합성 값 `0001→0002→0003`의 반복 회전과 중간 일반·연결 편집을 지원합니다.
+- caller가 제공한 head와 ancestor를 최대 512 revisions/8 MiB로 제한하고 모두 인증·연결한 뒤, root와 각 revision의 `0001→0002→0003` 연속성까지 확인하여 회전 event의 opaque revision/parent, bounded counts, completion/revocation-source enum만 최신순으로 반환하는 합성 history projection. Secret·메모·임의 표시 문자열은 반환하지 않습니다.
 - wrong password 무쓰기, future version 원문 보존, current 손상의 store-wide 읽기 전용 보존
 - DB/WAL 계열 합성 marker scan, process-crash transaction 원자성, secret-bearing API compile-fail 경계
 
@@ -50,11 +52,13 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 
 웹 데모에는 합성 목록·로컬 검색·자동 잠금·합성 백업/복원 화면이 있습니다. [현재 통합 증거](verification/2026-09-15-backup-session-integration.md)는 실제 브라우저 복원을 포함하지만, 디스크 다운로드/네이티브 파일 선택 왕복은 미검증입니다. 이 데모는 아래의 제품 MVP 완료를 의미하지 않습니다.
 
-후속 [원자 백업 snapshot](verification/2026-09-17-atomic-backup-snapshot.md)은 같은 transaction에서 archive와 conflicts를 읽고, 인증 후 다시 읽은 바이트가 같을 때만 시점 백업을 반환합니다. 로컬 단위 검사는 통과했으며 이번 변경의 전체 WASM/웹 빌드는 원격 검증 대기입니다. outbox 포함 백업이나 다운로드 이후 최신성·전체 rollback 탐지를 보장하지 않습니다.
+후속 [원자 백업 snapshot](verification/2026-09-17-atomic-backup-snapshot.md)은 같은 transaction에서 archive와 conflicts를 읽고, 인증 후 다시 읽은 바이트가 같을 때만 시점 백업을 반환합니다. 로컬 단위 검사와 원격 run `35112935398`의 Secret/Rust/WASM/web gate가 통과했습니다. outbox 포함 백업이나 다운로드 이후 최신성·전체 rollback 탐지를 보장하지 않습니다.
+
+후속 [합성 회전 lifecycle/history](verification/2026-09-17-synthetic-rotation-lifecycle-history.md)는 과거 회전 event를 immutable ciphertext에 유지하면서 완료된 event 뒤의 일반·연결 편집과 두 번째 합성 회전을 허용하고, 제공된 체인 전체와 세대 연속성을 인증해 공개 가능한 event metadata만 조회합니다. 관련 코어 38 tests, SQLite 집중 1 test, format/Clippy/Secret scan과 최종 독립 리뷰(Critical 0/Important 0)는 통과했으며 현재 SHA의 전체 원격 CI만 남았습니다. 이 API는 supplied head가 실제 최신 head라는 증명, rollback/누락 anchor, provider 갱신·폐기 확인, durable intermediate checklist 또는 웹·WASM·Android 흐름이 아닙니다.
 
 [합성 등록 저장 경로 증거](verification/2026-09-15-synthetic-registration-storage.md)는 v1/v2 백업과 실제 WASM/Node 세션 재열기를 포함합니다. 후속 [등록 화면·issuer 검색 증거](verification/2026-09-15-synthetic-registration-ui.md)는 선택형 폼, 실제 Comet의 0/1/3 연결 등록과 순서 보존, 검색·잠금·재열기·새로고침·탭 전환 검사를 포함합니다. 임의 자격 증명 등록이나 실제 모바일 검증은 아닙니다.
 
-실제 자격 증명 입력·가져오기, 제품용 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
+실제 자격 증명 입력·가져오기, 제품용 검색, durable intermediate 상태·사용자 재개·optional 연결 확인·provider 확인을 포함한 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS와 합성 history는 정상 API의 stale writer 및 caller가 제공한 체인을 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical latest head rollback·완전한 row 누락을 탐지하지 못합니다.
 
 실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 

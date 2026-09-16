@@ -333,6 +333,10 @@ fn create_synthetic_edited_successor_with_revision_fill(
     };
 
     let expected_revision_id = metadata.revision_id;
+    // A completed cutover event remains in its immutable predecessor. Reject
+    // incomplete events before any edit or revision RNG can run. Apply this to
+    // every successor, including the generic/no-op path.
+    crate::rotation_lifecycle::prepare_rotation_successor_v1(&mut item)?;
     edit(&mut item, expected_revision_id)?;
     // The persistence boundary, not an edit closure, is authoritative for the
     // immutable revision chain linkage.

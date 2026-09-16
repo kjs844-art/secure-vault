@@ -90,7 +90,7 @@ fn required_cutover_replaces_only_the_closed_secret_and_binds_the_revision_chain
     assert!(item.external_revocation_attestation == ExternalRevocationAttestationV1::None);
     assert!(item.revoked_at.is_none());
     assert_eq!(item.secret_fields.len(), 1);
-    assert!(item.secret_fields[0].value.expose() == ROTATED_SYNTHETIC_API_KEY);
+    assert!(item.secret_fields[0].value.expose() == b"DEMO_VALUE_ONLY_ROTATED_API_KEY_0002");
     assert_eq!(item.connections.len(), 1);
     assert!(item.connections[0].status == ConnectionStatusV1::Verified);
     assert!(item.connections[0].verification_source == VerificationSourceV1::User);
@@ -247,7 +247,7 @@ fn selections_reject_duplicates_overlap_unknown_absent_and_removed_fixtures() {
 }
 
 #[test]
-fn wrong_session_tamper_future_and_completed_rotation_fail_before_revision_entropy() {
+fn wrong_session_tamper_and_future_rotation_fail_before_revision_entropy() {
     let session = session();
     let selection = SyntheticRotationCutoverSelectionV1::from_fixture_ids(
         &[],
@@ -267,15 +267,10 @@ fn wrong_session_tamper_future_and_completed_rotation_fail_before_revision_entro
             .unwrap();
     *tampered.envelope.last_mut().unwrap() ^= 1;
     let future = crate::record::seal_synthetic_future_inner_v2(&session).unwrap();
-    let completed = record_from_successor(
-        &create_synthetic_rotation_cutover_successor_v1(&session, &original, &selection).unwrap(),
-    );
-
     let cases = [
         (&other.session, &original),
         (&session, &tampered),
         (&session, &future),
-        (&session, &completed),
     ];
     for (candidate_session, record) in cases {
         let before = record.envelope.clone();
@@ -515,13 +510,13 @@ fn mixed_required_optional_and_removed_connections_preserve_unrelated_populated_
 }
 
 #[test]
-fn completed_cutover_refuses_further_edits_until_history_semantics_are_supported() {
+fn completed_cutover_allows_successors_without_rewriting_its_historical_event() {
     let session = session();
     let predecessor =
-        seal_synthetic_fixture_v1(&session, SyntheticCredentialFixtureId::UnconnectedApiKey)
+        seal_synthetic_fixture_v1(&session, SyntheticCredentialFixtureId::SingleMcpConnection)
             .unwrap();
     let selection = SyntheticRotationCutoverSelectionV1::from_fixture_ids(
-        &[],
+        &[0],
         &[],
         SyntheticVerificationEvidenceV1::UserConfirmed,
     )
@@ -531,14 +526,28 @@ fn completed_cutover_refuses_further_edits_until_history_semantics_are_supported
     let completed = record_from_successor(&successor);
     let before = completed.envelope.clone();
     let connections = crate::SyntheticConnectionSelectionV1::from_ids(&[0]).unwrap();
-    assert!(
+    let generic = crate::create_synthetic_successor_v1(&session, &completed).unwrap();
+    let edited =
         crate::create_synthetic_connection_successor_v1(&session, &completed, &connections)
-            .is_err()
-    );
-    assert!(crate::create_synthetic_successor_v1(&session, &completed).is_err());
-    assert!(
-        create_synthetic_rotation_cutover_successor_v1(&session, &completed, &selection).is_err()
-    );
+            .unwrap();
+    let mut expected = decode(&session, &completed);
+    expected.parent_revision_id = Some(completed.locator.revision_id);
+    expected.rotation_state = None;
+    for candidate in [&generic, &edited] {
+        assert!(
+            candidate.persistence_projection_v1().expected_revision_id()
+                == Some(completed.locator.revision_id)
+        );
+        assert_item_preserved(
+            &expected,
+            &decode(&session, &record_from_successor(candidate)),
+        );
+    }
+    let another =
+        create_synthetic_rotation_cutover_successor_v1(&session, &completed, &selection).unwrap();
+    let again = decode(&session, &record_from_successor(&another));
+    assert!(again.secret_fields[0].value.expose() == b"DEMO_VALUE_ONLY_ROTATED_API_KEY_0003");
+    assert!(again.rotation_state.unwrap().supersedes_revision_id == completed.locator.revision_id);
     assert!(completed.envelope == before);
 }
 
@@ -566,3 +575,6 @@ fn cutover_uses_authenticated_envelope_revision_instead_of_mutated_locator() {
     assert!(actual.parent_revision_id == Some(authoritative_revision));
     assert!(actual.rotation_state.unwrap().supersedes_revision_id == authoritative_revision);
 }
+
+#[path = "rotation_lifecycle_tests.rs"]
+mod lifecycle;

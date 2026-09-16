@@ -14,6 +14,8 @@ mod persistence;
 mod record;
 mod registration;
 mod rotation;
+mod rotation_history;
+mod rotation_lifecycle;
 mod secret;
 mod synthetic;
 
@@ -43,6 +45,11 @@ pub use rotation::{
     SyntheticRotationCutoverSelectionV1, SyntheticRotationReadinessV1,
     SyntheticVerificationEvidenceV1, create_synthetic_rotation_cutover_successor_v1,
     inspect_synthetic_rotation_readiness_v1,
+};
+pub use rotation_history::{
+    SyntheticRotationHistoryEventV1, SyntheticRotationHistoryV1,
+    SyntheticRotationRecordedCompletionV1, SyntheticRotationRevocationSourceV1,
+    inspect_synthetic_rotation_history_v1,
 };
 pub use synthetic::SyntheticCredentialFixtureId;
 

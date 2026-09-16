@@ -68,10 +68,19 @@ pub(crate) struct ConnectionProfile {
 
 impl ConnectionProfile {
     pub(crate) fn from_item(item: &CredentialItemV1) -> Result<Self, LocalVaultError> {
-        if item.credential_type != CredentialTypeV1::ApiKey
-            || item.rotation_state.is_some()
-            || item.status == CredentialStatusV1::Rotating
-        {
+        if item.status == CredentialStatusV1::Rotating {
+            return Err(LocalVaultError::InvalidItem);
+        }
+        let profile = Self::from_item_structure(item)?;
+        crate::rotation_lifecycle::validate_completed_rotation_event_v1(item)?;
+        Ok(profile)
+    }
+
+    /// Validates the closed synthetic profile shape without consulting rotation
+    /// lifecycle state. Rotation completion validation uses this entry point to
+    /// identify the primary field without recursively calling itself.
+    pub(crate) fn from_item_structure(item: &CredentialItemV1) -> Result<Self, LocalVaultError> {
+        if item.credential_type != CredentialTypeV1::ApiKey {
             return Err(LocalVaultError::InvalidItem);
         }
         let (registration, catalog) = match item.provider_template_id.as_deref() {
@@ -111,6 +120,21 @@ impl ConnectionProfile {
             catalog,
             field_id: field.field_id,
         })
+    }
+
+    pub(crate) fn primary_secret<'a>(
+        &self,
+        item: &'a CredentialItemV1,
+    ) -> Result<&'a [u8], LocalVaultError> {
+        let mut fields = item
+            .secret_fields
+            .iter()
+            .filter(|field| field.field_id == self.field_id);
+        let field = fields.next().ok_or(LocalVaultError::InvalidItem)?;
+        if fields.next().is_some() {
+            return Err(LocalVaultError::InvalidItem);
+        }
+        Ok(field.value.expose())
     }
 
     fn field_label(&self) -> &'static str {

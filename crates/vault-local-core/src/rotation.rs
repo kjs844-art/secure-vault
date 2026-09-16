@@ -2,8 +2,8 @@
 //!
 //! This boundary accepts fixture IDs and build-included demonstration values
 //! only. It performs no provider call and does not prove real-world revocation.
-//! This is a one-shot core fixture: completed rotation history currently blocks
-//! further connection edits and rotation. It is not wired to the web UI.
+//! Completed cutover events remain in immutable historical revisions. Closed
+//! fixture generations permit two rotations; this is not wired to the web UI.
 
 use vault_crypto::VaultSession;
 
@@ -26,7 +26,26 @@ use crate::secret::SecretValueV1;
 
 const CURRENT_SYNTHETIC_API_KEY: &[u8] = b"DEMO_VALUE_ONLY_API_KEY_0001";
 const ROTATED_SYNTHETIC_API_KEY: &[u8] = b"DEMO_VALUE_ONLY_ROTATED_API_KEY_0002";
+const SECOND_ROTATED_SYNTHETIC_API_KEY: &[u8] = b"DEMO_VALUE_ONLY_ROTATED_API_KEY_0003";
 const ROTATION_TIMESTAMP: &str = "2026-09-16T00:00:00Z";
+const SECOND_ROTATION_TIMESTAMP: &str = "2026-09-17T00:00:00Z";
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum SyntheticApiKeyGeneration {
+    Initial0001,
+    Rotated0002,
+    Rotated0003,
+}
+
+impl SyntheticApiKeyGeneration {
+    pub(crate) const fn next(self) -> Option<Self> {
+        match self {
+            Self::Initial0001 => Some(Self::Rotated0002),
+            Self::Rotated0002 => Some(Self::Rotated0003),
+            Self::Rotated0003 => None,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 /// Simulated fixture evidence only, not an authorization or provider proof.
@@ -122,7 +141,8 @@ pub fn inspect_synthetic_rotation_readiness_v1(
 
 /// Creates a closed encrypted cutover candidate. The caller must still commit
 /// its persistence projection atomically before presenting success.
-/// Completed candidates cannot yet be edited or rotated again.
+/// The two build-included replacements are never cycled back to an old value.
+/// Terminal fixture generation and incomplete cutover events fail closed.
 pub fn create_synthetic_rotation_cutover_successor_v1(
     session: &VaultSession,
     predecessor: &SealedCredentialRecordV0Alpha1,
@@ -140,6 +160,8 @@ struct RotationInspection {
     required_connection_ids: Vec<EntityIdV1>,
     remaining_required: u32,
     remaining_optional: u32,
+    next_secret: &'static [u8],
+    timestamp: &'static str,
 }
 
 fn inspect_item(
@@ -148,14 +170,13 @@ fn inspect_item(
 ) -> Result<RotationInspection, LocalVaultError> {
     let profile = ConnectionProfile::from_item(item)?;
     let field_id = profile.field_id();
-    let mut matching_fields = item
-        .secret_fields
-        .iter()
-        .filter(|field| field.field_id == field_id);
-    let field = matching_fields.next().ok_or(LocalVaultError::InvalidItem)?;
-    if matching_fields.next().is_some() || field.value.expose() != CURRENT_SYNTHETIC_API_KEY {
-        return Err(LocalVaultError::InvalidItem);
-    }
+    let (next_secret, timestamp) = match classify_synthetic_generation_v1(item)? {
+        SyntheticApiKeyGeneration::Initial0001 => (ROTATED_SYNTHETIC_API_KEY, ROTATION_TIMESTAMP),
+        SyntheticApiKeyGeneration::Rotated0002 => {
+            (SECOND_ROTATED_SYNTHETIC_API_KEY, SECOND_ROTATION_TIMESTAMP)
+        }
+        SyntheticApiKeyGeneration::Rotated0003 => return Err(LocalVaultError::InvalidItem),
+    };
 
     let mut present = 0_u8;
     let mut selectable = 0_u8;
@@ -201,7 +222,34 @@ fn inspect_item(
         required_connection_ids,
         remaining_required,
         remaining_optional,
+        next_secret,
+        timestamp,
     })
+}
+
+pub(crate) fn classify_synthetic_generation_v1(
+    item: &CredentialItemV1,
+) -> Result<SyntheticApiKeyGeneration, LocalVaultError> {
+    let profile = ConnectionProfile::from_item_structure(item)?;
+    match profile.primary_secret(item)? {
+        CURRENT_SYNTHETIC_API_KEY => Ok(SyntheticApiKeyGeneration::Initial0001),
+        ROTATED_SYNTHETIC_API_KEY => Ok(SyntheticApiKeyGeneration::Rotated0002),
+        SECOND_ROTATED_SYNTHETIC_API_KEY => Ok(SyntheticApiKeyGeneration::Rotated0003),
+        _ => Err(LocalVaultError::InvalidItem),
+    }
+}
+
+/// Returns the exact build-included cutover timestamp only for a post-cutover
+/// synthetic generation. Metadata alone can never turn generation 0001 into a
+/// completed rotation event.
+pub(crate) fn completed_synthetic_rotation_timestamp_v1(
+    item: &CredentialItemV1,
+) -> Result<&'static str, LocalVaultError> {
+    match classify_synthetic_generation_v1(item)? {
+        SyntheticApiKeyGeneration::Initial0001 => Err(LocalVaultError::InvalidItem),
+        SyntheticApiKeyGeneration::Rotated0002 => Ok(ROTATION_TIMESTAMP),
+        SyntheticApiKeyGeneration::Rotated0003 => Ok(SECOND_ROTATION_TIMESTAMP),
+    }
 }
 
 fn apply_cutover(
@@ -220,7 +268,7 @@ fn apply_cutover(
         .iter_mut()
         .find(|field| field.field_id == inspection.field_id)
         .ok_or(LocalVaultError::InvalidItem)?;
-    field.value = SecretValueV1::new(ROTATED_SYNTHETIC_API_KEY.to_vec())?;
+    field.value = SecretValueV1::new(inspection.next_secret.to_vec())?;
 
     for connection in &mut item.connections {
         if connection.status != ConnectionStatusV1::Removed {
@@ -237,7 +285,7 @@ fn apply_cutover(
         if let Some(evidence) = selection.evidence_for(fixture) {
             connection.status = ConnectionStatusV1::Verified;
             connection.verification_source = verification_source(evidence);
-            connection.last_verified_at = Some(rotation_timestamp()?);
+            connection.last_verified_at = Some(rotation_timestamp(inspection.timestamp)?);
         }
     }
 
@@ -245,7 +293,7 @@ fn apply_cutover(
     item.external_revocation_status = ExternalRevocationStatusV1::NotRequested;
     item.external_revocation_attestation = ExternalRevocationAttestationV1::None;
     item.revoked_at = None;
-    item.updated_at = rotation_timestamp()?;
+    item.updated_at = rotation_timestamp(inspection.timestamp)?;
 
     let (revocation_status, revocation_attestation) =
         revocation_evidence(selection.superseded_revocation);
@@ -256,7 +304,7 @@ fn apply_cutover(
         completed_connection_ids,
         superseded_external_revocation_status: revocation_status,
         superseded_external_revocation_attestation: revocation_attestation,
-        superseded_revoked_at: Some(rotation_timestamp()?),
+        superseded_revoked_at: Some(rotation_timestamp(inspection.timestamp)?),
     });
     Ok(())
 }
@@ -302,8 +350,8 @@ const fn revocation_evidence(
     }
 }
 
-fn rotation_timestamp() -> Result<UtcTimestampV1, LocalVaultError> {
-    UtcTimestampV1::new(ROTATION_TIMESTAMP.to_owned())
+fn rotation_timestamp(timestamp: &str) -> Result<UtcTimestampV1, LocalVaultError> {
+    UtcTimestampV1::new(timestamp.to_owned())
 }
 
 #[cfg(test)]
