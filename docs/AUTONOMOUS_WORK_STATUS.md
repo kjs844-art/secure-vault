@@ -18,7 +18,7 @@
 | 암호문 conflict outbox | DB v1/store 유지, 최대 8개 무퇴거 후보, CAS loser 보존, 전체 인증 뒤 위치 기반 검토, exact-byte 2단계 폐기, 미해결 후보 backup 차단 | 자동 병합·승격 정책과 outbox 포함 백업 형식, 실제 브라우저 멀티탭·모바일 검증 |
 | 웹 연결 편집 UI | 검토 UI 포함 통합 웹 932 tests, typecheck/build exit 0; 독립 보안 리뷰 Critical/Important 0 | 저장/취소/포커스/잠금·멀티탭 충돌의 실제 브라우저 검증과 모바일 검증 |
 | 공유 메모리 입력 경계 | Store·Session·Worker client/worker·Backup에서 SharedArrayBuffer를 DB/Worker/WASM 작업 전에 고정 오류로 거부 | cross-origin-isolated 실제 브라우저의 동시 변경 통합 검사는 미실행 |
-| 원격 CI 보안 gate | 최소 권한 Windows workflow와 구조 회귀 9 tests 작성; 외부 검색 실행기 없는 내장 Secret scan을 첫 저장소 명령과 웹 build 뒤에 배치. 기존 `5d439eb` 원격 run `35046207820`은 첫 Secret 단계에서 fail-closed 종료 | built-in 후속판은 로컬 PS7·5.1 각 99/99와 정책 9/9 통과, 이 기록 시점 원격 재실행 전. branch protection은 별도 |
+| 원격 CI 보안 gate | 내장 Secret scan, Rust 설치 명령 수정과 정책 10 tests 반영. `3a17d91`의 원격 run `35102459554`에서 전체 Rust·WASM(22/973 checks)·웹 932 tests 통과 후 누락된 Node 타입에서 실패. 타입 devDependency/lock 수정 후 로컬 typecheck·932 tests·build·최종 scan exit 0 | 타입 의존성 수정판의 전체 원격 재검증. branch protection과 ignored 보안 gate 승인은 별도 |
 | SQLite 읽기 전용 preflight | 8 DB_CONFIG를 첫 SQL 전에 적용하고 query_only와 공통 hardening을 읽기 전용 연결에도 강제; 패키지 91 passed/1 ignored, 독립 재리뷰 Critical/Important 0 | 악성 schema 실제 통합 fixture와 WR 대칭 profile assertion은 residual |
 | 네이티브 전체 QA | `5d439eb` 기능 묶음 기준 Workspace Secret scan·format·Clippy·tests·ordinary VFS·doctests exit 0. 후속 scanner-only 트리는 집중 회귀와 실제 저장소 scan 통과 | 후속판 전체 Workspace 재실행과 명시적으로 ignored인 Phase 0A 보안 gate·권위 승인은 별도 필요 |
 

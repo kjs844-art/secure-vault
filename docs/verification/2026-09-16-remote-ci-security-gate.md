@@ -55,12 +55,17 @@ rustup toolchain install 1.95.0 --profile minimal --component clippy rustfmt --t
 
 수정판 로컬 검증은 Pester 3.4.0과 CI와 동일한 Pester 5.7.1에서 각각 workflow 정책 10/10, PowerShell AST 문법 검사와 `git diff --check` exit 0을 확인했다. Pester 5.7.1은 PSGallery에서 프로젝트의 무시되는 `target/verification-modules`에만 저장해 사용했다. 실제 저장소 Secret scan도 `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED`, exit 0이었다. 이 결과는 수정판 전체 원격 실행 성공을 대신하지 않는다.
 
-아래 항목은 계속 미검증이다.
+후속 commit `3a17d91`의 [run `35102459554`](https://github.com/kjs844-art/secure-vault/actions/runs/35102459554)에서는 Rust 설치 오류가 재발하지 않았다. Secret scanner 회귀와 workflow 정책 10개, 전체 Rust verifier의 format/Clippy/default tests/ordinary VFS tests/doctests가 모두 exit 0이었다. 기본/합성 WASM의 Release 생성과 실제 runtime 검사도 각각 22/973 checks 통과했고 웹 25파일 932 tests도 통과했다. 그러나 웹 typecheck에서 테스트 코드의 `node:buffer`와 `node:fs/promises` 타입을 찾지 못해 TS2591로 종료되어 웹 build와 마지막 Secret scan은 실행되지 않았다. 이 run 전체가 성공한 것은 아니다.
+
+원인은 `apps/web/package.json` 및 lockfile의 `@types/node` 누락이었다. 로컬 `tsc --listFilesOnly`에서는 상위 사용자 폴더의 Node 타입을 읽어 누락이 가려졌지만, 깨끗한 runner에는 해당 타입이 없었다. 수정판은 Node 24 계열 `@types/node`를 정확한 `24.8.0` devDependency로 선언하고 전이 타입 패키지 `undici-types`도 lockfile의 `7.14.0`과 integrity로 고정한다. 런타임 코드, `tsconfig`의 전역 타입 범위, lifecycle script 정책은 변경하지 않는다.
+
+수정 후 `npm ci --ignore-scripts --no-audit --no-fund`, `npm run typecheck`, `npm test`(25파일 932/932), `npm run build`가 로컬에서 exit 0이었다. 타입 목록의 Node 선언 66개가 모두 해당 프로젝트 `apps/web/node_modules/@types/node` 아래임을 검증했고 빌드 후 Secret scan 및 `git diff --check`도 exit 0이었다. package/lock 정합성에 대한 독립 검토에서도 추가 문제는 발견되지 않았다. 이 의존성 수정판의 전체 원격 실행 결과는 다음 run에서 확인해야 한다.
+
+아래 항목은 계속 미검증이거나 별도 승인 대상이다.
 
 - GitHub 호스팅 `windows-latest` 이미지에서 전체 작업의 실제 성공 여부
-- 러너가 Rust 1.95.0 및 Node.js 배포 서버에 접근해 설치를 완료할 수 있는지(PowerShell Gallery의 Pester 5.7.1 준비는 위 run에서 통과)
-- `npm ci --ignore-scripts` 뒤의 실제 GitHub 러너 웹 빌드 호환성
-- CI에서 source-built `wasm-bindgen-cli` 0.2.128과 Rust 1.95.0 조합의 실제 소요 시간 및 호환성
+- Node 타입 의존성 수정 후 `npm ci --ignore-scripts` 뒤의 실제 GitHub 러너 웹 빌드와 최종 Secret scan
+- 명시적으로 ignored인 별도 보안/feasibility gate 및 실제 Secret 사용 승인(일반 CI 통과로 대체하지 않는다)
 - 저장소 설정에서 이 워크플로를 필수 브랜치 보호 검사로 지정하는 절차
 
 후속판 push는 사용자가 승인했지만, 브랜치 보호 활성화는 GitHub 저장소 설정을 바꾸는 별도 작업이므로 별도 승인 뒤 진행해야 한다.
