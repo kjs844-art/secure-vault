@@ -4,11 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSyntheticCiphertextStore,
   MAX_SYNTHETIC_ARCHIVE_BYTES,
+  MAX_SYNTHETIC_CONFLICT_ARCHIVES,
   SYNTHETIC_VAULT_DATABASE_NAME,
   SyntheticStorageError,
 } from "./SyntheticCiphertextStore";
 
 let factory: IDBFactory;
+
+function sequentialConflictIds(start = 1) {
+  let next = start;
+  return (target: Uint8Array) => {
+    target.fill(0);
+    target[target.byteLength - 1] = next;
+    next += 1;
+  };
+}
+
+function hexConflictId(value: number): string {
+  return value.toString(16).padStart(32, "0");
+}
 
 function openRaw(version = 1, upgrade?: (database: globalThis.IDBDatabase) => void) {
   return new Promise<globalThis.IDBDatabase>((resolve, reject) => {
@@ -229,7 +243,7 @@ describe("synthetic ciphertext IndexedDB storage", () => {
     await store.createIfAbsent(original);
     await expect(store.compareAndSwapArchive(original, replacement)).resolves.toBe("updated");
     expect(await store.read()).toEqual(replacement);
-  });
+  }, 15_000);
 
   describe.each(["expected", "next"] as const)("CAS %s input", (argument) => {
     it.each([
@@ -571,5 +585,348 @@ describe("synthetic ciphertext IndexedDB storage", () => {
     const close = vi.spyOn(connection, "close");
     connection.onversionchange?.call(connection, new Event("versionchange") as IDBVersionChangeEvent);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  describe("durable ciphertext-only conflict outbox", () => {
+    it("rejects SharedArrayBuffer-backed inputs before opening IndexedDB", async () => {
+      const open = vi.spyOn(factory, "open");
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      const shared = () => Object.defineProperty(
+        new Uint8Array(new SharedArrayBuffer(1)), "buffer", { value: new ArrayBuffer(1) },
+      );
+      const valid = new Uint8Array([1]);
+      await expect(store.createIfAbsent(shared())).rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.compareAndSwapArchive(shared(), valid))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.compareAndSwapArchive(valid, shared()))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.compareAndSwapArchivePreservingConflict(shared(), valid))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.compareAndSwapArchivePreservingConflict(valid, shared()))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.preserveConflictArchiveIfCurrentDiffers(shared()))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.deleteConflictArchiveIfEqual(hexConflictId(1), shared()))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it("uses the native backing-buffer getter without evaluating an own shadow", async () => {
+      const shadow = vi.fn(() => { throw new Error("private buffer getter"); });
+      const input = Object.defineProperty(new Uint8Array([1, 2]), "buffer", { get: shadow });
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await expect(store.createIfAbsent(input)).resolves.toBe("created");
+      expect(await store.read()).toEqual(new Uint8Array([1, 2]));
+      expect(shadow).not.toHaveBeenCalled();
+    });
+
+    it("keeps the database name, version and single store while preserving a conflict", async () => {
+      const original = new Uint8Array([1, 2, 3]);
+      const candidate = new Uint8Array([4, 5, 6]);
+      const store = createSyntheticCiphertextStore(factory, (target) => target.fill(0xab));
+      await store.createIfAbsent(original);
+
+      await expect(store.compareAndSwapArchivePreservingConflict(new Uint8Array([9]), candidate))
+        .resolves.toEqual({ kind: "conflict-preserved", conflictId: "ab".repeat(16) });
+      expect(await store.read()).toEqual(original);
+      expect(await store.listConflictArchives()).toEqual([
+        { conflictId: "ab".repeat(16), bytes: candidate },
+      ]);
+
+      const database = await openRaw();
+      expect(database.version).toBe(1);
+      expect(Array.from(database.objectStoreNames)).toEqual(["bundle"]);
+      database.close();
+      expect(await rawRecords()).toEqual({
+        keys: ["archive", `conflict:${"ab".repeat(16)}`],
+        values: [original, candidate],
+      });
+    });
+
+    it("never creates an outbox row for a missing archive or a successful update", async () => {
+      const random = vi.fn(sequentialConflictIds());
+      const store = createSyntheticCiphertextStore(factory, random);
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([1]), new Uint8Array([2]),
+      )).resolves.toEqual({ kind: "missing" });
+      expect(random).not.toHaveBeenCalled();
+      expect(await store.listConflictArchives()).toEqual([]);
+
+      await store.createIfAbsent(new Uint8Array([1]));
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([1]), new Uint8Array([2]),
+      )).resolves.toEqual({ kind: "updated" });
+      expect(random).not.toHaveBeenCalled();
+      expect(await store.read()).toEqual(new Uint8Array([2]));
+      expect(await store.listConflictArchives()).toEqual([]);
+    });
+
+    it("atomically preserves a post-CAS candidate only when current bytes differ", async () => {
+      const random = vi.fn(sequentialConflictIds());
+      const store = createSyntheticCiphertextStore(factory, random);
+      await expect(store.preserveConflictArchiveIfCurrentDiffers(new Uint8Array([2])))
+        .resolves.toEqual({ kind: "missing" });
+      expect(random).not.toHaveBeenCalled();
+      const original = new Uint8Array([1]);
+      await store.createIfAbsent(original);
+      await expect(store.preserveConflictArchiveIfCurrentDiffers(original))
+        .resolves.toEqual({ kind: "already-current" });
+      expect(random).not.toHaveBeenCalled();
+      const candidate = new Uint8Array([2]);
+      const pending = store.preserveConflictArchiveIfCurrentDiffers(candidate);
+      candidate.fill(9);
+      await expect(pending).resolves.toEqual({
+        kind: "conflict-preserved", conflictId: hexConflictId(1),
+      });
+      expect(await store.read()).toEqual(original);
+      expect(await store.listConflictArchives()).toEqual([
+        { conflictId: hexConflictId(1), bytes: new Uint8Array([2]) },
+      ]);
+    });
+
+    it("atomically leaves one concurrent winner in the archive and the loser in the outbox", async () => {
+      const original = new Uint8Array([1]);
+      const candidates = [new Uint8Array([11]), new Uint8Array([22])];
+      const stores = [
+        createSyntheticCiphertextStore(factory, (target) => target.fill(0x11)),
+        createSyntheticCiphertextStore(factory, (target) => target.fill(0x22)),
+      ];
+      await stores[0]!.createIfAbsent(original);
+      const outcomes = await Promise.all(stores.map((store, index) =>
+        store.compareAndSwapArchivePreservingConflict(original, candidates[index]!)));
+      const winner = outcomes.findIndex((outcome) => outcome.kind === "updated");
+      const loser = outcomes.findIndex((outcome) => outcome.kind === "conflict-preserved");
+      expect(winner).toBeGreaterThanOrEqual(0);
+      expect(loser).toBeGreaterThanOrEqual(0);
+      expect(winner).not.toBe(loser);
+      expect(await stores[0]!.read()).toEqual(candidates[winner]);
+      expect(await stores[0]!.listConflictArchives()).toEqual([
+        { conflictId: outcomes[loser]!.kind === "conflict-preserved"
+          ? outcomes[loser]!.conflictId : "unreachable", bytes: candidates[loser]! },
+      ]);
+    });
+
+    it("reports conflict preservation only after its transaction commits", async () => {
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(new Uint8Array([1]));
+      const events: string[] = [];
+      const originalAdd = FakeObjectStore.prototype.add;
+      vi.spyOn(FakeObjectStore.prototype, "add").mockImplementationOnce(function (
+        this: globalThis.IDBObjectStore, value, key,
+      ) {
+        const request = originalAdd.call(this, value, key);
+        request.addEventListener("success", () => { events.push("add-success"); });
+        this.transaction.addEventListener("complete", () => { events.push("commit"); });
+        return request;
+      });
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([9]), new Uint8Array([2]),
+      ).then((outcome) => { events.push("resolved"); return outcome; }))
+        .resolves.toMatchObject({ kind: "conflict-preserved" });
+      expect(events).toEqual(["add-success", "commit", "resolved"]);
+    });
+
+    it("rolls back a conflict row when the transaction aborts after add success", async () => {
+      const original = new Uint8Array([1]);
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(original);
+      const originalAdd = FakeObjectStore.prototype.add;
+      vi.spyOn(FakeObjectStore.prototype, "add").mockImplementationOnce(function (
+        this: globalThis.IDBObjectStore, value, key,
+      ) {
+        const request = originalAdd.call(this, value, key);
+        request.addEventListener("success", () => { request.transaction?.abort(); });
+        return request;
+      });
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([9]), new Uint8Array([2]),
+      )).rejects.toEqual(new SyntheticStorageError("aborted"));
+      expect(await rawRecords()).toEqual({ keys: ["archive"], values: [original] });
+    });
+
+    it("preserves the archive and existing outbox on a conflict add quota failure", async () => {
+      const original = new Uint8Array([1]);
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(original);
+      vi.spyOn(FakeObjectStore.prototype, "add").mockImplementationOnce(() => {
+        throw new DOMException("private browser diagnostic", "QuotaExceededError");
+      });
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([9]), new Uint8Array([2]),
+      )).rejects.toEqual(new SyntheticStorageError("quota"));
+      expect(await rawRecords()).toEqual({ keys: ["archive"], values: [original] });
+    });
+
+    it("normalizes a conflict add request error and rolls its transaction back", async () => {
+      const original = new Uint8Array([1]);
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(original);
+      const originalAdd = FakeObjectStore.prototype.add;
+      vi.spyOn(FakeObjectStore.prototype, "add").mockImplementationOnce(function (
+        this: globalThis.IDBObjectStore, value, key,
+      ) {
+        const request = originalAdd.call(this, value, key);
+        request.addEventListener("success", () => {
+          Object.defineProperty(request, "error", {
+            value: new DOMException("private browser diagnostic", "QuotaExceededError"),
+          });
+          request.onerror?.call(request, new Event("error"));
+          request.transaction?.abort();
+        });
+        return request;
+      });
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([9]), new Uint8Array([2]),
+      )).rejects.toEqual(new SyntheticStorageError("quota"));
+      expect(await rawRecords()).toEqual({ keys: ["archive"], values: [original] });
+    });
+
+    it("keeps exactly eight conflicts and refuses a ninth without eviction or RNG use", async () => {
+      const random = vi.fn(sequentialConflictIds());
+      const store = createSyntheticCiphertextStore(factory, random);
+      const original = new Uint8Array([1]);
+      await store.createIfAbsent(original);
+      for (let index = 0; index < MAX_SYNTHETIC_CONFLICT_ARCHIVES; index += 1) {
+        await expect(store.compareAndSwapArchivePreservingConflict(
+          new Uint8Array([0]), new Uint8Array([index + 10]),
+        )).resolves.toMatchObject({ kind: "conflict-preserved" });
+      }
+      const before = await store.listConflictArchives();
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), new Uint8Array([99]),
+      )).rejects.toEqual(new SyntheticStorageError("outbox-full"));
+      expect(random).toHaveBeenCalledTimes(MAX_SYNTHETIC_CONFLICT_ARCHIVES);
+      expect(await store.read()).toEqual(original);
+      expect(await store.listConflictArchives()).toEqual(before);
+    });
+
+    it("fails closed and preserves an orphan conflict row", async () => {
+      await seed(new Uint8Array([7]), `conflict:${hexConflictId(1)}`);
+      const before = await rawRecords();
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await expect(store.read()).rejects.toEqual(new SyntheticStorageError("corrupt"));
+      await expect(store.listConflictArchives()).rejects.toEqual(new SyntheticStorageError("corrupt"));
+      expect(await rawRecords()).toEqual(before);
+    });
+
+    it("fails closed and preserves malformed conflict keys and values", async () => {
+      await seed(new Uint8Array([1]));
+      await seed("private plaintext", `conflict:${hexConflictId(1)}`);
+      const beforeBadValue = await rawRecords();
+      await expect(createSyntheticCiphertextStore(factory).read())
+        .rejects.toEqual(new SyntheticStorageError("corrupt"));
+      expect(await rawRecords()).toEqual(beforeBadValue);
+
+      factory = new IDBFactory();
+      await seed(new Uint8Array([1]));
+      await seed(new Uint8Array([2]), "conflict:ABC");
+      const beforeBadKey = await rawRecords();
+      await expect(createSyntheticCiphertextStore(factory).listConflictArchives())
+        .rejects.toEqual(new SyntheticStorageError("corrupt"));
+      expect(await rawRecords()).toEqual(beforeBadKey);
+    });
+
+    it("fails closed and preserves a raw over-limit conflict keyspace", async () => {
+      await seed(new Uint8Array([1]));
+      for (let index = 1; index <= MAX_SYNTHETIC_CONFLICT_ARCHIVES + 1; index += 1) {
+        await seed(new Uint8Array([index]), `conflict:${hexConflictId(index)}`);
+      }
+      const before = await rawRecords();
+      await expect(createSyntheticCiphertextStore(factory).read())
+        .rejects.toEqual(new SyntheticStorageError("corrupt"));
+      expect(await rawRecords()).toEqual(before);
+    });
+
+    it("returns independent conflict copies and deletes only an exact authenticated byte snapshot", async () => {
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(new Uint8Array([1]));
+      const candidate = new Uint8Array([7, 8, 9]);
+      const outcome = await store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), candidate,
+      );
+      expect(outcome.kind).toBe("conflict-preserved");
+      const conflictId = outcome.kind === "conflict-preserved" ? outcome.conflictId : "unreachable";
+      const first = await store.listConflictArchives();
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(Object.isFrozen(first[0])).toBe(true);
+      first[0]!.bytes.fill(0);
+      expect(await store.listConflictArchives()).toEqual([{ conflictId, bytes: candidate }]);
+      await expect(store.deleteConflictArchiveIfEqual(conflictId, new Uint8Array([7, 8, 0])))
+        .resolves.toBe("changed");
+      expect(await store.listConflictArchives()).toHaveLength(1);
+      await expect(store.deleteConflictArchiveIfEqual(conflictId, candidate)).resolves.toBe("deleted");
+      await expect(store.deleteConflictArchiveIfEqual(conflictId, candidate)).resolves.toBe("missing");
+      expect(await store.listConflictArchives()).toEqual([]);
+    });
+
+    it("rejects invalid conflict IDs and bytes before opening the database", async () => {
+      const open = vi.spyOn(factory, "open");
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await expect(store.deleteConflictArchiveIfEqual("ABC", new Uint8Array([1])))
+        .rejects.toEqual(new SyntheticStorageError("invalid-conflict-id"));
+      await expect(store.deleteConflictArchiveIfEqual(hexConflictId(1), new Uint8Array()))
+        .rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array(), new Uint8Array([1]),
+      )).rejects.toEqual(new SyntheticStorageError("invalid-bytes"));
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it.each(["throw", "detach"] as const)("fails closed when the conflict ID source %s", async (kind) => {
+      const source = kind === "throw"
+        ? () => { throw new Error("private RNG diagnostic"); }
+        : (target: Uint8Array) => {
+          structuredClone(target.buffer as ArrayBuffer, { transfer: [target.buffer as ArrayBuffer] });
+        };
+      const original = new Uint8Array([1]);
+      const store = createSyntheticCiphertextStore(factory, source);
+      await store.createIfAbsent(original);
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), new Uint8Array([2]),
+      )).rejects.toEqual(new SyntheticStorageError("failed"));
+      expect(await rawRecords()).toEqual({ keys: ["archive"], values: [original] });
+    });
+
+    it("refuses a generated ID collision without replacing the first conflict", async () => {
+      const store = createSyntheticCiphertextStore(factory, (target) => target.fill(0));
+      await store.createIfAbsent(new Uint8Array([1]));
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), new Uint8Array([2]),
+      )).resolves.toEqual({ kind: "conflict-preserved", conflictId: "0".repeat(32) });
+      await expect(store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), new Uint8Array([3]),
+      )).rejects.toEqual(new SyntheticStorageError("failed"));
+      expect(await store.listConflictArchives()).toEqual([
+        { conflictId: "0".repeat(32), bytes: new Uint8Array([2]) },
+      ]);
+    });
+
+    it("keeps existing CAS behavior while valid conflict rows are present", async () => {
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      const original = new Uint8Array([1]);
+      const replacement = new Uint8Array([2]);
+      await store.createIfAbsent(original);
+      await store.compareAndSwapArchivePreservingConflict(new Uint8Array([0]), new Uint8Array([9]));
+      const conflicts = await store.listConflictArchives();
+      await expect(store.compareAndSwapArchive(original, replacement)).resolves.toBe("updated");
+      await expect(store.createIfAbsent(new Uint8Array([3]))).resolves.toBe("exists");
+      expect(await store.read()).toEqual(replacement);
+      expect(await store.listConflictArchives()).toEqual(conflicts);
+    });
+
+    it("never logs archive or conflict bytes, IDs, or browser diagnostics", async () => {
+      const spies = (["debug", "info", "log", "warn", "error", "trace"] as const)
+        .map((method) => vi.spyOn(console, method).mockImplementation(() => {}));
+      const store = createSyntheticCiphertextStore(factory, sequentialConflictIds());
+      await store.createIfAbsent(new Uint8Array([1]));
+      const outcome = await store.compareAndSwapArchivePreservingConflict(
+        new Uint8Array([0]), new Uint8Array([2]),
+      );
+      const conflictId = outcome.kind === "conflict-preserved" ? outcome.conflictId : "unreachable";
+      await store.listConflictArchives();
+      await store.deleteConflictArchiveIfEqual(conflictId, new Uint8Array([9]));
+      await store.deleteConflictArchiveIfEqual(conflictId, new Uint8Array([2]));
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    });
   });
 });

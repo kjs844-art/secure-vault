@@ -57,9 +57,10 @@ view generation and ciphertext, compare current storage, then CAS those exact
 bytes. Changed storage is a conflict, never permission to reinterpret the index.
 
 The head table is not a signed manifest. This transport does not prevent complete
-archive rollback/replacement, establish origin/completeness, or implement the
-native SQLite durable conflict outbox. A CAS loser is unsaved. The internal edit
-API is not yet connected to a user-facing edit form.
+archive rollback/replacement, establish origin/completeness, or itself implement
+a durable conflict outbox. The web host now preserves a CAS loser as a separate
+opaque IndexedDB archive, but WASM does not list, resolve, merge, delete, or sync
+those candidates and the host policy is not the native SQLite conflict model.
 
 ## Build and check on Windows
 

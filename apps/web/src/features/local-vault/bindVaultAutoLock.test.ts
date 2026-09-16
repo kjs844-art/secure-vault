@@ -39,6 +39,10 @@ function fixture() {
   const session = new SyntheticVaultSession({
     read: vi.fn().mockResolvedValue(new Uint8Array([1])),
     createIfAbsent: vi.fn().mockResolvedValue("created"),
+    listConflictArchives: vi.fn().mockResolvedValue([{
+      conflictId: "00000000000000000000000000000001", bytes: new Uint8Array([2]),
+    }]),
+    deleteConflictArchiveIfEqual: vi.fn().mockResolvedValue("deleted"),
   }, worker);
   const environment: VaultAutoLockEnvironment = {
     document: doc, window: win,
@@ -162,5 +166,28 @@ describe("local vault auto-lock", () => {
     expect(f.session.state.phase).toBe("locked");
     expect(vi.mocked(f.worker.cancel).mock.calls.length).toBe(calls);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("cleanup invalidates authenticated conflict review plaintext", async () => {
+    const f = fixture();
+    await f.session.open();
+    vi.mocked(f.worker.open).mockResolvedValueOnce([{
+      reference: 0, itemName: "Ephemeral conflict item", providerName: "Demo provider",
+      issuerAccountIdentifier: "demo-account", issuerOrganizationOrWorkspace: null,
+      issuerProject: "demo-project", issuerEnvironment: "demo", credentialType: "api_key",
+      status: "active", connectionCount: 0, secretFieldCount: 1, mcpConnectionCount: 0,
+      connections: [],
+    }]);
+    await f.session.loadConflictReviews(f.session.viewGeneration);
+    expect(f.session.conflictReviewState.items[0]!.entries[0]!.itemName)
+      .toBe("Ephemeral conflict item");
+    const version = f.session.conflictReviewState.reviewVersion;
+
+    f.dispose();
+
+    expect(f.session.state.phase).toBe("locked");
+    expect(f.session.conflictReviewState).toMatchObject({ phase: "idle", items: [] });
+    expect(f.session.conflictReviewState.reviewVersion).toBeGreaterThan(version);
+    expect(JSON.stringify(f.session.conflictReviewState)).not.toContain("Ephemeral conflict item");
   });
 });

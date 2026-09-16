@@ -22,8 +22,9 @@
 - DB를 닫고 다시 연 뒤 현재 head 관계를 인증·복원하는 재시작 흐름과 wrong-password 무쓰기 검증
 - future schema/wire의 upgrade-required 보존, current 손상의 store-wide 읽기 전용 보존, 저장 파일 합성 marker scan
 - transaction 전·후 process 종료 원자성 및 secret-bearing API compile-fail 경계
+- 합성 Web IndexedDB의 원자적 CAS와 최대 8개 암호문 충돌 후보 보존(outbox). 충돌 후보는 아직 화면에서 조회·해결할 수 없습니다.
 
-다음 기능은 **아직 구현되지 않았습니다**: 실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 앱스토어 출시, plugin/MCP 실행, 지원되는 backup/export와 실제 Secret 지원.
+다음 기능은 **아직 구현되지 않았습니다**: 실제 자격 증명 입력·가져오기와 실제 Secret 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Android UI, 운영용 Web 인증·잠금 해제, 결제, 앱스토어 출시, plugin/MCP 실행, 지원되는 실사용 backup/export와 실제 Secret 지원. React Web에는 합성 데이터 전용 로컬 금고·메모리 검색·등록·연결 편집·백업 연습 화면이 연결되어 있지만, 이를 실사용 비밀번호 관리자로 해석하면 안 됩니다.
 
 실제 자격 증명을 다루려면 rollback/누락 탐지 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트, backup/export 복구 훈련을 모두 완료해야 합니다. 이 게이트들이 끝나기 전에는 실제 비밀번호나 API 키를 이 알파에 입력하면 안 됩니다.
 
@@ -65,23 +66,28 @@ GitHub는 **소스 코드와 설계의 백업 장소**이며 사용자 금고 �
 
 ```powershell
 # Windows VFS 패키지의 일반 검사 (기본 feature + feasibility-probe 일반 테스트)
-powershell -NoProfile -File .\scripts\verify-local.ps1
+pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1
 
 # 전체 Rust workspace 검사와 문서 예제 테스트
-powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace
+pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1 -Scope Workspace
 
-# 검증 스크립트 자체의 실패 전파/옵션/경로 회귀 테스트 (가짜 Cargo 사용)
-powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1
+# 저장소 Secret 패턴 검사기의 탐지·비노출·fail-closed 회귀 테스트
+pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1
+
+# 검증 스크립트 자체의 실패 전파/옵션/경로 회귀 테스트 (가짜 Cargo와 가짜 rg 사용)
+pwsh -NoProfile -NonInteractive -File .\tests\verification\verify-local.Tests.ps1
 
 # 테스트 대역 누락 시 실제 Cargo로 넘어가지 않는지 검사 (PowerShell 7)
 pwsh -NoProfile -File .\tests\verification\verify-fixture-isolation.Tests.ps1
 ```
 
-`Focused`는 포맷 및 Windows VFS 패키지 검사, `Workspace`는 포맷·전체 Clippy·기본 테스트·문서 예제와 VFS feature 일반 테스트를 실행합니다. 빌드/테스트는 `--offline --locked`로 수행하며 첫 실패에서 멈추고 해당 종료 코드를 반환합니다. **명시적으로 무시된 보안 gate는 실행하지 않으며**, 성공해도 Phase 0A 판정과 실제 Secret 입력 금지는 바뀌지 않습니다. 스크립트 자체 테스트는 실제 Rust 검사를 대신하지 않습니다.
+`Focused`와 `Workspace` 모두 Cargo보다 먼저 제한된 저장소 Secret 패턴 검사를 실행합니다. `Focused`는 이어서 포맷 및 Windows VFS 패키지 검사, `Workspace`는 포맷·전체 Clippy·기본 테스트·문서 예제와 VFS feature 일반 테스트를 실행합니다. 빌드/테스트는 `--offline --locked`로 수행하며 첫 실패에서 멈추고 해당 종료 코드를 반환합니다. **명시적으로 무시된 보안 gate는 실행하지 않으며**, 성공해도 Phase 0A 판정과 실제 Secret 입력 금지는 바뀌지 않습니다. 스크립트 자체 테스트는 실제 Rust 검사를 대신하지 않습니다.
 
-작업 폴더가 이동해도 스크립트 위치에서 저장소 루트를 찾습니다. 다른 폴더에서는 스크립트의 전체 경로를 지정하세요. [2026-09-07 검증·작업 기록](docs/verification/2026-09-07-local-verification-maintenance.md)에서 실제 실행 범위와 남은 조건을 확인할 수 있습니다.
+작업 폴더가 이동해도 스크립트 위치에서 저장소 루트를 찾습니다. 다른 폴더에서는 스크립트의 전체 경로를 지정하세요. [2026-09-07 검증·작업 기록](docs/verification/2026-09-07-local-verification-maintenance.md)과 [2026-09-16 Secret gate 통합 기록](docs/verification/2026-09-16-repository-secret-gate-integration.md)에서 실제 실행 범위와 남은 조건을 확인할 수 있습니다.
 
-검사 스크립트의 회귀 테스트는 `fixtures/cargo.cmd`만 사용하며, 파일이 없거나 다른 Cargo로 해석되면 실행 전에 실패합니다. 격리 검사는 소유한 임시 복사본과 실행 여부를 기록하는 대역만 사용하고 원래 Cargo 경로를 상속하지 않습니다. [대역 격리 보강 기록](docs/verification/2026-09-07-fixture-isolation.md)을 참고하세요. 이번 PowerShell 5.1 실행은 호스트 실행 정책에 차단되어 미검증이며, 정책을 변경하거나 우회하지 않았습니다.
+검사 스크립트의 회귀 테스트는 `fixtures/cargo.cmd`와 `fixtures/rg.cmd`만 사용하며, 파일이 없거나 다른 실행 파일로 해석되면 실제 도구를 시작하기 전에 실패합니다. 격리 검사는 소유한 임시 복사본과 실행 여부를 기록하는 대역만 사용하고 원래 Cargo 경로를 상속하지 않습니다. [대역 격리 보강 기록](docs/verification/2026-09-07-fixture-isolation.md)을 참고하세요. 기본 실행 안내는 이 호스트에서 그대로 동작한 PowerShell 7(`pwsh`) 기준입니다. 2026-09-16 Windows PowerShell 5.1 호환성 검사는 호스트 정책 때문에 별도 프로세스에만 `-ExecutionPolicy Bypass`를 적용해 실행했으며 사용자용 기본 명령으로 권장하지 않습니다.
+
+Secret 패턴 검사 통과는 제외 디렉터리를 뺀 검사 대상 텍스트 범위에서, 정확히 검토된 합성 기준선 4개를 제외한 조치 대상 고신뢰 후보가 없다는 뜻입니다. 전체 Git 이력, `target`·`node_modules`·`coverage`·`.vite`, 바이너리·압축파일 내부, 모든 공급자 형식 또는 엔트로피 기반 탐지를 보장하지 않으며 실제 Secret 저장 허가, 제품 보안 승인, Phase 0A 승인도 아닙니다.
 
 ## 문서
 

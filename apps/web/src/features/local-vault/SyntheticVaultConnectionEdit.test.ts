@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { CatalogAdapterError, type LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
-import { MAX_SYNTHETIC_ARCHIVE_BYTES, type SyntheticMutableCiphertextStore } from "../../storage/SyntheticCiphertextStore";
+import {
+  MAX_SYNTHETIC_ARCHIVE_BYTES,
+  SyntheticStorageError,
+  type SyntheticConflictCiphertextStore,
+  type SyntheticMutableCiphertextStore,
+} from "../../storage/SyntheticCiphertextStore";
 import { SyntheticVaultSession, type SyntheticConnectionEditWorker, type SyntheticRegistrationWorker } from "./SyntheticVaultSession";
 
 const original = new Uint8Array([1, 2]);
@@ -20,8 +25,10 @@ function deferred<T>() {
 }
 async function flush() { for (let index = 0; index < 12; index += 1) await Promise.resolve(); }
 function invalidLengthArchive(kind: string): Uint8Array {
-  const bytes = new Uint8Array(kind === "oversized" ? MAX_SYNTHETIC_ARCHIVE_BYTES + 1 : kind === "detached" ? 2 : 0);
+  const bytes = kind === "shared" ? new Uint8Array(new SharedArrayBuffer(2))
+    : new Uint8Array(kind === "oversized" ? MAX_SYNTHETIC_ARCHIVE_BYTES + 1 : kind === "detached" ? 2 : 0);
   if (kind === "detached") structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+  if (kind === "shared") Object.defineProperty(bytes, "buffer", { value: new ArrayBuffer(2) });
   return Object.defineProperty(bytes, "byteLength", { value: 1 });
 }
 function fixture() {
@@ -49,8 +56,39 @@ function fixture() {
     saved: () => saved, replace: (bytes: Uint8Array | null) => { saved = bytes; } };
 }
 
+function preservingFixture() {
+  const base = fixture();
+  const preservingCas = vi.fn<SyntheticConflictCiphertextStore["compareAndSwapArchivePreservingConflict"]>(
+    async (before, next) => {
+      const saved = base.saved();
+      if (saved === null) return { kind: "missing" };
+      if (before.length !== saved.length || before.some((byte, index) => byte !== saved[index])) {
+        return { kind: "conflict-preserved", conflictId: "0".repeat(31) + "1" };
+      }
+      base.replace(next.slice());
+      return { kind: "updated" };
+    },
+  );
+  const preserveAfterReadback = vi.fn<SyntheticConflictCiphertextStore["preserveConflictArchiveIfCurrentDiffers"]>(
+    async (next) => {
+      const saved = base.saved();
+      if (saved === null) return { kind: "missing" };
+      if (next.length === saved.length && next.every((byte, index) => byte === saved[index])) {
+        return { kind: "already-current" };
+      }
+      return { kind: "conflict-preserved", conflictId: "0".repeat(31) + "2" };
+    },
+  );
+  const store = Object.assign(base.store, {
+    compareAndSwapArchivePreservingConflict: preservingCas,
+    preserveConflictArchiveIfCurrentDiffers: preserveAfterReadback,
+  });
+  return { ...base, store, preservingCas, preserveAfterReadback,
+    session: new SyntheticVaultSession(store, base.worker) };
+}
+
 describe("snapshot-bound synthetic connection edit session", () => {
-  it.each(["empty", "oversized", "detached"])("rejects %s stored bytes despite a spoofed byteLength before open", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s stored bytes despite a spoofed byteLength before open", async (kind) => {
     const { session, store, worker, replace } = fixture();
     replace(invalidLengthArchive(kind));
     await session.open();
@@ -59,7 +97,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
-  it.each(["empty", "oversized", "detached"])("rejects %s candidates despite spoofed byteLength before commit", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s candidates despite spoofed byteLength before commit", async (kind) => {
     const { session, store, worker } = fixture(); await session.open();
     worker.editConnections.mockResolvedValueOnce(invalidLengthArchive(kind));
     await session.editConnections(session.viewGeneration, selected());
@@ -71,13 +109,15 @@ describe("snapshot-bound synthetic connection edit session", () => {
     const { session, store, worker, replace } = fixture();
     const shadow = vi.fn(() => { throw new Error("unused shadow"); });
     const initiallySaved = Object.defineProperties(original.slice(), {
-      byteLength: { get: shadow }, length: { get: shadow }, every: { get: shadow }, some: { get: shadow },
+      buffer: { get: shadow }, byteLength: { get: shadow }, length: { get: shadow },
+      every: { get: shadow }, some: { get: shadow },
     });
     replace(initiallySaved); await session.open();
     expect(session.state.phase).toBe("open");
     expect(shadow).not.toHaveBeenCalled();
     const changed = Object.defineProperties(new Uint8Array([1, 2, 99]), {
-      byteLength: { value: 2 }, length: { value: 2 }, every: { get: shadow }, some: { get: shadow },
+      buffer: { get: shadow }, byteLength: { value: 2 }, length: { value: 2 },
+      every: { get: shadow }, some: { get: shadow },
     });
     replace(changed);
     await session.editConnections(session.viewGeneration, selected());
@@ -85,6 +125,15 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect(worker.editConnections).not.toHaveBeenCalled();
     expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
     expect(shadow).not.toHaveBeenCalled();
+  });
+  it("rejects a SharedArrayBuffer-backed current archive before invoking the edit worker", async () => {
+    const { session, store, worker, replace } = fixture();
+    await session.open();
+    replace(new Uint8Array(new SharedArrayBuffer(2)));
+    await session.editConnections(session.viewGeneration, selected());
+    expect(session.state.errorCode).toBe("STORAGE_CONFLICT");
+    expect(worker.editConnections).not.toHaveBeenCalled();
+    expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
   });
   it("cannot hide a longer saved readback using own length/byteLength or equality methods", async () => {
     const { session, store, worker } = fixture(); await session.open();
@@ -95,7 +144,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     store.read.mockResolvedValueOnce(original).mockResolvedValueOnce(readback);
     await session.editConnections(session.viewGeneration, selected());
     expect(session.state.errorCode).toBe("STORAGE_CONFLICT");
-    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
     expect(shadow).not.toHaveBeenCalled();
   });
   it("does not authenticate a registration readback with forged length and equality methods", async () => {
@@ -130,7 +179,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect(worker.editConnections).not.toHaveBeenCalled();
     expect(inspect).not.toHaveBeenCalled();
   });
-  it("authenticates candidate only after exact CAS readback and refreshes its private snapshot", async () => {
+  it("authenticates a candidate before CAS and publishes only an exact CAS readback", async () => {
     const { session, store, worker } = fixture();
     await session.open();
     const generation = session.viewGeneration;
@@ -143,6 +192,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect(worker.editConnections).toHaveBeenCalledWith(original, selected());
     expect(store.compareAndSwapArchive).toHaveBeenCalledWith(original, candidate);
     expect(worker.open).toHaveBeenLastCalledWith(candidate);
+    expect(worker.open).toHaveBeenCalledTimes(3);
     expect(session.state.entries[0]!.itemName).toBe("saved");
     expect(Object.keys(session.state).sort()).toEqual(["entries", "errorCode", "phase"]);
     expect(store.read).toHaveBeenCalledTimes(3);
@@ -200,7 +250,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     await session.editConnections(session.viewGeneration, selected());
     expect(session.state.errorCode).toBe(outcome === "missing" ? "STORAGE_MISSING" : "STORAGE_CONFLICT");
     expect(session.state.entries).toEqual([]);
-    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
     expect(store.compareAndSwapArchive).toHaveBeenCalledOnce();
     expect(saved()).toEqual(original);
   });
@@ -209,7 +259,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     store.read.mockResolvedValueOnce(original).mockResolvedValueOnce(readback);
     await session.editConnections(session.viewGeneration, selected());
     expect(session.state.errorCode).toBe(readback === null ? "STORAGE_MISSING" : "STORAGE_CONFLICT");
-    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
   });
   it("protects the candidate comparison from store and worker-owned mutation", async () => {
     const { session, store, worker } = fixture(); await session.open();
@@ -220,7 +270,7 @@ describe("snapshot-bound synthetic connection edit session", () => {
     store.read.mockResolvedValueOnce(original).mockResolvedValueOnce(new Uint8Array(candidate.length));
     await session.editConnections(session.viewGeneration, selected());
     expect(session.state.errorCode).toBe("STORAGE_CONFLICT");
-    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
   });
   it.each(["read", "edit", "commit", "reread", "reopen"])("clears views and uses fixed failures at %s", async (stage) => {
     const { session, store, worker } = fixture(); await session.open();
@@ -229,11 +279,23 @@ describe("snapshot-bound synthetic connection edit session", () => {
     if (stage === "edit") worker.editConnections.mockRejectedValueOnce(error);
     if (stage === "commit") store.compareAndSwapArchive.mockRejectedValueOnce(error);
     if (stage === "reread") store.read.mockResolvedValueOnce(original).mockRejectedValueOnce(error);
-    if (stage === "reopen") worker.open.mockRejectedValueOnce(new CatalogAdapterError("AUTHENTICATION_FAILED"));
+    if (stage === "reopen") {
+      worker.open.mockResolvedValueOnce(rows("candidate-auth"));
+      worker.open.mockRejectedValueOnce(new CatalogAdapterError("AUTHENTICATION_FAILED"));
+    }
     await session.editConnections(session.viewGeneration, selected());
     expect(session.state).toEqual({ phase: "error", entries: [], errorCode: stage === "reopen" ? "AUTHENTICATION_FAILED" : "OPERATION_FAILED" });
     expect(store.createIfAbsent).not.toHaveBeenCalled();
     if (stage === "read" || stage === "edit") expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+  });
+  it("legacy fallback authenticates a candidate before committing it", async () => {
+    const { session, store, worker, saved } = fixture();
+    await session.open();
+    worker.open.mockRejectedValueOnce(new CatalogAdapterError("AUTHENTICATION_FAILED"));
+    await session.editConnections(session.viewGeneration, selected());
+    expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "AUTHENTICATION_FAILED" });
+    expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+    expect(saved()).toEqual(original);
   });
   it.each(["read", "edit", "commit", "reread", "reopen"])("lock during %s prevents all later publication", async (stage) => {
     const { session, store, worker } = fixture(); await session.open();
@@ -242,12 +304,17 @@ describe("snapshot-bound synthetic connection edit session", () => {
     if (stage === "edit") worker.editConnections.mockReturnValueOnce(gate.promise);
     if (stage === "commit") store.compareAndSwapArchive.mockReturnValueOnce(gate.promise);
     if (stage === "reread") store.read.mockResolvedValueOnce(original).mockReturnValueOnce(gate.promise);
-    if (stage === "reopen") worker.open.mockReturnValueOnce(gate.promise);
+    if (stage === "reopen") {
+      worker.open.mockResolvedValueOnce(rows("candidate-auth"));
+      worker.open.mockReturnValueOnce(gate.promise);
+    }
     const pending = session.editConnections(session.viewGeneration, selected()); await flush();
     expect(store.read).toHaveBeenCalledTimes(stage === "reread" || stage === "reopen" ? 3 : 2);
     expect(worker.editConnections).toHaveBeenCalledTimes(stage === "read" ? 0 : 1);
     expect(store.compareAndSwapArchive).toHaveBeenCalledTimes(stage === "read" || stage === "edit" ? 0 : 1);
-    expect(worker.open).toHaveBeenCalledTimes(stage === "reopen" ? 2 : 1);
+    expect(worker.open).toHaveBeenCalledTimes(
+      stage === "commit" || stage === "reread" ? 2 : stage === "reopen" ? 3 : 1,
+    );
     session.lock();
     gate.resolve((stage === "read" ? original : stage === "commit" ? "updated" : stage === "reopen" ? rows("late") : candidate) as never);
     await pending;
@@ -299,5 +366,203 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect([session.state.errorCode, second.state.errorCode]).toContain("STORAGE_CONFLICT");
     expect(store.compareAndSwapArchive).toHaveBeenCalledTimes(2);
     expect(saved()!.length).toBe(3);
+  });
+
+  describe("atomic conflict-preserving store capability", () => {
+    it("authenticates an owned candidate before CAS without a pre-CAS storage read", async () => {
+      const { session, store, worker, preservingCas, replace, saved } = preservingFixture();
+      await session.open();
+      store.read.mockClear();
+      worker.open.mockClear();
+      worker.editConnections.mockClear();
+      store.compareAndSwapArchive.mockClear();
+      const events: string[] = [];
+      worker.editConnections.mockImplementationOnce(async () => { events.push("edit"); return candidate.slice(); });
+      worker.open
+        .mockImplementationOnce(async (bytes) => { events.push("candidate-auth"); bytes.fill(0); return rows("uncommitted"); })
+        .mockImplementationOnce(async () => { events.push("saved-auth"); return rows("saved"); });
+      preservingCas.mockImplementationOnce(async (before, next) => {
+        events.push("atomic-cas");
+        expect(before).toEqual(original);
+        expect(next).toEqual(candidate);
+        before.fill(7); next.fill(8);
+        replace(candidate.slice());
+        return { kind: "updated" };
+      });
+      store.read.mockImplementationOnce(async () => { events.push("readback"); return saved(); });
+
+      await session.editConnections(session.viewGeneration, selected());
+
+      expect(events).toEqual(["edit", "candidate-auth", "atomic-cas", "readback", "saved-auth"]);
+      expect(store.read).toHaveBeenCalledOnce();
+      expect(worker.open).toHaveBeenCalledTimes(2);
+      expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+      expect(session.state).toMatchObject({ phase: "open", errorCode: null });
+      expect(session.state.entries[0]!.itemName).toBe("saved");
+      expect(session.state.entries[0]!.itemName).not.toBe("uncommitted");
+    });
+
+    it("reports a durably preserved loser distinctly and never publishes it as success", async () => {
+      const { session, store, worker, preservingCas, saved } = preservingFixture();
+      await session.open();
+      preservingCas.mockResolvedValueOnce({
+        kind: "conflict-preserved", conflictId: "a".repeat(32),
+      });
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({
+        phase: "error", entries: [], errorCode: "STORAGE_CONFLICT_PRESERVED",
+      });
+      expect(saved()).toEqual(original);
+      expect(store.read).toHaveBeenCalledOnce();
+      expect(worker.open).toHaveBeenCalledTimes(2);
+      expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+    });
+
+    it("preserves a candidate when another writer changes storage after an updated CAS", async () => {
+      const { session, store, preservingCas, preserveAfterReadback, replace } = preservingFixture();
+      await session.open();
+      preservingCas.mockImplementationOnce(async () => {
+        replace(new Uint8Array([1, 2, 4]));
+        return { kind: "updated" };
+      });
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({
+        phase: "error", entries: [], errorCode: "STORAGE_CONFLICT_PRESERVED",
+      });
+      expect(preserveAfterReadback).toHaveBeenCalledExactlyOnceWith(candidate);
+      expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+      expect(store.read).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not claim preservation when post-CAS outbox persistence fails", async () => {
+      const { session, preservingCas, preserveAfterReadback, replace } = preservingFixture();
+      await session.open();
+      preservingCas.mockImplementationOnce(async () => {
+        replace(new Uint8Array([1, 2, 4]));
+        return { kind: "updated" };
+      });
+      preserveAfterReadback.mockRejectedValueOnce(new SyntheticStorageError("outbox-full"));
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "outbox-full" });
+    });
+
+    it("maps an atomic missing result without storing, retrying or reading back", async () => {
+      const { session, store, worker, preservingCas, saved } = preservingFixture();
+      await session.open();
+      preservingCas.mockResolvedValueOnce({ kind: "missing" });
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "STORAGE_MISSING" });
+      expect(saved()).toEqual(original);
+      expect(store.read).toHaveBeenCalledOnce();
+      expect(worker.open).toHaveBeenCalledTimes(2);
+      expect(preservingCas).toHaveBeenCalledOnce();
+    });
+
+    it.each(["outbox-full", "quota", "failed"] as const)(
+      "keeps the fixed storage failure distinct when atomic preservation fails: %s", async (code) => {
+        const { session, store, preservingCas, saved } = preservingFixture();
+        await session.open();
+        preservingCas.mockRejectedValueOnce(new SyntheticStorageError(code));
+        await session.editConnections(session.viewGeneration, selected());
+        expect(session.state).toEqual({ phase: "error", entries: [], errorCode: code });
+        expect(saved()).toEqual(original);
+        expect(store.read).toHaveBeenCalledOnce();
+        expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+      },
+    );
+
+    it("does not touch storage when pre-commit candidate authentication fails", async () => {
+      const { session, store, worker, preservingCas, saved } = preservingFixture();
+      await session.open();
+      worker.open.mockRejectedValueOnce(new CatalogAdapterError("AUTHENTICATION_FAILED"));
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({
+        phase: "error", entries: [], errorCode: "AUTHENTICATION_FAILED",
+      });
+      expect(preservingCas).not.toHaveBeenCalled();
+      expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+      expect(store.read).toHaveBeenCalledOnce();
+      expect(saved()).toEqual(original);
+    });
+
+    it("rejects a SharedArrayBuffer candidate before authentication or storage", async () => {
+      const { session, store, worker, preservingCas } = preservingFixture();
+      await session.open();
+      worker.editConnections.mockResolvedValueOnce(new Uint8Array(new SharedArrayBuffer(2)));
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state.errorCode).toBe("INVALID_ARCHIVE");
+      expect(worker.open).toHaveBeenCalledOnce();
+      expect(preservingCas).not.toHaveBeenCalled();
+      expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+    });
+
+    it("normalizes hostile atomic result objects without invoking accessors or reading back", async () => {
+      const { session, store, preservingCas } = preservingFixture();
+      await session.open();
+      const getter = vi.fn(() => "updated");
+      preservingCas.mockResolvedValueOnce(Object.defineProperty({}, "kind", {
+        enumerable: true, get: getter,
+      }) as never);
+      await session.editConnections(session.viewGeneration, selected());
+      expect(getter).not.toHaveBeenCalled();
+      expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "OPERATION_FAILED" });
+      expect(store.read).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      { kind: "updated", extra: "private" },
+      { kind: "conflict-preserved", conflictId: "INVALID" },
+      { kind: "unknown" },
+      null,
+    ])("rejects malformed atomic outcomes without a readback: %j", async (outcome) => {
+      const { session, store, preservingCas } = preservingFixture();
+      await session.open();
+      preservingCas.mockResolvedValueOnce(outcome as never);
+      await session.editConnections(session.viewGeneration, selected());
+      expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "OPERATION_FAILED" });
+      expect(store.read).toHaveBeenCalledOnce();
+    });
+
+    it("a reentrant hostile result cannot replace a locked state", async () => {
+      const fixture = preservingFixture();
+      await fixture.session.open();
+      const hostile = new Proxy({}, {
+        ownKeys() { fixture.session.lock(); throw new Error("private trap"); },
+      });
+      fixture.preservingCas.mockResolvedValueOnce(hostile as never);
+      await fixture.session.editConnections(fixture.session.viewGeneration, selected());
+      expect(fixture.session.state).toEqual({ phase: "locked", entries: [], errorCode: null });
+      expect(fixture.store.read).toHaveBeenCalledOnce();
+    });
+
+    it("lock during candidate authentication prevents the atomic storage call", async () => {
+      const { session, worker, preservingCas } = preservingFixture();
+      await session.open();
+      const gate = deferred<readonly LocalCatalogEntryV1[]>();
+      worker.open.mockReturnValueOnce(gate.promise);
+      const pending = session.editConnections(session.viewGeneration, selected());
+      await flush();
+      expect(preservingCas).not.toHaveBeenCalled();
+      session.lock();
+      gate.resolve(rows("late-candidate"));
+      await pending;
+      expect(session.state).toEqual({ phase: "locked", entries: [], errorCode: null });
+      expect(preservingCas).not.toHaveBeenCalled();
+    });
+
+    it("a late atomic completion after lock cannot read back or reopen the UI", async () => {
+      const { session, store, preservingCas } = preservingFixture();
+      await session.open();
+      const gate = deferred<{ kind: "conflict-preserved"; conflictId: string }>();
+      preservingCas.mockReturnValueOnce(gate.promise);
+      const pending = session.editConnections(session.viewGeneration, selected());
+      await flush();
+      expect(preservingCas).toHaveBeenCalledOnce();
+      session.lock();
+      gate.resolve({ kind: "conflict-preserved", conflictId: "b".repeat(32) });
+      await pending;
+      expect(session.state).toEqual({ phase: "locked", entries: [], errorCode: null });
+      expect(store.read).toHaveBeenCalledOnce();
+    });
   });
 });

@@ -1,6 +1,6 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-15, `codex/firstvibe-local-session-hardening`.
+기준: 2026-09-16, `codex/firstvibe-local-session-hardening`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
 ## 현재 확인한 것
@@ -8,21 +8,25 @@
 | 항목 | 현재 증거 | 남은 일 |
 |---|---|---|
 | 암호화/필드 보존 | 기존 코어, 후속 67개 필드 비교 검사 cherry-pick | 통합 상태의 네이티브 회귀, 독립 리뷰 |
-| 로컬 웹 저장/복원 | IndexedDB·Worker·WASM 구현, 통합 웹 전체 839 tests; 합성 등록 후 저장본 재열기·새로고침 확인, v3 내부 편집/백업은 실제 WASM+fake IndexedDB 검증 | 연결 편집 UI 실제 저장, 파일 다운로드 경로, 다중 writer/오프라인 브라우저 통합 검사 |
+| 로컬 웹 저장/복원 | IndexedDB·Worker·WASM 구현, 통합 웹 전체 932 tests; 합성 등록 후 저장본 재열기·새로고침 확인, v3 편집·충돌 보존·검토 UI·백업 guard는 실제 WASM+fake IndexedDB 검증 | 파일 다운로드 경로, 실제 브라우저 다중 writer/오프라인 통합 검사 |
 | 자동 잠금 | 5분/숨김/절전 후 만료/시계 오류 처리, 신규 18 tests | 실제 브라우저·모바일 수명 주기 확인 |
 | 키와 연결처 목록 | 계정/workspace/project/환경 private projection·검색; 실제 Comet에서 3→6개 등록, 0/1/3 연결과 순서 보존, 검색·잠금·재열기·360px 검사 | 임의 데이터 수동 등록/편집, 회전 체크리스트, 실제 모바일/큰 목록 검증 |
-| 합성 백업/복원 | ecf9ee9 원본을 현재 브랜치에 통합; 자동잠금 UI 세션 45 tests, 서비스 69 tests, 실제 WASM 8 tests; 별도 브라우저 복원 후 암호문 SHA-256 일치 | 디스크 다운로드가 테스트 Chrome에서 Download error; 네이티브 파일 선택·디스크 왕복 미검증. 실제 데이터용 기능 아님 |
+| 합성 백업/복원 | 기존 경로에 미해결 conflict export fail-closed guard 추가; 집중 192 tests, 전체 웹 932 tests, 별도 브라우저 복원 후 암호문 SHA-256 일치 | 목록 확인 직후 새 conflict가 생기는 비원자 TOCTOU, 디스크 다운로드·네이티브 파일 선택 왕복 미검증. 실제 데이터용 기능 아님 |
 | 로컬 도구 경계 | 입력 64 tests + 세션 62 tests; 격리 Comet 검색/분류/잠금/재열기/숨김 검사, 중복 React key 수정 후 콘솔 경고 0 | 외부 AI/MCP 연결·개인 projection 승인 아님; 실제 모바일 검증 별도 |
 | 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 편집 UI 실제 저장/회전·rollback/누락 보장은 아직 없음 |
-| 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 실제 브라우저 편집 Worker/IDB 미검증, durable conflict outbox/회전 미구현 |
-| 웹 연결 편집 UI | UI 연결·모델 58/SSR 19 포함 웹 839 tests 및 빌드 exit 0; 실제 Comet에서 폼 초기 상태 관찰 | 브라우저 도구 연결 오류 후 중단. 저장/취소/포커스/잠금/충돌/모바일 미검증인 부분 체크포인트 |
-| 네이티브 전체 QA | PR #2에 부분 통과와 OS 4551 차단 기록 | 보안 정책을 우회하지 않는 검증 환경/승인 필요 |
+| 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·후보 사전 인증·원자 CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 실제 브라우저 편집 Worker/IDB 미검증, 회전·signed rollback/누락 anchor 미구현 |
+| 암호문 conflict outbox | DB v1/store 유지, 최대 8개 무퇴거 후보, CAS loser 보존, 전체 인증 뒤 위치 기반 검토, exact-byte 2단계 폐기, 미해결 후보 backup 차단 | 자동 병합·승격 정책과 outbox 포함 백업 형식, 실제 브라우저 멀티탭·모바일 검증 |
+| 웹 연결 편집 UI | 검토 UI 포함 통합 웹 932 tests, typecheck/build exit 0; 독립 보안 리뷰 Critical/Important 0 | 저장/취소/포커스/잠금·멀티탭 충돌의 실제 브라우저 검증과 모바일 검증 |
+| 공유 메모리 입력 경계 | Store·Session·Worker client/worker·Backup에서 SharedArrayBuffer를 DB/Worker/WASM 작업 전에 고정 오류로 거부 | cross-origin-isolated 실제 브라우저의 동시 변경 통합 검사는 미실행 |
+| 원격 CI 보안 gate | 최소 권한 Windows workflow와 구조 회귀 7 tests 작성; Secret scan을 첫 저장소 명령으로 배치 | 아직 미커밋·미푸시라 GitHub Actions 실실행 없음. runner의 `rg` provenance 고정과 branch protection은 별도 |
+| SQLite 읽기 전용 preflight | 8 DB_CONFIG를 첫 SQL 전에 적용하고 query_only와 공통 hardening을 읽기 전용 연결에도 강제; 패키지 91 passed/1 ignored, 독립 재리뷰 Critical/Important 0 | 악성 schema 실제 통합 fixture와 WR 대칭 profile assertion은 residual |
+| 네이티브 전체 QA | 최종 현재 트리 Workspace Secret scan·format·Clippy·tests·ordinary VFS·doctests exit 0 | 명시적으로 ignored인 Phase 0A 보안 gate와 권위 승인은 별도 필요 |
 
 ## 이어서 할 수 있는 구현
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
-3. v3의 immutable revisions와 명시적 heads는 선형 이력만 지원한다. durable conflict outbox와 재시도/병합 설계를 별도로 구현·검증한 뒤 회전 상태 전이·갱신 체크리스트로 진행한다. CAS loser의 저장 실패를 충돌 사본 보존 성공으로 표시하지 않는다.
+3. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 실제 브라우저 다중 창 검증 뒤 자동 재시도·병합·승격·퇴거를 열지 않은 채 회전 상태 전이·갱신 체크리스트로 진행한다.
 4. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 5. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
 

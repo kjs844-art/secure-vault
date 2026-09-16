@@ -26,6 +26,12 @@ const utf8 = new TextEncoder();
 const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
 )!.get!;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "buffer",
+)!.get!;
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype, "byteLength",
+)!.get!;
 
 /** One fresh worker per operation; cancel/replace terminates expensive KDF work. */
 export class BrowserSyntheticVaultWorker {
@@ -132,6 +138,10 @@ function copyArchive(value: unknown): Uint8Array {
   let length: number;
   try {
     if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) throw new Error();
+    const buffer = typedArrayBuffer.call(value);
+    // A native ArrayBuffer brand check rejects SharedArrayBuffer before a
+    // supposedly synchronous snapshot can race with another agent.
+    arrayBufferByteLength.call(buffer);
     length = typedArrayByteLength.call(value) as number;
   } catch {
     throw new CatalogAdapterError("INVALID_ARCHIVE");

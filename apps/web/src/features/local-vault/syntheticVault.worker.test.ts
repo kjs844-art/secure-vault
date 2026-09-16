@@ -33,20 +33,22 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 function invalidLengthArchive(kind: string): Uint8Array {
-  const bytes = new Uint8Array(kind === "oversized" ? 524_289 : kind === "detached" ? 2 : 0);
+  const bytes = kind === "shared"
+    ? new Uint8Array(new SharedArrayBuffer(2))
+    : new Uint8Array(kind === "oversized" ? 524_289 : kind === "detached" ? 2 : 0);
   if (kind === "detached") structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
   return Object.defineProperty(bytes, "byteLength", { value: 1 });
 }
 
 describe("synthetic connection-edit worker dispatch (mock WASM boundary)", () => {
-  it.each(["empty", "oversized", "detached"])("rejects %s spoofed archive before WASM initialization", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s spoofed archive before WASM initialization", async (kind) => {
     const { port, send, closed } = await harness();
     send({ op: "editConnections", bytes: invalidLengthArchive(kind), selection: { reference: 0, connectionIds: [] } });
     await closed;
     expect(wasm.init).not.toHaveBeenCalled(); expect(wasm.edit).not.toHaveBeenCalled();
     expect(port.postMessage).toHaveBeenCalledWith({ ok: false, code: kind === "oversized" ? "LIMITS_EXCEEDED" : "INVALID_ARCHIVE" });
   });
-  it.each(["empty", "oversized", "detached"])("rejects %s spoofed WASM output instead of returning ciphertext", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s spoofed WASM output instead of returning ciphertext", async (kind) => {
     const { port, send, closed } = await harness();
     wasm.edit.mockReturnValueOnce(invalidLengthArchive(kind));
     send({ op: "editConnections", bytes: new Uint8Array([1]), selection: { reference: 0, connectionIds: [] } });

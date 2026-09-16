@@ -22,6 +22,23 @@ const COMMON_FLAGS: OpenFlags = OpenFlags::SQLITE_OPEN_NO_MUTEX
     .union(OpenFlags::SQLITE_OPEN_NOFOLLOW)
     .union(OpenFlags::SQLITE_OPEN_EXRESCODE);
 
+const SECURITY_DB_CONFIGS: [(DbConfig, bool); 8] = [
+    (DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true),
+    (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, true),
+    (DbConfig::SQLITE_DBCONFIG_DQS_DML, false),
+    (DbConfig::SQLITE_DBCONFIG_DQS_DDL, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE, false),
+];
+
+#[derive(Clone, Copy)]
+enum ConnectionAccess {
+    ReadOnly,
+    Writable,
+}
+
 pub enum InitializeStoreOutcomeV1 {
     Created(SyntheticWritableStoreV1),
     AlreadyInitialized,
@@ -311,12 +328,7 @@ pub(crate) fn open_read_only(path: &Path) -> Result<Connection, StorageError> {
     let connection =
         Connection::open_with_flags(path, crate::schema_contract::read_only_open_flags())
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    connection
-        .load_extension_disable()
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    harden_connection(&connection, ConnectionAccess::ReadOnly, None)?;
     Ok(connection)
 }
 
@@ -334,42 +346,24 @@ fn harden_writable(
     connection: &Connection,
     observer: &mut InitObserver,
 ) -> Result<(), StorageError> {
+    harden_connection(connection, ConnectionAccess::Writable, Some(observer))
+}
+
+fn harden_connection(
+    connection: &Connection,
+    access: ConnectionAccess,
+    mut observer: Option<&mut InitObserver>,
+) -> Result<(), StorageError> {
     connection
         .busy_timeout(Duration::from_secs(5))
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
     connection
         .load_extension_disable()
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
 
-    let journal_mode: String = connection
-        .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    if !journal_mode.eq_ignore_ascii_case("wal") {
-        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
-    }
-    observer.hardening_applied()?;
-    connection
-        .execute_batch("PRAGMA synchronous=FULL; PRAGMA recursive_triggers=ON;")
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    if pragma_i64(connection, "synchronous")? != 2
-        || pragma_i64(connection, "recursive_triggers")? != 1
-    {
-        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
-    }
-    observer.hardening_applied()?;
-
-    for (config, expected) in [
-        (DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true),
-        (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, true),
-        (DbConfig::SQLITE_DBCONFIG_DQS_DML, false),
-        (DbConfig::SQLITE_DBCONFIG_DQS_DDL, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE, false),
-    ] {
+    for (config, expected) in SECURITY_DB_CONFIGS {
         let applied = connection
             .set_db_config(config, expected)
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
@@ -379,19 +373,63 @@ fn harden_writable(
         if applied != expected || verified != expected {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
         }
-        observer.hardening_applied()?;
+        observe_hardening(&mut observer)?;
     }
 
-    if connection
+    if matches!(access, ConnectionAccess::Writable) {
+        let journal_mode: String = connection
+            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
+        }
+        observe_hardening(&mut observer)?;
+    }
+
+    let mode_pragmas = match access {
+        ConnectionAccess::ReadOnly => {
+            "PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA recursive_triggers=ON;"
+        }
+        ConnectionAccess::Writable => {
+            "PRAGMA synchronous=FULL; PRAGMA query_only=OFF; PRAGMA foreign_keys=ON; \
+             PRAGMA recursive_triggers=ON;"
+        }
+    };
+    connection
+        .execute_batch(mode_pragmas)
+        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    if pragma_i64(connection, "foreign_keys")? != 1
+        || pragma_i64(connection, "recursive_triggers")? != 1
+        || match access {
+            ConnectionAccess::ReadOnly => pragma_i64(connection, "query_only")? != 1,
+            ConnectionAccess::Writable => {
+                pragma_i64(connection, "query_only")? != 0
+                    || pragma_i64(connection, "synchronous")? != 2
+            }
+        }
+    {
+        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
+    }
+    observe_hardening(&mut observer)?;
+
+    let main_is_read_only = connection
         .is_readonly("main")
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?
+        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    if main_is_read_only != matches!(access, ConnectionAccess::ReadOnly)
         || pragma_i64(connection, "foreign_keys")? != 1
         || pragma_i64(connection, "trusted_schema")? != 0
     {
         return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
     }
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
     Ok(())
+}
+
+fn observe_hardening(observer: &mut Option<&mut InitObserver>) -> Result<(), StorageError> {
+    match observer.as_deref_mut() {
+        Some(observer) => observer.hardening_applied(),
+        None => Ok(()),
+    }
 }
 
 fn verify_identity_and_singleton(
@@ -456,6 +494,7 @@ fn pragma_i64(connection: &Connection, pragma: &str) -> Result<i64, StorageError
         "application_id" => "PRAGMA application_id",
         "user_version" => "PRAGMA user_version",
         "synchronous" => "PRAGMA synchronous",
+        "query_only" => "PRAGMA query_only",
         "recursive_triggers" => "PRAGMA recursive_triggers",
         "foreign_keys" => "PRAGMA foreign_keys",
         "trusted_schema" => "PRAGMA trusted_schema",
@@ -1001,6 +1040,49 @@ mod tests {
         159, 89, 181, 82, 68, 79, 67, 166, 149, 154, 159, 148, 219, 0, 42, 88, 26, 45, 251, 183,
         191, 25, 101, 179, 127, 118, 36,
     ];
+
+    #[test]
+    fn all_security_db_configs_precede_sql_hardening_calls() {
+        let configured = SECURITY_DB_CONFIGS.map(|(config, expected)| (config as i32, expected));
+        let expected = [
+            (DbConfig::SQLITE_DBCONFIG_DEFENSIVE as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DML as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DDL as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE as i32, false),
+        ];
+        assert_eq!(configured, expected);
+
+        let source = include_str!("schema.rs");
+        let hardening_body = source
+            .split_once("fn harden_connection(")
+            .unwrap()
+            .1
+            .split_once("\nfn observe_hardening(")
+            .unwrap()
+            .0;
+        let final_db_config_readback = hardening_body.find(".db_config(config)").unwrap();
+        let first_sql_call = [
+            ".prepare(",
+            ".prepare_cached(",
+            ".execute(",
+            ".execute_batch(",
+            ".query_row(",
+            "pragma_i64(",
+        ]
+        .into_iter()
+        .filter_map(|marker| hardening_body.find(marker))
+        .min()
+        .unwrap();
+
+        assert!(
+            final_db_config_readback < first_sql_call,
+            "SQL hardening must not prepare or execute before all db_config settings are verified"
+        );
+    }
 
     fn bootstrap_bytes() -> Vec<u8> {
         SYNTHETIC_PASSWORD_ENVELOPE.to_vec()

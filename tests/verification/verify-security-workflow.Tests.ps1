@@ -1,0 +1,107 @@
+#requires -Version 5.1
+
+Describe 'KeyAtlas security-gates workflow policy' {
+    BeforeAll {
+        $script:RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+        $script:WorkflowPath = Join-Path $script:RepositoryRoot '.github\workflows\security-gates.yml'
+        if (-not (Test-Path -LiteralPath $script:WorkflowPath -PathType Leaf)) {
+            throw 'The mandatory security-gates workflow is missing.'
+        }
+
+        $script:Workflow = Get-Content -Raw -LiteralPath $script:WorkflowPath
+        if ([string]::IsNullOrWhiteSpace($script:Workflow)) {
+            throw 'The mandatory security-gates workflow is empty.'
+        }
+
+        function Assert-Condition {
+            param([bool]$Condition, [string]$Message)
+            if (-not $Condition) { throw $Message }
+        }
+    }
+
+    It 'uses only safe unprivileged triggers and least permissions' {
+        Assert-Condition ($script:Workflow -match '(?m)^on:\s*$') 'The workflow trigger block is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^  pull_request:\s*$') 'The pull_request trigger is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^  push:\s*$') 'The push trigger is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^  workflow_dispatch:\s*$') 'The manual trigger is missing.'
+        Assert-Condition (-not ($script:Workflow -match '(?m)^\s*(pull_request_target|workflow_run|repository_dispatch|schedule):')) 'A privileged or unrelated trigger is forbidden.'
+
+        Assert-Condition (([regex]::Matches($script:Workflow, '(?m)^permissions:\s*$')).Count -eq 1) 'Exactly one permissions block is required.'
+        Assert-Condition ($script:Workflow -match '(?m)^permissions:\s*\r?\n  contents: read\s*$') 'Only contents read permission is allowed.'
+        Assert-Condition (-not ($script:Workflow -match '(?m)^\s+[A-Za-z-]+:\s*write\s*$')) 'Write permissions are forbidden.'
+        Assert-Condition (-not ($script:Workflow -match '\$\{\{\s*secrets\.')) 'GitHub Secret references are forbidden.'
+    }
+
+    It 'cancels superseded runs and has a finite timeout' {
+        Assert-Condition ($script:Workflow -match '(?m)^concurrency:\s*$') 'The concurrency block is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^  cancel-in-progress: true\s*$') 'Superseded runs must be cancelled.'
+        Assert-Condition ($script:Workflow -match '(?m)^    runs-on: windows-latest\s*$') 'The Windows runner is mandatory.'
+        Assert-Condition ($script:Workflow -match '(?m)^    timeout-minutes: 90\s*$') 'The finite job timeout is mandatory.'
+    }
+
+    It 'pins every allowed official action to the reviewed full commit SHA' {
+        $uses = @([regex]::Matches($script:Workflow, '(?m)^\s*uses:\s*([^\s#]+)'))
+        Assert-Condition ($uses.Count -eq 2) 'Exactly two reviewed actions are allowed.'
+        $actualUses = @($uses | ForEach-Object { $_.Groups[1].Value }) -join "`n"
+        $expectedUses = @(
+            'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+            'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
+        ) -join "`n"
+        Assert-Condition ([string]::Equals($actualUses, $expectedUses, [StringComparison]::Ordinal)) 'The action allowlist or pinned SHA changed.'
+        foreach ($use in $uses) {
+            Assert-Condition ($use.Groups[1].Value -match '^actions/(checkout|setup-node)@[0-9a-f]{40}$') 'Every action must use an official allowlisted owner and a full SHA.'
+        }
+        Assert-Condition ($script:Workflow -match '(?m)^          persist-credentials: false\s*$') 'Checkout credentials must not persist.'
+        Assert-Condition ($script:Workflow -match '(?m)^          package-manager-cache: false\s*$') 'Automatic package caching must remain disabled.'
+        Assert-Condition ($script:Workflow -match '(?m)^          node-version: 24\.8\.0\s*$') 'The exact Node.js version must remain pinned.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: Install-Module -Name Pester -RequiredVersion 5\.7\.1 -Scope CurrentUser -Repository PSGallery -Force\s*$') 'The exact Pester installation version must remain pinned.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*Import-Module Pester -RequiredVersion 5\.7\.1 -Force\s*$') 'The exact Pester import version must remain pinned.'
+    }
+
+    It 'runs the fail-closed repository scan before dependency setup or execution' {
+        $scanIndex = $script:Workflow.IndexOf('.\scripts\check-repository-secrets.ps1', [StringComparison]::Ordinal)
+        Assert-Condition ($scanIndex -gt -1) 'The repository Secret scanner invocation is missing.'
+
+        foreach ($dependencyMarker in @(
+            'Install-Module -Name Pester',
+            'rustup toolchain install',
+            'cargo fetch --locked',
+            'cargo install wasm-bindgen-cli',
+            'actions/setup-node@',
+            'npm ci --ignore-scripts'
+        )) {
+            $dependencyIndex = $script:Workflow.IndexOf($dependencyMarker, [StringComparison]::Ordinal)
+            Assert-Condition ($dependencyIndex -gt $scanIndex) "Dependency setup must follow the Secret scan: $dependencyMarker"
+        }
+
+        Assert-Condition ($script:Workflow -match "'SECRET_SCAN_PASSED'") 'The scan success marker must be verified.'
+        Assert-Condition ($script:Workflow -match "'REAL_SECRET_GATE=CLOSED'") 'The real-Secret boundary marker must be verified.'
+    }
+
+    It 'runs scanner regressions on both Windows PowerShell engines' {
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'PowerShell 7 scanner regression is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'Windows PowerShell 5.1 scanner regression is missing.'
+    }
+
+    It 'runs the full Rust and locked web verification commands' {
+        Assert-Condition ($script:Workflow -match '(?m)^    env:\s*\r?\n      # rustup merely installing a toolchain does not select it for later\s*\r?\n      # cargo/rustc subprocesses\. Pin every Rust proxy in this job explicitly\.\s*\r?\n      RUSTUP_TOOLCHAIN: 1\.95\.0\s*$') 'The job must select Rust 1.95.0 for every cargo/rustc subprocess.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: rustup toolchain install 1\.95\.0 --profile minimal --component clippy rustfmt --target wasm32-unknown-unknown\s*$') 'The exact Rust toolchain and WASM target provisioning command is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: cargo fetch --locked\s*$') 'Locked Rust dependency fetch is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: cargo install wasm-bindgen-cli --version 0\.2\.128 --locked --root "\$env:RUNNER_TEMP\\wasm-bindgen-cli"\s*$') 'The exact locked wasm-bindgen CLI installation is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\scripts\\verify-local\.ps1 -Scope Workspace\s*$') 'Full Rust workspace verification is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\scripts\\build-wasm\.ps1 -Release -BindgenPath "\$env:RUNNER_TEMP\\wasm-bindgen-cli\\bin\\wasm-bindgen\.exe"\s*$') 'Default release WASM generation is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\scripts\\build-wasm\.ps1 -SyntheticDemo -Release -BindgenPath "\$env:RUNNER_TEMP\\wasm-bindgen-cli\\bin\\wasm-bindgen\.exe"\s*$') 'Synthetic-demo release WASM generation is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: node \.\\scripts\\test-wasm\.mjs\s*$') 'Default generated WASM smoke test is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: node \.\\scripts\\test-wasm\.mjs --demo\s*$') 'Synthetic-demo generated WASM smoke test is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm ci --ignore-scripts\s*$') 'Locked web install with lifecycle scripts disabled is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm test\s*$') 'Web tests are missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm run typecheck\s*$') 'Web typecheck is missing.'
+        Assert-Condition ($script:Workflow -match '(?m)^\s*run: npm run build\s*$') 'Web build is missing.'
+    }
+
+    It 'cannot silently continue or upload repository contents' {
+        Assert-Condition (-not ($script:Workflow -match '(?m)^\s*continue-on-error:\s*true\s*$')) 'Silent continuation is forbidden.'
+        Assert-Condition (-not ($script:Workflow -match '(?i)upload-artifact')) 'Artifact upload is forbidden.'
+        Assert-Condition (-not ($script:Workflow -match '(?i)artifact-retention')) 'Artifact retention configuration is forbidden.'
+    }
+}

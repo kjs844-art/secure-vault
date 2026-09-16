@@ -15,6 +15,12 @@ const MAX_ARCHIVE_BYTES = 524_288;
 const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
 )!.get!;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "buffer",
+)!.get!;
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype, "byteLength",
+)!.get!;
 let started = false;
 
 port.onmessage = (event) => {
@@ -76,6 +82,10 @@ function archiveBytes(value: unknown): Uint8Array {
   let length: number;
   try {
     if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) throw new Error();
+    const buffer = typedArrayBuffer.call(value);
+    // Only ordinary ArrayBuffer-backed views can be snapshotted and later
+    // transferred. Shared memory would make the copy raceable.
+    arrayBufferByteLength.call(buffer);
     length = typedArrayByteLength.call(value) as number;
   } catch {
     throw new CatalogAdapterError("INVALID_ARCHIVE");

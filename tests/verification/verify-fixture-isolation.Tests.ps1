@@ -30,12 +30,24 @@ function Copy-TestProject {
     New-Item -ItemType Directory -Path $scriptDirectory -Force | Out-Null
     New-Item -ItemType Directory -Path $verificationDirectory -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\verify-local.ps1') -Destination (Join-Path $scriptDirectory 'verify-local.ps1')
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\check-repository-secrets.ps1') -Destination (Join-Path $scriptDirectory 'check-repository-secrets.ps1')
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'Cargo.toml') -Destination (Join-Path $Destination 'Cargo.toml')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'verify-local.Tests.ps1') -Destination (Join-Path $verificationDirectory 'verify-local.Tests.ps1')
+    foreach ($baselinePath in @(
+            'crates\vault-client-wasm\src\archive.rs',
+            'crates\vault-crypto\examples\synthetic_local_alpha.rs',
+            'crates\vault-crypto\src\v0alpha1\tests.rs',
+            'tests\fixtures\synthetic\v0alpha1-vectors.json')) {
+        $baselineSource = Join-Path $repositoryRoot $baselinePath
+        $baselineDestination = Join-Path $Destination $baselinePath
+        New-Item -ItemType Directory -Path (Split-Path -Path $baselineDestination -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $baselineSource -Destination $baselineDestination
+    }
     if ($IncludeFixture) {
         $fixtureDirectory = Join-Path $verificationDirectory 'fixtures'
         New-Item -ItemType Directory -Path $fixtureDirectory | Out-Null
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\cargo.cmd') -Destination (Join-Path $fixtureDirectory 'cargo.cmd')
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\rg.cmd') -Destination (Join-Path $fixtureDirectory 'rg.cmd')
     }
     Join-Path $verificationDirectory 'verify-local.Tests.ps1'
 }
@@ -92,7 +104,7 @@ try {
     Assert-Condition (-not $result.FallbackExecuted) 'The normal fixture run must not create the fallback marker file.'
     Assert-Condition (-not $result.Text.Contains('ISOLATION_FALLBACK_CARGO_EXECUTED')) 'The normal fixture run must not report fallback execution.'
     Assert-Condition ($result.Code -eq 0) "The copied normal harness must return 0; observed $($result.Code). Child output: $($result.Text)"
-    Assert-Condition ($result.Text -match '(?m)^VERIFIER_TESTS_PASSED=11\r?$') 'The copied normal harness must pass its 11 regression cases.'
+    Assert-Condition ($result.Text -match '(?m)^VERIFIER_TESTS_PASSED=12\r?$') 'The copied normal harness must pass its 12 regression cases.'
     $passed++
     Write-Output 'PASS: copied normal fixture passes without inherited fallback Cargo'
 }

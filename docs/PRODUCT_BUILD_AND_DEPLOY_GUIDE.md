@@ -19,12 +19,12 @@
 |---|---|---|
 | Rust 암호화 코어 | 구현·합성 테스트 완료 | 합성 마스터 비밀번호, Root Key 래핑, 항목별 암호화와 변조 거부를 검증했습니다. |
 | 자격 증명 데이터 모델 | 구현·합성 테스트 완료 | 서비스·계정·프로젝트·환경·MCP 연결 관계를 엄격한 형식으로 표현합니다. |
-| SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
-| SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
+| SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. 읽기 전용 preflight에도 query-only와 공통 DB hardening을 적용했습니다. |
+| SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-16 저장소 Secret gate를 일반 검증의 첫 단계로 연결했고 전체 workspace 포맷·Clippy·테스트·문서 예제가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
 | Web 합성 금고 화면 | 로컬 구현·범위별 실제 브라우저 검증 | React에서 선택형 등록/목록/issuer 검색/자동 잠금/IndexedDB 재열기/백업 연습을 제공합니다. 최종 디자인은 별도이며 운영 서비스가 아닙니다. |
 | Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·회전은 아직 미구현입니다. |
-| Web 합성 연결 편집 | 내부 API 검증, UI 자동 검사 통과·브라우저 검증 미완료 | 기존 record/비밀 필드 보존 successor → v3 선형 이력/heads → 화면 bytes+generation 결합·CAS/재인증. UI 포함 전체 웹 839 tests와 타입/빌드 통과. 실제 demo WASM 973 checks는 내부 경로 증거입니다. 실제 브라우저 편집 저장·durable conflict outbox·rollback anchor는 미완료입니다. |
+| Web 합성 연결 편집 | 암호문 충돌 보존·검토 UI·백업 차단 자동 검사 통과, 브라우저 검증 미완료 | 기존 record/비밀 필드 보존 successor → 후보 사전 인증 → 원자 CAS/재인증. 최대 8개 outbox를 전체 인증 뒤 위치 기반으로 표시하고 exact-byte 2단계 폐기만 허용합니다. 미해결 후보가 있으면 합성 export를 막습니다. 전체 웹 932 tests와 타입/빌드가 통과했습니다. 실제 브라우저 멀티탭, 자동 병합/승격, 원자적 outbox 포함 백업, rollback anchor는 미완료입니다. |
 | Android 화면 | 미구현 | 웹 구현이 Android 앱 구현을 의미하지 않습니다. 생체 인증·Keystore·앱 수명 주기 검증이 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
@@ -34,6 +34,10 @@
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
 
 [연결 편집 구현·검증 기록](verification/2026-09-15-synthetic-connection-edit.md)과
+[암호문 conflict outbox 검증 기록](verification/2026-09-16-synthetic-conflict-outbox.md),
+[conflict 검토 UI 기록](verification/2026-09-16-synthetic-conflict-review-ui.md),
+[backup conflict guard 기록](verification/2026-09-16-synthetic-backup-conflict-guard.md),
+[SQLite 읽기 전용 preflight hardening 기록](verification/2026-09-16-sqlite-read-only-preflight-hardening.md),
 [Amazon Quick/Spark 협업 인계·프롬프트](handoff/AMAZON_QUICK_COLLABORATION.md)를 함께 확인하세요.
 Quick 연결이나 유료 구독은 실행하지 않았으며 핵심 보안은 기능 담당자가 계속 책임집니다.
 
@@ -50,9 +54,9 @@ AI의 worktree를 구분해 사용합니다. 예전 SQLite 설계 작업 경로�
 `npm.cmd run build --prefix apps/web`로 확인합니다. 생성 WASM과 node_modules는
 Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 다시 준비해야 합니다.
 
-작업 폴더에서 `powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 전체 일반 검사를 다시 수행할 수 있습니다. 검증 스크립트 자체 테스트는 `powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo를 사용하므로 실제 Rust 테스트 통과와 구분합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret과 ignored 보안 gate는 여전히 제외됩니다.
+작업 폴더에서 `pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 저장소 Secret 패턴 검사를 먼저 수행한 뒤 전체 일반 검사를 진행합니다. Secret 검사기 자체 테스트는 `pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1`, 통합 검증기 테스트는 `pwsh -NoProfile -NonInteractive -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo와 가짜 `rg`를 사용하므로 실제 Rust 테스트 통과와 구분합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret 처리, Git 전체 이력·바이너리·압축파일 검사, 명시적으로 ignored인 보안 gate는 여전히 제외됩니다.
 
-[상세 변경 파일·검사 결과·남은 경계](verification/2026-09-07-local-verification-maintenance.md)를 함께 확인하세요.
+[상세 변경 파일·검사 결과·남은 경계](verification/2026-09-16-repository-secret-gate-integration.md)를 함께 확인하세요.
 
 ## 3. 전체 아키텍처 그림
 
@@ -140,6 +144,10 @@ Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 
 - 위 Phase 0A 조건을 충족하거나 별도로 승인된 새 권위 검증 계약과 그 gate를 통과하기 전에는 Draft PR을 Ready로 전환하거나 `main`에 병합하지 않음
 
 ## 9. 작업 로그
+
+- 2026-09-16 — conflict outbox의 모든 후보를 인증한 뒤에만 위치 기반 검토 목록을 게시하고, ID/암호문을 노출하지 않는 2단계 exact-byte 폐기를 연결했습니다. 미해결 또는 신뢰할 수 없는 conflict 목록이 있으면 합성 backup export를 fail-closed로 차단합니다. 전체 Web 932/932, typecheck와 build가 통과했고 conflict UI와 backup guard 독립 리뷰는 각각 Critical/Important 0이었습니다. 실제 Chromium 다중 창 검증과 backup 목록 확인 직후의 비원자 TOCTOU는 남아 있습니다. [검토 UI 기록](verification/2026-09-16-synthetic-conflict-review-ui.md), [backup guard 기록](verification/2026-09-16-synthetic-backup-conflict-guard.md).
+
+- 2026-09-16 — 저장소 Secret scan을 첫 단계로 강제하는 최소 권한 원격 CI workflow를 작성하고 구조 정책 7/7, scanner 회귀 PowerShell 7·5.1 각 78/78을 확인했습니다. 웹 IndexedDB에는 최대 8개 암호문 conflict outbox와 CAS 직후 경합 보존을 추가했고, SharedArrayBuffer를 Store·Session·Worker·Backup 경계에서 작업 전에 거부했습니다. Backup readback의 SAB·위조 길이 문제와 SQLite hardening 순서를 독립 리뷰에서 찾아 수정한 뒤 두 재리뷰 모두 Critical/Important 0이었습니다. 최종 웹 891/891·typecheck·build, 최종 일반 Workspace 검증이 exit 0이었습니다. 실제 브라우저 멀티탭, outbox 사용자 UI, 원격 GitHub Actions 실실행, Phase 0A 권위 승인, 실제 Secret은 여전히 미완료/금지입니다. [outbox 기록](verification/2026-09-16-synthetic-conflict-outbox.md), [SQLite 기록](verification/2026-09-16-sqlite-read-only-preflight-hardening.md), [CI 기록](verification/2026-09-16-remote-ci-security-gate.md).
 
 - 2026-09-15 — 합성 연결 편집 UI를 연결하고 모델 58/SSR 19를 포함한 웹 839 tests 및 타입/빌드 exit 0을 확인했습니다. 독립 리뷰의 행 전환 포커스 문제를 수정했으나 실제 포커스 검사는 미완료입니다. 격리 Comet에서 금고 안 항목 3개와 편집 폼 초기 상태까지 관찰한 후 브라우저 도구의 CDP 연결 종료로 저장/취소/잠금 검증을 마치지 못했습니다. 사용자 현황 요청에 따라 새 구현과 개발 서버를 중단하고 부분 체크포인트로 기록합니다. [UI 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md), [일정·AI 협업 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md).
 

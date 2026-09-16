@@ -6,6 +6,7 @@ import { bindVaultAutoLock } from "./bindVaultAutoLock";
 import { SyntheticEditableCatalog } from "./SyntheticConnectionEditor";
 import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
+import { SyntheticConflictReviewPanel } from "./SyntheticConflictReviewPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -50,6 +51,9 @@ export function LocalVaultPanel() {
         <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠길 수 있습니다.</small>
       </section>
 
+      {state.phase === "open" && <SyntheticConflictReviewPanel
+        key={`conflict-review-${generation}`} session={session} vaultGeneration={generation}
+      />}
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}

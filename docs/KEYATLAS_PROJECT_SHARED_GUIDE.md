@@ -12,8 +12,8 @@
 
 - 완료된 기반: 합성 암호화/복호화, 자격 증명·연결 모델, 네이티브 SQLite 저장 slice, 웹 목록·검색·자동 잠금·선택형 등록·합성 백업 경로.
 - 최신 확정 체크포인트: `c6010ba` — 연결 수정용 successor, 모든 과거 암호문을 보존하는 v3 이력, 화면 snapshot에 묶인 CAS와 재인증.
-- 현재 추가 변경: 합성 연결 편집 화면을 구현했고 웹 자동 테스트 **839/839**, 타입 검사·빌드가 통과했다. 실제 브라우저 저장/취소/충돌 검사는 **미완료**다.
-- 다음 중심 과제: 연결 UI 검증 → 충돌 사본 영구 보존/회전 → 복구·기기 키·서명/checkpoint → 서버·Android 통합 → 독립 보안 검토.
+- 현재 추가 변경: 합성 연결 편집, 암호문 conflict outbox, 전체 인증 검토 UI, exact-byte 2단계 폐기와 미해결 conflict backup 차단을 구현했고 웹 자동 테스트 **932/932**, 타입 검사·빌드가 통과했다. 실제 브라우저 저장/취소/멀티탭 충돌 검사는 **미완료**다.
+- 다음 중심 과제: 실제 브라우저 다중 창 검증 → 회전 → 복구·기기 키·서명/checkpoint → 서버·Android 통합 → 독립 보안 검토.
 - Amazon Quick 설정은 사용자 요청으로 보류했다. 기기 연결·원격 제어·연산 오케스트레이션은 KeyAtlas 밖의 별도 비공개 운영 저장소에서 관리한다.
 - 테스트 개수로 제품 완료율 %를 계산하지 않는다. “혼자 실제 키를 쓰기”에도 보안 gate는 똑같이 적용된다.
 
@@ -64,9 +64,9 @@ GitHub는 소스/문서 백업이며 사용자 금고·.env·브라우저 프로
 | 네이티브 SQLite | 불변 revision, head CAS, 충돌 보존, 재시작·프로세스 종료 테스트 기록 | 통합 회귀 공백, Windows 저장 경계 권위 판정, 실제 플랫폼 검증 |
 | React 웹 | 목록, issuer/서비스/연결 검색, 자동 잠금, 선택형 합성 등록 | 일반 사용자 흐름, 원문 접근의 강한 재인증, 최종 디자인·접근성 |
 | 브라우저 저장 | Worker → 실제 Rust/WASM → 암호문 IndexedDB | 제품용 복구/동기화와 통합, 브라우저 수명·다중 writer 검증 |
-| 연결 편집 내부 | 같은 record successor, v3 선형 이력/명시적 head, exact bytes + generation + CAS | durable conflict outbox, 회전·분기/병합 규칙 |
-| 연결 편집 UI | 고정 예시 선택 편집, no-change/확인/중복 submit 차단, 삭제 의미 안내; 839 tests와 build | 실제 브라우저 저장·취소·포커스·잠금·충돌·모바일 검사 미완료 |
-| 합성 백업/복원 | 빈 저장소 복원, 재읽기 동일성, v1/v2/v3 인증; Node+실제 WASM+fake IndexedDB | 실제 디스크 다운로드·네이티브 파일 선택 왕복, 복구 훈련 |
+| 연결 편집 내부 | 같은 record successor, v3 선형 이력/명시적 head, exact bytes + generation + 후보 사전 인증 + CAS, 최대 8개 암호문 conflict outbox | 회전·분기/자동 병합·승격 규칙 |
+| 연결 편집 UI | 고정 예시 편집, 전체 후보 인증, 위치 기반 검토, exact-byte 2단계 폐기; 통합 932 tests와 build | 실제 브라우저 저장·취소·포커스·잠금·멀티탭 충돌·모바일 검사 미완료 |
+| 합성 백업/복원 | 빈 저장소 복원, 재읽기 동일성, v1/v2/v3 인증, 미해결 conflict export 차단; Node+실제 WASM+fake IndexedDB | conflict 확인 직후 TOCTOU, outbox 포함 wire 정책, 실제 디스크/네이티브 파일 왕복·복구 훈련 |
 | 서비스 로그인 | Google OIDC/passkey와 금고 잠금 해제 분리 설계 | 서비스 세션·인증 구현, 제공자 설정, 계정 보안 |
 | 금고 복구·신뢰 기기 | 보호수단/기기 역할/epoch 설계 | recovery Key Slots, hardware-backed 기기 키, 실제 복구/분실 훈련 |
 | Android | Kotlin/Keystore/BiometricPrompt 목표 | 앱 프로젝트·Rust 바인딩·오프라인·수명 주기·실기기 검증 |
@@ -74,8 +74,9 @@ GitHub는 소스/문서 백업이며 사용자 금고·.env·브라우저 프로
 | 결제·공개 배포 | 정책/후속 단계 문서 | 상품·가격·계정·정책 결정, 운영 준비, 별도 배포 승인 |
 
 **SQLite 파일 전체를 SQLCipher로 암호화한 구현은 아니다.** 레코드 내용이 암호문으로 저장된다.
-웹의 IndexedDB와 네이티브 SQLite는 별도 경로다. 웹 v3 선형 이력은 SQLite 충돌 보존이나
-제품 동기화 프로토콜을 대신하지 않는다. CAS loser의 후보를 현재 웹은 영구 보관하지 않는다.
+웹의 IndexedDB와 네이티브 SQLite는 별도 경로다. 웹 v3 선형 이력과 암호문 conflict
+outbox는 SQLite 충돌 보존이나 제품 동기화 프로토콜을 대신하지 않는다. CAS loser 후보는
+웹 IndexedDB에 보존하지만 아직 사용자가 목록·삭제·해결할 수 없고 자동 병합하지 않는다.
 
 ### 이번 편집 UI의 정확한 검증 상태
 

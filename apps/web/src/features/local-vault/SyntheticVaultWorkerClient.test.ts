@@ -34,7 +34,9 @@ function setup() {
 }
 
 function invalidLengthArchive(kind: string): Uint8Array {
-  const bytes = new Uint8Array(kind === "oversized" ? SYNTHETIC_ARCHIVE_MAX_BYTES + 1 : kind === "detached" ? 2 : 0);
+  const bytes = kind === "shared"
+    ? new Uint8Array(new SharedArrayBuffer(2))
+    : new Uint8Array(kind === "oversized" ? SYNTHETIC_ARCHIVE_MAX_BYTES + 1 : kind === "detached" ? 2 : 0);
   if (kind === "detached") structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
   return Object.defineProperty(bytes, "byteLength", { value: 1 });
 }
@@ -42,13 +44,13 @@ function invalidLengthArchive(kind: string): Uint8Array {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("BrowserSyntheticVaultWorker", () => {
-  it.each(["empty", "oversized", "detached"])("rejects %s input with spoofed byteLength before worker creation", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s input with spoofed byteLength before worker creation", async (kind) => {
     const { client, factory } = setup();
     await expect(client.editConnections(invalidLengthArchive(kind), { reference: 0, connectionIds: [] }))
       .rejects.toHaveProperty("code", kind === "oversized" ? "LIMITS_EXCEEDED" : "INVALID_ARCHIVE");
     expect(factory).not.toHaveBeenCalled();
   });
-  it.each(["empty", "oversized", "detached"])("rejects %s worker ciphertext with spoofed byteLength", async (kind) => {
+  it.each(["empty", "oversized", "detached", "shared"])("rejects %s worker ciphertext with spoofed byteLength", async (kind) => {
     const { client, workers } = setup();
     const pending = client.editConnections(new Uint8Array([1]), { reference: 0, connectionIds: [] });
     workers[0]!.reply({ ok: true, kind: "archive", bytes: invalidLengthArchive(kind) });

@@ -1,12 +1,22 @@
 /** This store accepts opaque ciphertext only. Encryption belongs to its caller. */
 export const SYNTHETIC_VAULT_DATABASE_NAME = "keyatlas-synthetic-vault-v1";
 export const MAX_SYNTHETIC_ARCHIVE_BYTES = 512 * 1024;
+export const MAX_SYNTHETIC_CONFLICT_ARCHIVES = 8;
 
 const DATABASE_VERSION = 1;
 const OBJECT_STORE_NAME = "bundle";
 const BUNDLE_KEY = "archive";
+const CONFLICT_KEY_PREFIX = "conflict:";
+const CONFLICT_ID_PATTERN = /^[0-9a-f]{32}$/;
+const CONFLICT_ID_BYTES = 16;
 const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
+)!.get!;
+const typedArrayBuffer = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "buffer",
+)!.get!;
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype, "byteLength",
 )!.get!;
 
 export type SyntheticStorageErrorCode =
@@ -15,6 +25,8 @@ export type SyntheticStorageErrorCode =
   | "incompatible"
   | "corrupt"
   | "invalid-bytes"
+  | "invalid-conflict-id"
+  | "outbox-full"
   | "quota"
   | "aborted"
   | "failed";
@@ -25,6 +37,8 @@ const ERROR_MESSAGES: Record<SyntheticStorageErrorCode, string> = {
   incompatible: "Local encrypted storage has an unsupported database format.",
   corrupt: "The saved encrypted archive is invalid; it has been preserved.",
   "invalid-bytes": "The encrypted archive must contain 1 to 524288 bytes.",
+  "invalid-conflict-id": "The encrypted conflict identifier is invalid.",
+  "outbox-full": "The encrypted conflict outbox is full.",
   quota: "Local encrypted storage has insufficient space.",
   aborted: "The local encrypted storage transaction was aborted.",
   failed: "The local encrypted storage operation failed.",
@@ -57,6 +71,39 @@ export interface SyntheticMutableCiphertextStore extends SyntheticCiphertextStor
   ): Promise<"updated" | "conflict" | "missing">;
 }
 
+export interface SyntheticConflictArchive {
+  readonly conflictId: string;
+  readonly bytes: Uint8Array;
+}
+
+export type SyntheticConflictPreservingCasResult =
+  | { readonly kind: "updated" }
+  | { readonly kind: "conflict-preserved"; readonly conflictId: string }
+  | { readonly kind: "missing" };
+
+export type SyntheticConflictPreservationResult =
+  | { readonly kind: "already-current" }
+  | { readonly kind: "conflict-preserved"; readonly conflictId: string }
+  | { readonly kind: "missing" };
+
+export type SyntheticConflictIdSource = (target: Uint8Array<ArrayBuffer>) => void;
+
+/** Opaque ciphertext-only conflict capability. Callers authenticate archives. */
+export interface SyntheticConflictCiphertextStore extends SyntheticMutableCiphertextStore {
+  compareAndSwapArchivePreservingConflict(
+    expected: Uint8Array,
+    next: Uint8Array,
+  ): Promise<SyntheticConflictPreservingCasResult>;
+  preserveConflictArchiveIfCurrentDiffers(
+    candidate: Uint8Array,
+  ): Promise<SyntheticConflictPreservationResult>;
+  listConflictArchives(): Promise<readonly SyntheticConflictArchive[]>;
+  deleteConflictArchiveIfEqual(
+    conflictId: string,
+    expected: Uint8Array,
+  ): Promise<"deleted" | "missing" | "changed">;
+}
+
 function fixedError(error: unknown): SyntheticStorageError {
   try {
     if (error instanceof SyntheticStorageError) return error;
@@ -79,6 +126,10 @@ function copyBytes(value: unknown, code: "corrupt" | "invalid-bytes"): Uint8Arra
     if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) {
       throw new SyntheticStorageError(code);
     }
+    // SharedArrayBuffer can change concurrently while it is copied. The native
+    // ArrayBuffer getter brand-checks and rejects shared backing stores.
+    const buffer = typedArrayBuffer.call(value) as ArrayBufferLike;
+    arrayBufferByteLength.call(buffer);
     // An own byteLength property can lie; inspect the native view's real length.
     const length = typedArrayByteLength.call(value) as number;
     if (length < 1 || length > MAX_SYNTHETIC_ARCHIVE_BYTES) {
@@ -88,6 +139,44 @@ function copyBytes(value: unknown, code: "corrupt" | "invalid-bytes"): Uint8Arra
   } catch {
     // Reject detached/forged views or throwing inspection without leaking data.
     throw new SyntheticStorageError(code);
+  }
+}
+
+function conflictKey(conflictId: unknown): string {
+  if (typeof conflictId !== "string" || !CONFLICT_ID_PATTERN.test(conflictId)) {
+    throw new SyntheticStorageError("invalid-conflict-id");
+  }
+  return `${CONFLICT_KEY_PREFIX}${conflictId}`;
+}
+
+function defaultConflictIdSource(target: Uint8Array<ArrayBuffer>): void {
+  let provider: Crypto;
+  try {
+    provider = globalThis.crypto;
+  } catch {
+    throw new SyntheticStorageError("unavailable");
+  }
+  if (!provider || typeof provider.getRandomValues !== "function") {
+    throw new SyntheticStorageError("unavailable");
+  }
+  provider.getRandomValues(target);
+}
+
+function createConflictId(source: SyntheticConflictIdSource): string {
+  try {
+    const random = new Uint8Array(CONFLICT_ID_BYTES);
+    source(random);
+    if (typedArrayByteLength.call(random) !== CONFLICT_ID_BYTES) {
+      throw new SyntheticStorageError("failed");
+    }
+    let result = "";
+    for (let index = 0; index < CONFLICT_ID_BYTES; index += 1) {
+      result += random[index]!.toString(16).padStart(2, "0");
+    }
+    random.fill(0);
+    return result;
+  } catch (error) {
+    throw fixedError(error);
   }
 }
 
@@ -152,8 +241,26 @@ function openDatabase(factory: IDBFactory | undefined): Promise<IDBDatabase> {
 type Operation =
   | { kind: "read" }
   | { kind: "create"; bytes: Uint8Array }
-  | { kind: "compare-and-swap"; expected: Uint8Array; next: Uint8Array };
-type OperationResult = Uint8Array | null | "created" | "exists" | "updated" | "conflict" | "missing";
+  | { kind: "compare-and-swap"; expected: Uint8Array; next: Uint8Array }
+  | { kind: "compare-and-swap-preserving-conflict"; expected: Uint8Array; next: Uint8Array }
+  | { kind: "preserve-if-current-differs"; candidate: Uint8Array }
+  | { kind: "list-conflicts" }
+  | { kind: "delete-conflict"; conflictId: string; expected: Uint8Array };
+type OperationResult = Uint8Array | null | "created" | "exists" | "updated" | "conflict" | "missing"
+  | "deleted" | "changed" | SyntheticConflictPreservingCasResult
+  | SyntheticConflictPreservationResult
+  | readonly SyntheticConflictArchive[];
+
+interface StoredConflictArchive {
+  readonly key: string;
+  readonly conflictId: string;
+  readonly bytes: Uint8Array;
+}
+
+interface InspectedKeyspace {
+  readonly archive: Uint8Array | null;
+  readonly conflicts: readonly StoredConflictArchive[];
+}
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) return false;
@@ -166,6 +273,7 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 async function transact(
   factory: IDBFactory | undefined,
   operation: Operation,
+  conflictIdSource: SyntheticConflictIdSource,
 ): Promise<OperationResult> {
   const database = await openDatabase(factory);
   return new Promise((resolve, reject) => {
@@ -173,7 +281,7 @@ async function transact(
     try {
       transaction = database.transaction(
         OBJECT_STORE_NAME,
-        operation.kind === "read" ? "readonly" : "readwrite",
+        operation.kind === "read" || operation.kind === "list-conflicts" ? "readonly" : "readwrite",
       );
     } catch (error) {
       database.close();
@@ -217,71 +325,166 @@ async function transact(
         return;
       }
 
-      // Presence is checked by key, so an existing undefined/corrupt value cannot
-      // masquerade as an empty database. Two keys are enough to detect extras.
-      const keysRequest = store.getAllKeys(undefined, 2);
+      // The existing v1 object-store schema remains unchanged. Its logical
+      // keyspace is strictly one archive plus at most eight opaque conflicts.
+      // One extra key is enough to detect an over-limit/corrupt database.
+      const keysRequest = store.getAllKeys(undefined, MAX_SYNTHETIC_CONFLICT_ARCHIVES + 2);
       keysRequest.onerror = () => { failure = fixedError(keysRequest.error); };
       keysRequest.onsuccess = () => {
         const keys = keysRequest.result;
-        if (keys.length > 1 || (keys.length === 1 && keys[0] !== BUNDLE_KEY)) {
+        if (keys.length > MAX_SYNTHETIC_CONFLICT_ARCHIVES + 1) {
           fail(new SyntheticStorageError("corrupt"));
           return;
         }
-        if (keys.length === 0) {
-          if (operation.kind === "read") {
-            result = null;
+
+        let hasArchive = false;
+        const conflictIds = new Map<string, string>();
+        for (const key of keys) {
+          if (key === BUNDLE_KEY) {
+            if (hasArchive) { fail(new SyntheticStorageError("corrupt")); return; }
+            hasArchive = true;
+            continue;
+          }
+          if (typeof key !== "string" || !key.startsWith(CONFLICT_KEY_PREFIX)) {
+            fail(new SyntheticStorageError("corrupt"));
             return;
           }
-          if (operation.kind === "compare-and-swap") {
-            result = "missing";
+          const conflictId = key.slice(CONFLICT_KEY_PREFIX.length);
+          if (!CONFLICT_ID_PATTERN.test(conflictId) || conflictIds.has(conflictId)) {
+            fail(new SyntheticStorageError("corrupt"));
             return;
           }
-          try {
-            // add, not put: an existing archive must never be overwritten.
-            const addRequest = store.add(operation.bytes, BUNDLE_KEY);
-            addRequest.onerror = () => { failure = fixedError(addRequest.error); };
-            addRequest.onsuccess = () => { result = "created"; };
-          } catch (error) {
-            fail(error);
-          }
+          conflictIds.set(conflictId, key);
+        }
+        if (!hasArchive && conflictIds.size !== 0) {
+          fail(new SyntheticStorageError("corrupt"));
           return;
         }
 
-        let readRequest: IDBRequest;
-        try {
-          readRequest = store.get(BUNDLE_KEY);
-        } catch (error) {
-          fail(error);
+        if (keys.length === 0) {
+          perform(Object.freeze({ archive: null, conflicts: Object.freeze([]) }));
           return;
         }
-        readRequest.onerror = () => { failure = fixedError(readRequest.error); };
-        readRequest.onsuccess = () => {
-          try {
-            const bytes = copyBytes(readRequest.result, "corrupt");
-            if (operation.kind === "read") {
-              result = bytes;
-            } else if (operation.kind === "create") {
-              result = "exists";
-            } else if (!equalBytes(bytes, operation.expected)) {
-              result = "conflict";
-            } else {
-              // Validation, comparison and replacement share this transaction.
-              const putRequest = store.put(operation.next, BUNDLE_KEY);
-              putRequest.onerror = () => { failure = fixedError(putRequest.error); };
-              putRequest.onsuccess = () => { result = "updated"; };
+
+        const values = new Map<string, Uint8Array>();
+        let remaining = keys.length;
+        for (const key of keys) {
+          let readRequest: IDBRequest;
+          try { readRequest = store.get(key); }
+          catch (error) { fail(error); return; }
+          readRequest.onerror = () => { failure = fixedError(readRequest.error); };
+          readRequest.onsuccess = () => {
+            if (failure) return;
+            try {
+              values.set(String(key), copyBytes(readRequest.result, "corrupt"));
+              remaining -= 1;
+              if (remaining !== 0) return;
+              const conflicts = [...conflictIds.entries()]
+                .map(([conflictId, key]) => Object.freeze({
+                  key,
+                  conflictId,
+                  bytes: values.get(key)!,
+                }))
+                .sort((left, right) => left.conflictId < right.conflictId ? -1
+                  : left.conflictId > right.conflictId ? 1 : 0);
+              perform(Object.freeze({
+                archive: hasArchive ? values.get(BUNDLE_KEY)! : null,
+                conflicts: Object.freeze(conflicts),
+              }));
+            } catch (error) {
+              fail(error);
             }
-          } catch (error) {
-            fail(error);
-          }
-        };
+          };
+        }
       };
+
+      function perform(keyspace: InspectedKeyspace): void {
+        try {
+          const bytes = keyspace.archive;
+          const preserveConflict = (candidate: Uint8Array): void => {
+            if (keyspace.conflicts.length >= MAX_SYNTHETIC_CONFLICT_ARCHIVES) {
+              fail(new SyntheticStorageError("outbox-full"));
+              return;
+            }
+            const conflictId = createConflictId(conflictIdSource);
+            const key = `${CONFLICT_KEY_PREFIX}${conflictId}`;
+            if (keyspace.conflicts.some((entry) => entry.key === key)) {
+              fail(new SyntheticStorageError("failed"));
+              return;
+            }
+            const addRequest = store.add(candidate, key);
+            addRequest.onerror = () => { failure = fixedError(addRequest.error); };
+            addRequest.onsuccess = () => {
+              result = Object.freeze({ kind: "conflict-preserved" as const, conflictId });
+            };
+          };
+          if (operation.kind === "read") {
+            result = bytes === null ? null : new Uint8Array(bytes);
+            return;
+          }
+          if (operation.kind === "list-conflicts") {
+            result = Object.freeze(keyspace.conflicts.map((conflict) => Object.freeze({
+              conflictId: conflict.conflictId,
+              bytes: new Uint8Array(conflict.bytes),
+            })));
+            return;
+          }
+          if (operation.kind === "create") {
+            if (bytes !== null) { result = "exists"; return; }
+            const addRequest = store.add(operation.bytes, BUNDLE_KEY);
+            addRequest.onerror = () => { failure = fixedError(addRequest.error); };
+            addRequest.onsuccess = () => { result = "created"; };
+            return;
+          }
+          if (operation.kind === "delete-conflict") {
+            const conflict = keyspace.conflicts.find((entry) => entry.conflictId === operation.conflictId);
+            if (!conflict) { result = "missing"; return; }
+            if (!equalBytes(conflict.bytes, operation.expected)) { result = "changed"; return; }
+            const deleteRequest = store.delete(conflict.key);
+            deleteRequest.onerror = () => { failure = fixedError(deleteRequest.error); };
+            deleteRequest.onsuccess = () => { result = "deleted"; };
+            return;
+          }
+          if (operation.kind === "preserve-if-current-differs") {
+            if (bytes === null) { result = Object.freeze({ kind: "missing" as const }); return; }
+            if (equalBytes(bytes, operation.candidate)) {
+              result = Object.freeze({ kind: "already-current" as const });
+              return;
+            }
+            preserveConflict(operation.candidate);
+            return;
+          }
+          if (bytes === null) {
+            result = operation.kind === "compare-and-swap"
+              ? "missing" : Object.freeze({ kind: "missing" as const });
+            return;
+          }
+          if (!equalBytes(bytes, operation.expected)) {
+            if (operation.kind === "compare-and-swap") { result = "conflict"; return; }
+            preserveConflict(operation.next);
+            return;
+          }
+          // Validation, comparison and replacement share this transaction.
+          const putRequest = store.put(operation.next, BUNDLE_KEY);
+          putRequest.onerror = () => { failure = fixedError(putRequest.error); };
+          putRequest.onsuccess = () => {
+            result = operation.kind === "compare-and-swap"
+              ? "updated" : Object.freeze({ kind: "updated" as const });
+          };
+        } catch (error) {
+          fail(error);
+        }
+      }
     } catch (error) {
       fail(error);
     }
   });
 }
 
-export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticMutableCiphertextStore {
+export function createSyntheticCiphertextStore(
+  factory?: IDBFactory,
+  conflictIdSource: SyntheticConflictIdSource = defaultConflictIdSource,
+): SyntheticConflictCiphertextStore {
   const resolveFactory = () => {
     try {
       return factory ?? globalThis.indexedDB;
@@ -291,12 +494,12 @@ export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticM
   };
   return {
     async read() {
-      return await transact(resolveFactory(), { kind: "read" }) as Uint8Array | null;
+      return await transact(resolveFactory(), { kind: "read" }, conflictIdSource) as Uint8Array | null;
     },
     async createIfAbsent(bytes) {
       // Snapshot and validate synchronously before any asynchronous database work.
       const snapshot = copyBytes(bytes, "invalid-bytes");
-      return await transact(resolveFactory(), { kind: "create", bytes: snapshot }) as "created" | "exists";
+      return await transact(resolveFactory(), { kind: "create", bytes: snapshot }, conflictIdSource) as "created" | "exists";
     },
     async compareAndSwapArchive(expected, next) {
       // Snapshot both inputs before resolving/opening the database or awaiting.
@@ -304,7 +507,35 @@ export function createSyntheticCiphertextStore(factory?: IDBFactory): SyntheticM
       const nextSnapshot = copyBytes(next, "invalid-bytes");
       return await transact(resolveFactory(), {
         kind: "compare-and-swap", expected: expectedSnapshot, next: nextSnapshot,
-      }) as "updated" | "conflict" | "missing";
+      }, conflictIdSource) as "updated" | "conflict" | "missing";
+    },
+    async compareAndSwapArchivePreservingConflict(expected, next) {
+      const expectedSnapshot = copyBytes(expected, "invalid-bytes");
+      const nextSnapshot = copyBytes(next, "invalid-bytes");
+      return await transact(resolveFactory(), {
+        kind: "compare-and-swap-preserving-conflict",
+        expected: expectedSnapshot,
+        next: nextSnapshot,
+      }, conflictIdSource) as SyntheticConflictPreservingCasResult;
+    },
+    async preserveConflictArchiveIfCurrentDiffers(candidate) {
+      const candidateSnapshot = copyBytes(candidate, "invalid-bytes");
+      return await transact(resolveFactory(), {
+        kind: "preserve-if-current-differs",
+        candidate: candidateSnapshot,
+      }, conflictIdSource) as SyntheticConflictPreservationResult;
+    },
+    async listConflictArchives() {
+      return (await transact(resolveFactory(), { kind: "list-conflicts" }, conflictIdSource)) as SyntheticConflictArchive[];
+    },
+    async deleteConflictArchiveIfEqual(conflictId, expected) {
+      const key = conflictKey(conflictId);
+      const expectedSnapshot = copyBytes(expected, "invalid-bytes");
+      return await transact(resolveFactory(), {
+        kind: "delete-conflict",
+        conflictId: key.slice(CONFLICT_KEY_PREFIX.length),
+        expected: expectedSnapshot,
+      }, conflictIdSource) as "deleted" | "missing" | "changed";
     },
   };
 }

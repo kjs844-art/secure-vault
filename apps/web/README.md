@@ -152,19 +152,26 @@ Worker/Rust에서 기존 암호문을 모두 인증하고 기존 envelope를 보
 
 React 선택형 등록 폼과 계정/workspace/project/환경의 private local-only 표시·검색이
 연결됐습니다. 실제 Comet의 등록·검색·잠금 검증은 [화면 기록](../../docs/verification/2026-09-15-synthetic-registration-ui.md)을 따릅니다.
-편집 화면·회전·동기화·실제 키 원문 조회가 완성됐다는 뜻이 아닙니다.
+선택형 합성 연결 편집 화면은 연결됐지만 회전·동기화·실제 키 원문 조회가 완성됐다는 뜻은 아닙니다.
 [등록 저장 경로 기록](../../docs/verification/2026-09-15-synthetic-registration-storage.md).
 
-## 합성 연결 편집 내부 API (화면 연결 전)
+## 합성 연결 편집 화면과 내부 API
 
 `session.editConnections(expectedGeneration, { reference, connectionIds })`는 열린
-화면의 generation과 실제 표시를 만든 암호문 snapshot을 함께 확인합니다. UI 연결 시
-reference와 generation을 같은 render/editor에서 캡처해야 하며, 오래된 callback에서
-현재 generation을 새로 읽어 넣으면 안 됩니다. 현재 이 API를 호출하는 편집 폼은 없습니다.
+화면의 generation과 실제 표시를 만든 암호문 snapshot을 함께 확인합니다. 현재 선택형
+합성 편집 폼은 reference와 generation을 같은 render/editor에서 캡처하며, 오래된
+callback에서 현재 generation을 새로 읽어 넣지 않습니다. 지원하지 않는 기록은 보존 후
+편집을 거부하고, 저장 완료 표시는 저장본 재읽기와 전체 인증 뒤에만 갱신됩니다.
 
-저장소가 표시 당시와 바뀌면 수정 Worker/CAS를 호출하지 않습니다. 일치하면 원래 bytes로
-후속 revision을 만들고 CAS → 동일 저장본 재읽기 → 전체 인증 뒤 목록을 게시합니다.
-잠금/새 작업은 이전 완료를 무효화합니다. 실패한 후보를 영구 보관하는 outbox는 없습니다.
+표시 당시의 인증된 암호문 snapshot으로 후속 revision 후보를 만들고, 후보 전체를 다시
+인증한 뒤 원자적 CAS를 실행합니다. CAS loser는 최대 8개의 암호문 전용 conflict outbox에
+보존하며 자동 덮어쓰기·재시도·퇴거·병합하지 않습니다. CAS 성공 직후 다른 writer가
+현재본을 바꾼 readback 경합에서도 후보를 같은 transaction 규칙으로 보존합니다.
+잠금/새 작업은 이전 완료를 무효화합니다. 사용자는 모든 후보가 인증된 뒤 위치 기반 번호로
+읽기 전용 내용을 보고 두 단계 확인으로 exact-byte 조건부 폐기만 할 수 있습니다. ID와
+암호문은 DOM에 노출하지 않으며 자동 재조회·병합·승격은 없습니다. 합성 backup은 후보를
+포함하지 않고, 미해결 후보 또는 신뢰할 수 없는 목록이 있으면 export를 fail-closed로
+중단합니다. outbox 포함 형식과 해결/승격 정책은 아직 구현하지 않았습니다.
 
 v3는 최대 128 records / 512 revisions / 총 512 KiB입니다. 과거 envelope를 지우지 않고
 head index만 교체하며 모든 과거 revision도 인증합니다. 분기·누락 부모·중복·손상·미래
@@ -172,5 +179,12 @@ head index만 교체하며 모든 과거 revision도 인증합니다. 분기·�
 않습니다. 전체 rollback/출처/누락을 보증하는 signed manifest는 아닙니다.
 
 이번 [내부 연결 편집 검증](../../docs/verification/2026-09-15-synthetic-connection-edit.md)은
-웹 전체 762 tests, 실제 WASM+Node+fake IndexedDB를 포함합니다. 실제 브라우저 편집 동작,
-브라우저 다중 탭 충돌, 실제 Secret 지원을 검증한 것은 아닙니다.
+실제 WASM+Node+fake IndexedDB 자동 검사를 포함합니다. 편집 폼의 정적 접근성·상태 검사는
+[UI 검증 기록](../../docs/verification/2026-09-15-synthetic-connection-editor-ui.md)을 따릅니다.
+[암호문 conflict outbox 검증](../../docs/verification/2026-09-16-synthetic-conflict-outbox.md)은
+저장소·세션·실제 WASM 경합 회귀와 SharedArrayBuffer 사전 거부 경계를 기록합니다.
+[검토 UI 검증](../../docs/verification/2026-09-16-synthetic-conflict-review-ui.md)과
+[백업 conflict guard 검증](../../docs/verification/2026-09-16-synthetic-backup-conflict-guard.md)은
+명시적 검토·폐기와 미해결 후보가 있는 export 차단 경계를 기록합니다.
+실제 브라우저의 저장·취소·포커스·잠금·다중 탭 충돌 전체 흐름이나 실제 Secret 지원을
+검증한 것은 아닙니다.

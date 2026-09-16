@@ -95,4 +95,129 @@ describe("connection edit actual-WASM/session/IndexedDB adapter integration", { 
     expect(reopened.state.entries).toEqual(session.state.entries);
     session.lock(); reopened.lock();
   }, 120_000);
+
+  it("restarts with an authenticated winner and a separately authenticated durable loser", async () => {
+    const database = new IDBFactory();
+    const firstStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x11));
+    const secondStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x22));
+    const first = new SyntheticVaultSession(firstStore, actualWorker());
+    await first.create();
+    const second = new SyntheticVaultSession(secondStore, actualWorker());
+    await second.open();
+    expect(first.state.phase).toBe("open");
+    expect(second.state.phase).toBe("open");
+
+    await Promise.all([
+      first.editConnections(first.viewGeneration, { reference: 1, connectionIds: [0] }),
+      second.editConnections(second.viewGeneration, { reference: 1, connectionIds: [2] }),
+    ]);
+    expect([first.state.phase, second.state.phase].sort()).toEqual(["error", "open"]);
+    expect([first.state.errorCode, second.state.errorCode])
+      .toContain("STORAGE_CONFLICT_PRESERVED");
+
+    const restartedStore = createSyntheticCiphertextStore(database);
+    const current = await restartedStore.read();
+    const conflicts = await restartedStore.listConflictArchives();
+    expect(current).not.toBeNull();
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]!.bytes).not.toEqual(current);
+
+    const verifier = actualWorker();
+    const currentRows = await verifier.open(current!);
+    const losingRows = await verifier.open(conflicts[0]!.bytes);
+    const alternatives = [currentRows[1]!.connections, losingRows[1]!.connections]
+      .map((connections) => connections.map((connection) => connection.label).join(","))
+      .sort();
+    expect(alternatives).toEqual(["Example CI", "Example MCP"]);
+
+    first.lock(); second.lock();
+    const reopened = new SyntheticVaultSession(restartedStore, actualWorker());
+    await reopened.open();
+    expect(reopened.state.entries).toEqual(currentRows);
+    expect(await createSyntheticCiphertextStore(database).listConflictArchives())
+      .toEqual(conflicts);
+    reopened.lock();
+  }, 120_000);
+
+  it("durably preserves an authenticated candidate changed by a writer after CAS success", async () => {
+    const database = new IDBFactory();
+    const durableStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x33));
+    const setup = new SyntheticVaultSession(durableStore, actualWorker());
+    await setup.create();
+    setup.lock();
+
+    const racingStore = {
+      ...durableStore,
+      async compareAndSwapArchivePreservingConflict(expected: Uint8Array, next: Uint8Array) {
+        const outcome = await durableStore.compareAndSwapArchivePreservingConflict(expected, next);
+        if (outcome.kind === "updated") {
+          const successor = editSyntheticConnections(next, 1, new Float64Array([2]));
+          expect(await durableStore.compareAndSwapArchive(next, successor)).toBe("updated");
+        }
+        return outcome;
+      },
+    };
+    const editor = new SyntheticVaultSession(racingStore, actualWorker());
+    await editor.open();
+    await editor.editConnections(editor.viewGeneration, { reference: 1, connectionIds: [0] });
+    expect(editor.state).toEqual({
+      phase: "error", entries: [], errorCode: "STORAGE_CONFLICT_PRESERVED",
+    });
+
+    const restartedStore = createSyntheticCiphertextStore(database);
+    const current = await restartedStore.read();
+    const conflicts = await restartedStore.listConflictArchives();
+    expect(current).not.toBeNull();
+    expect(conflicts).toHaveLength(1);
+    const verifier = actualWorker();
+    const currentRows = await verifier.open(current!);
+    const preservedRows = await verifier.open(conflicts[0]!.bytes);
+    expect(currentRows[1]!.connections.map((connection) => connection.label)).toEqual(["Example CI"]);
+    expect(preservedRows[1]!.connections.map((connection) => connection.label)).toEqual(["Example MCP"]);
+
+    const reopened = new SyntheticVaultSession(restartedStore, actualWorker());
+    await reopened.open();
+    expect(reopened.state.entries).toEqual(currentRows);
+    expect(await createSyntheticCiphertextStore(database).listConflictArchives()).toEqual(conflicts);
+    editor.lock(); reopened.lock();
+  }, 120_000);
+
+  it("reviews an authenticated loser and exact-discards it without changing the current archive", async () => {
+    const database = new IDBFactory();
+    const firstStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x41));
+    const secondStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x42));
+    const first = new SyntheticVaultSession(firstStore, actualWorker());
+    await first.create();
+    const second = new SyntheticVaultSession(secondStore, actualWorker());
+    await second.open();
+    await Promise.all([
+      first.editConnections(first.viewGeneration, { reference: 1, connectionIds: [0] }),
+      second.editConnections(second.viewGeneration, { reference: 1, connectionIds: [2] }),
+    ]);
+
+    const durableStore = createSyntheticCiphertextStore(database);
+    const currentBefore = (await durableStore.read())!;
+    const conflictsBefore = await durableStore.listConflictArchives();
+    expect(conflictsBefore).toHaveLength(1);
+    const expectedLoserRows = await actualWorker().open(conflictsBefore[0]!.bytes);
+
+    const reviewer = new SyntheticVaultSession(durableStore, actualWorker());
+    await reviewer.open();
+    await reviewer.loadConflictReviews(reviewer.viewGeneration);
+    expect(reviewer.conflictReviewState.phase).toBe("ready");
+    expect(reviewer.conflictReviewState.items).toEqual([
+      { reference: 0, entries: expectedLoserRows },
+    ]);
+    expect(JSON.stringify(reviewer.conflictReviewState)).not.toContain(conflictsBefore[0]!.conflictId);
+
+    const reviewVersion = reviewer.conflictReviewState.reviewVersion;
+    reviewer.requestConflictDiscard(reviewVersion, 0);
+    expect(await durableStore.listConflictArchives()).toEqual(conflictsBefore);
+    await reviewer.confirmConflictDiscard(reviewVersion, 0);
+    expect(reviewer.conflictReviewState).toMatchObject({ phase: "discarded", items: [] });
+    expect(await durableStore.read()).toEqual(currentBefore);
+    expect(await durableStore.listConflictArchives()).toEqual([]);
+
+    first.lock(); second.lock(); reviewer.lock();
+  }, 120_000);
 });

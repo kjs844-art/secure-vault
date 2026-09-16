@@ -24,6 +24,13 @@ function fakeArchive(length = 32, marker = 7): Uint8Array {
   return bytes;
 }
 
+function sharedArchive(): Uint8Array {
+  const source = fakeArchive();
+  const bytes = new Uint8Array(new SharedArrayBuffer(source.byteLength));
+  bytes.set(source);
+  return bytes;
+}
+
 /** Compare every visible byte without Vitest enumerating half a million properties. */
 function expectArchiveBytesEqual(actual: Uint8Array, expected: Uint8Array): void {
   expect(Object.getPrototypeOf(actual)).toBe(Uint8Array.prototype);
@@ -85,6 +92,7 @@ function fixture(initial: Uint8Array | null = null) {
       saved = new Uint8Array(bytes);
       return "created";
     }),
+    listConflictArchives: vi.fn().mockResolvedValue([]),
   };
   const worker = fakeWorker();
   return { store, worker, backup: new SyntheticVaultBackup(store, worker) };
@@ -103,6 +111,7 @@ const invalidInputs: [string, unknown][] = [
   ["DataView", new DataView(new ArrayBuffer(32))],
   ["other typed array", new Uint16Array(32)],
   ["Uint8Array subclass", new ArchiveSubclass(fakeArchive())],
+  ["SharedArrayBuffer view", sharedArchive()],
   ["null", null],
   ["undefined", undefined],
 ];
@@ -171,6 +180,150 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(saved).toEqual(new Uint8Array(32));
     expect(store.read).toHaveBeenCalledOnce();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(store.listConflictArchives).toHaveBeenCalledTimes(2);
+  });
+
+  it("authenticates an unresolved conflict, clears returned copies, and refuses export before reading the main archive", async () => {
+    const conflictBytes = fakeArchive(32, 41);
+    const expected = conflictBytes.slice();
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives.mockResolvedValueOnce([{
+      conflictId: "00112233445566778899aabbccddeeff",
+      bytes: conflictBytes,
+    }]);
+    await expect(backup.exportArchive()).rejects.toMatchObject({
+      code: "UNRESOLVED_CONFLICTS",
+      message: new SyntheticBackupError("UNRESOLVED_CONFLICTS").message,
+    });
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open.mock.calls[0]![0]).toEqual(expected);
+    expect(worker.open.mock.calls[0]![0]).not.toBe(conflictBytes);
+    expect(conflictBytes).toEqual(new Uint8Array(expected.byteLength));
+  });
+
+  it.each([
+    ["invalid identifier", [{ conflictId: "PRIVATE_ID", bytes: fakeArchive() }]],
+    ["duplicate identifier", [
+      { conflictId: "00112233445566778899aabbccddeeff", bytes: fakeArchive() },
+      { conflictId: "00112233445566778899aabbccddeeff", bytes: fakeArchive() },
+    ]],
+    ["shared bytes", [{ conflictId: "00112233445566778899aabbccddeeff", bytes: sharedArchive() }]],
+    ["missing bytes", [{ conflictId: "00112233445566778899aabbccddeeff" }]],
+  ] as const)("fails closed for a malformed conflict list with %s", async (_label, conflicts) => {
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives.mockResolvedValueOnce(conflicts as never);
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+    expect(store.read).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("clears ordinary returned bytes even when another conflict field is malformed", async () => {
+    const bytes = fakeArchive();
+    const { backup, store } = fixture(fakeArchive());
+    store.listConflictArchives.mockResolvedValueOnce([{ conflictId: "bad", bytes }]);
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+    expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+  });
+
+  it("rejects conflict accessors without invoking them and clears an ordinary own bytes field", async () => {
+    const bytes = fakeArchive();
+    const accessor = vi.fn(() => { throw new Error("PRIVATE_CONFLICT_ACCESSOR"); });
+    const entry = Object.defineProperties({}, {
+      conflictId: { get: accessor, enumerable: true },
+      bytes: { value: bytes, enumerable: true },
+    });
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives.mockResolvedValueOnce([entry] as never);
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+    expect(accessor).not.toHaveBeenCalled();
+    expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+    expect(store.read).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it.each(["entry-extra-field", "array-extra-field"] as const)(
+    "rejects an exact-shape violation (%s), clears bytes, and exports nothing", async (kind) => {
+      const bytes = fakeArchive();
+      const entry = {
+        conflictId: "00112233445566778899aabbccddeeff",
+        bytes,
+        ...(kind === "entry-extra-field" ? { note: "PRIVATE_EXTRA" } : {}),
+      };
+      const list = [entry];
+      if (kind === "array-extra-field") Object.defineProperty(list, "extra", { value: true, enumerable: true });
+      const { backup, store, worker } = fixture(fakeArchive());
+      store.listConflictArchives.mockResolvedValueOnce(list as never);
+      await expect(backup.exportArchive()).rejects.toMatchObject({ code: "STORAGE_FAILED" });
+      expect(bytes).toEqual(new Uint8Array(bytes.byteLength));
+      expect(store.read).not.toHaveBeenCalled();
+      expect(worker.open).not.toHaveBeenCalled();
+    },
+  );
+
+  it("normalizes a hostile conflict-list Proxy without reading its values or exporting", async () => {
+    const valueRead = vi.fn(() => { throw new Error("PRIVATE_PROXY_GET"); });
+    const descriptorRead = vi.fn(() => { throw new Error("PRIVATE_PROXY_DESCRIPTOR"); });
+    const raw = new Proxy([{
+      conflictId: "00112233445566778899aabbccddeeff",
+      bytes: fakeArchive(),
+    }], {
+      // Promise resolution is specified to inspect `then`; allow only that
+      // protocol access so the backup guard receives the hostile value.
+      get(_target, key) { return key === "then" ? undefined : valueRead(); },
+      getOwnPropertyDescriptor: descriptorRead,
+    });
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives.mockResolvedValueOnce(raw as never);
+    await expect(backup.exportArchive()).rejects.toMatchObject({
+      code: "STORAGE_FAILED",
+      message: new SyntheticBackupError("STORAGE_FAILED").message,
+    });
+    expect(valueRead).not.toHaveBeenCalled();
+    expect(descriptorRead).toHaveBeenCalled();
+    expect(store.read).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the conflict-list capability is missing", async () => {
+    const stored = fakeArchive();
+    const store: SyntheticCiphertextStore = {
+      read: vi.fn().mockResolvedValue(stored),
+      createIfAbsent: vi.fn().mockResolvedValue("exists"),
+    };
+    const worker = fakeWorker();
+    await expect(new SyntheticVaultBackup(store, worker).exportArchive())
+      .rejects.toMatchObject({ code: "STORAGE_FAILED" });
+    expect(store.read).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when conflict listing rejects without reading or exporting the main archive", async () => {
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives.mockRejectedValueOnce(new Error("PRIVATE_CONFLICT_STORAGE_FAILURE"));
+    await expect(backup.exportArchive()).rejects.toMatchObject({
+      code: "STORAGE_FAILED",
+      message: new SyntheticBackupError("STORAGE_FAILED").message,
+    });
+    expect(store.read).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("rechecks immediately before returning and blocks a conflict inserted during main validation", async () => {
+    const lateConflict = fakeArchive(32, 53);
+    const { backup, store, worker } = fixture(fakeArchive());
+    store.listConflictArchives
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        conflictId: "ffeeddccbbaa99887766554433221100",
+        bytes: lateConflict,
+      }]);
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "UNRESOLVED_CONFLICTS" });
+    expect(store.listConflictArchives).toHaveBeenCalledTimes(2);
+    expect(store.read).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
+    expect(lateConflict).toEqual(new Uint8Array(lateConflict.byteLength));
   });
 
   it("returns EMPTY for absent storage without validating or creating", async () => {
@@ -262,6 +415,14 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     const { backup, store, worker } = fixture();
     await expect(backup.restoreArchive(input as Uint8Array)).rejects.toMatchObject({ code: "INVALID_BACKUP" });
     expect(store.read).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("rejects a SharedArrayBuffer-backed stored archive before worker validation", async () => {
+    const { backup, store, worker } = fixture(sharedArchive());
+    await expect(backup.exportArchive()).rejects.toMatchObject({ code: "INVALID_BACKUP" });
+    expect(store.read).toHaveBeenCalledOnce();
     expect(store.createIfAbsent).not.toHaveBeenCalled();
     expect(worker.open).not.toHaveBeenCalled();
   });
@@ -411,6 +572,26 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
       expect(worker.open).toHaveBeenCalledOnce();
     },
   );
+
+  it("rejects a SharedArrayBuffer readback without reporting restore success", async () => {
+    const { backup, store, worker } = fixture();
+    store.read.mockResolvedValueOnce(null).mockResolvedValueOnce(sharedArchive());
+    await expect(backup.restoreArchive(fakeArchive())).rejects.toMatchObject({ code: "READBACK_FAILED" });
+    expect(store.read).toHaveBeenCalledTimes(2);
+    expect(store.createIfAbsent).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledOnce();
+  });
+
+  it("uses the native readback length and rejects a longer matching prefix", async () => {
+    const readback = fakeArchive(33);
+    Object.defineProperty(readback, "byteLength", { value: 32, enumerable: true });
+    const { backup, store, worker } = fixture();
+    store.read.mockResolvedValueOnce(null).mockResolvedValueOnce(readback);
+    await expect(backup.restoreArchive(fakeArchive())).rejects.toMatchObject({ code: "READBACK_FAILED" });
+    expect(store.read).toHaveBeenCalledTimes(2);
+    expect(store.createIfAbsent).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledOnce();
+  });
 
   it.each(["export-read", "restore-read", "create", "readback"])(
     "normalizes a %s storage failure and never retries", async (stage) => {
@@ -573,20 +754,23 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 
   it.each(["resolve", "reject"] as const)("a stale %s cannot clear BUSY on a newer operation", async (outcome) => {
     const { backup, store } = fixture(fakeArchive());
-    const oldRead = deferred<Uint8Array | null>();
-    const newRead = deferred<Uint8Array | null>();
-    store.read.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    const oldList = deferred<readonly []>();
+    const newList = deferred<readonly []>();
+    store.listConflictArchives
+      .mockReturnValueOnce(oldList.promise)
+      .mockReturnValueOnce(newList.promise);
     const oldOperation = backup.exportArchive();
     const oldRejection = expect(oldOperation).rejects.toMatchObject({ code: "CANCELLED" });
     backup.cancel();
     const newOperation = backup.exportArchive();
-    if (outcome === "resolve") oldRead.resolve(fakeArchive());
-    else oldRead.reject(new Error("SYNTHETIC_PRIVATE_OLD_FAILURE"));
+    if (outcome === "resolve") oldList.resolve([]);
+    else oldList.reject(new Error("SYNTHETIC_PRIVATE_OLD_FAILURE"));
     await oldRejection;
     await expect(backup.exportArchive()).rejects.toMatchObject({ code: "BUSY" });
-    expect(store.read).toHaveBeenCalledTimes(2);
-    newRead.resolve(fakeArchive());
+    expect(store.read).not.toHaveBeenCalled();
+    newList.resolve([]);
     await expect(newOperation).resolves.toEqual(fakeArchive());
+    expect(store.read).toHaveBeenCalledOnce();
   });
 
   it("allows a new operation after validation failure", async () => {
@@ -609,29 +793,16 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     await expect(backup.exportArchive()).resolves.toEqual(fakeArchive());
   });
 
-  it("sanitizes tampered backup errors and reads their code accessor only once", async () => {
-    const { backup, store, worker } = fixture();
-    const code = vi.fn().mockReturnValueOnce("INVALID_BACKUP").mockReturnValue("SYNTHETIC_PRIVATE_CODE");
-    const error = Object.defineProperty(new SyntheticBackupError("INVALID_BACKUP"), "code", { get: code });
-    error.message = "SYNTHETIC_PRIVATE_MESSAGE";
-    const input = Object.defineProperty(fakeArchive(), "byteLength", { get() { throw error; } });
-    await expect(backup.restoreArchive(input)).rejects.toMatchObject({
-      code: "INVALID_BACKUP", message: new SyntheticBackupError("INVALID_BACKUP").message,
+  it("snapshots ordinary bytes without inspecting buffer, byteLength, length or iterator shadows", async () => {
+    const { backup, worker } = fixture();
+    const shadow = vi.fn(() => { throw new Error("SYNTHETIC_PRIVATE_SHADOW"); });
+    const input = Object.defineProperties(fakeArchive(), {
+      buffer: { get: shadow }, byteLength: { get: shadow },
+      length: { get: shadow }, [Symbol.iterator]: { get: shadow },
     });
-    expect(code).toHaveBeenCalledOnce();
-    expect(store.read).not.toHaveBeenCalled();
-    expect(worker.open).not.toHaveBeenCalled();
-  });
-
-  it("preserves cancellation triggered by a reentrant error-code accessor", async () => {
-    const { backup, store, worker } = fixture();
-    const error = Object.defineProperty(new SyntheticBackupError("INVALID_BACKUP"), "code", {
-      get() { backup.cancel(); return "INVALID_BACKUP"; },
-    });
-    const input = Object.defineProperty(fakeArchive(), "byteLength", { get() { throw error; } });
-    await expect(backup.restoreArchive(input)).rejects.toMatchObject({ code: "CANCELLED" });
-    expect(store.read).not.toHaveBeenCalled();
-    expect(worker.open).not.toHaveBeenCalled();
+    await expect(backup.restoreArchive(input)).resolves.toBeUndefined();
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(shadow).not.toHaveBeenCalled();
   });
 });
 

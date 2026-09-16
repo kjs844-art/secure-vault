@@ -191,6 +191,16 @@ describe("synthetic backup UI session", () => {
     expect(f.session.state.message).not.toContain("PRIVATE");
   });
 
+  it("does not create a download URL when unresolved conflicts block export", async () => {
+    const f = fixture();
+    f.backend.exportArchive.mockRejectedValue(new SyntheticBackupError("UNRESOLVED_CONFLICTS"));
+    f.session.acknowledge(true);
+    await f.session.prepareExport();
+    expect(f.session.state.downloadUrl).toBeNull();
+    expect(f.session.state.message).toContain("충돌 암호문");
+    expect(f.port.createObjectURL).not.toHaveBeenCalled();
+  });
+
   it("a reentrant error-code getter cannot reopen a locked session", async () => {
     const f = fixture(); const error = new SyntheticBackupError("EXISTS");
     Object.defineProperty(error, "code", { get() { f.session.lock(); return "EXISTS"; } });
