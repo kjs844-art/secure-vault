@@ -5,6 +5,12 @@ import {
 } from "../../bridge/catalogProtocol";
 import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
 import { parseSyntheticConnectionEdit, type SyntheticConnectionEditSelection } from "./syntheticConnectionEdit";
+import {
+  parseSyntheticRotationSelection, type SyntheticRotationSelection,
+} from "./syntheticRotation";
+import {
+  projectRotationChecklistV1, type LocalRotationChecklistV1,
+} from "../../bridge/rotationProtocol";
 
 export const SYNTHETIC_ARCHIVE_MAX_BYTES = 524_288;
 export const SYNTHETIC_WORKER_TIMEOUT_MS = 90_000;
@@ -21,7 +27,9 @@ export interface SyntheticVaultWorkerPort {
 type WorkerFactory = () => SyntheticVaultWorkerPort;
 type Request = { op: "create" } | { op: "open"; bytes: Uint8Array }
   | { op: "append"; bytes: Uint8Array; selection: SyntheticRegistrationSelection }
-  | { op: "editConnections"; bytes: Uint8Array; selection: SyntheticConnectionEditSelection };
+  | { op: "editConnections"; bytes: Uint8Array; selection: SyntheticConnectionEditSelection }
+  | { op: "inspectRotation"; bytes: Uint8Array; selection: SyntheticRotationSelection }
+  | { op: "createRotationCutover"; bytes: Uint8Array; selection: SyntheticRotationSelection };
 const utf8 = new TextEncoder();
 const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
@@ -78,6 +86,32 @@ export class BrowserSyntheticVaultWorker {
     const selected = parseSyntheticConnectionEdit(selection);
     const input = copyArchive(bytes);
     return this.#run({ op: "editConnections", bytes: input, selection: selected }, (data) => {
+      if (data.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return copyArchive(data.bytes);
+    });
+  }
+
+  async inspectRotation(
+    bytes: Uint8Array,
+    selection: SyntheticRotationSelection,
+  ): Promise<LocalRotationChecklistV1> {
+    this.cancel();
+    const selected = parseSyntheticRotationSelection(selection);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "inspectRotation", bytes: input, selection: selected }, (data) => {
+      if (data.kind !== "rotationChecklist") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return projectRotationChecklistV1(data.checklist);
+    });
+  }
+
+  async createRotationCutover(
+    bytes: Uint8Array,
+    selection: SyntheticRotationSelection,
+  ): Promise<Uint8Array> {
+    this.cancel();
+    const selected = parseSyntheticRotationSelection(selection);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "createRotationCutover", bytes: input, selection: selected }, (data) => {
       if (data.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
       return copyArchive(data.bytes);
     });

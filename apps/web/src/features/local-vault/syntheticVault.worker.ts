@@ -1,8 +1,15 @@
-import init, { appendSyntheticRegistration, createSyntheticArchive, editSyntheticConnections, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
+import init, {
+  appendSyntheticRegistration, createSyntheticArchive, createSyntheticRotationCutover,
+  editSyntheticConnections, inspectSyntheticRotationChecklist, openSyntheticArchive,
+} from "../../generated/vault-wasm-demo/vault_client_wasm.js";
 import { WasmCatalogAdapter } from "../../bridge/WasmCatalogAdapter";
+import { WasmRotationChecklistAdapter } from "../../bridge/WasmRotationChecklistAdapter";
 import { CATALOG_ERROR_CODES_V1, CatalogAdapterError } from "../../bridge/catalogProtocol";
 import { parseSyntheticRegistration } from "./syntheticRegistration";
 import { parseSyntheticConnectionEdit } from "./syntheticConnectionEdit";
+import {
+  parseSyntheticRotationSelection, type SyntheticRotationSelection,
+} from "./syntheticRotation";
 
 // Avoid adding DOM/WebWorker conflicting globals to the application tsconfig.
 interface WorkerScope {
@@ -32,18 +39,23 @@ port.onmessage = (event) => {
 
 async function execute(value: unknown): Promise<void> {
   let adapter: WasmCatalogAdapter | undefined;
+  let rotationAdapter: WasmRotationChecklistAdapter | undefined;
   try {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     const request = value as Record<string, unknown>;
-    if (request.op !== "create" && request.op !== "open" && request.op !== "append" && request.op !== "editConnections") {
+    if (request.op !== "create" && request.op !== "open" && request.op !== "append"
+        && request.op !== "editConnections" && request.op !== "inspectRotation"
+        && request.op !== "createRotationCutover") {
       throw new CatalogAdapterError("BRIDGE_FAILURE");
     }
     // Validate and snapshot bounded input before initialization or WASM bindings.
     const input = request.op !== "create" ? archiveBytes(request.bytes) : undefined;
     const selection = request.op === "append" ? parseSyntheticRegistration(request.selection) : undefined;
     const edit = request.op === "editConnections" ? parseSyntheticConnectionEdit(request.selection) : undefined;
+    const rotation = request.op === "inspectRotation" || request.op === "createRotationCutover"
+      ? parseSyntheticRotationSelection(request.selection) : undefined;
     await init();
     if (request.op === "create") {
       const bytes = archiveBytes(createSyntheticArchive());
@@ -56,6 +68,17 @@ async function execute(value: unknown): Promise<void> {
     } else if (request.op === "editConnections") {
       const bytes = archiveBytes(editSyntheticConnections(input!, edit!.reference, new Float64Array(edit!.connectionIds)));
       port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
+    } else if (request.op === "createRotationCutover") {
+      const bytes = archiveBytes(createSyntheticRotationCutover(input!, ...rotationArguments(rotation!)));
+      port.postMessage({ ok: true, kind: "archive", bytes }, [bytes.buffer as ArrayBuffer]);
+    } else if (request.op === "inspectRotation") {
+      rotationAdapter = new WasmRotationChecklistAdapter(
+        () => inspectSyntheticRotationChecklist(input!, ...rotationArguments(rotation!)),
+      );
+      const checklist = await rotationAdapter.load();
+      rotationAdapter.dispose();
+      rotationAdapter = undefined;
+      port.postMessage({ ok: true, kind: "rotationChecklist", checklist });
     } else {
       adapter = new WasmCatalogAdapter(() => openSyntheticArchive(input!));
       const entries = await adapter.load();
@@ -74,8 +97,22 @@ async function execute(value: unknown): Promise<void> {
     });
   } finally {
     try { adapter?.dispose(); } catch { /* Main thread also terminates this worker. */ }
+    try { rotationAdapter?.dispose(); } catch { /* Main thread also terminates this worker. */ }
     port.close();
   }
+}
+
+function rotationArguments(selection: SyntheticRotationSelection): [
+  number, boolean, boolean, boolean, boolean, boolean, boolean, number,
+] {
+  const user = (value: SyntheticRotationSelection["mcp"]): boolean => value === "user_confirmed";
+  const provider = (value: SyntheticRotationSelection["mcp"]): boolean => value === "provider_verified";
+  return [
+    selection.reference,
+    user(selection.mcp), user(selection.cli), user(selection.ci),
+    provider(selection.mcp), provider(selection.cli), provider(selection.ci),
+    selection.supersededRevocation === "user_confirmed" ? 0 : 1,
+  ];
 }
 
 function archiveBytes(value: unknown): Uint8Array {

@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const wasm = vi.hoisted(() => ({
-  init: vi.fn(), append: vi.fn(), create: vi.fn(), edit: vi.fn(), open: vi.fn(),
+  init: vi.fn(), append: vi.fn(), create: vi.fn(), cutover: vi.fn(), edit: vi.fn(),
+  inspectRotation: vi.fn(), open: vi.fn(),
 }));
 vi.mock("../../generated/vault-wasm-demo/vault_client_wasm.js", () => ({
   default: wasm.init,
   appendSyntheticRegistration: wasm.append,
   createSyntheticArchive: wasm.create,
+  createSyntheticRotationCutover: wasm.cutover,
   editSyntheticConnections: wasm.edit,
+  inspectSyntheticRotationChecklist: wasm.inspectRotation,
   openSyntheticArchive: wasm.open,
 }));
 
