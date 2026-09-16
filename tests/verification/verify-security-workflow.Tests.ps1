@@ -13,6 +13,12 @@ Describe 'KeyAtlas security-gates workflow policy' {
             throw 'The mandatory security-gates workflow is empty.'
         }
 
+        $script:ScannerPath = Join-Path $script:RepositoryRoot 'scripts\check-repository-secrets.ps1'
+        if (-not (Test-Path -LiteralPath $script:ScannerPath -PathType Leaf)) {
+            throw 'The mandatory repository Secret scanner is missing.'
+        }
+        $script:Scanner = Get-Content -Raw -LiteralPath $script:ScannerPath
+
         function Assert-Condition {
             param([bool]$Condition, [string]$Message)
             if (-not $Condition) { throw $Message }
@@ -81,6 +87,29 @@ Describe 'KeyAtlas security-gates workflow policy' {
     It 'runs scanner regressions on both Windows PowerShell engines' {
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'PowerShell 7 scanner regression is missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'Windows PowerShell 5.1 scanner regression is missing.'
+    }
+
+    It 'keeps the first gate independent of runner-provided scanners' {
+        Assert-Condition (-not ($script:Scanner -match '(?i)\b(?:rg|ripgrep)(?:\.exe)?\b')) 'The repository Secret scanner must not depend on rg or ripgrep.'
+        Assert-Condition (-not ($script:Scanner -match '(?m)^\s*(?:Import-Module|Install-Module|Add-Type|Start-Process|Invoke-Expression)\b')) 'The first gate must not load modules, compile code, or start external processes.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumFileBytes = 8MB\s*$') 'The exact per-file scan bound must remain explicit.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumAggregateBytes = 256MB\s*$') 'The exact aggregate scan bound must remain explicit.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumFileCount = 50000\s*$') 'The exact file-count scan bound must remain explicit.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumEntryCount = 100000\s*$') 'The exact entry-count scan bound must remain explicit.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumDepth = 64\s*$') 'The exact tree-depth scan bound must remain explicit.'
+        Assert-Condition ($script:Scanner -match '(?m)^\$maximumCooperativeElapsedSeconds = 300\s*$') 'The exact cooperative elapsed-time scan budget must remain explicit.'
+        Assert-Condition ($script:Scanner -match '\[Text\.RegularExpressions\.RegexOptions\]::CultureInvariant') 'Regex interpretation must remain culture invariant.'
+        Assert-Condition ($script:Scanner -match '\[TimeSpan\]::FromSeconds\(2\)') 'Regex execution must retain a finite timeout.'
+    }
+
+    It 're-scans generated artifacts after the web build' {
+        $buildIndex = $script:Workflow.IndexOf('- name: Build the web app', [StringComparison]::Ordinal)
+        $postBuildIndex = $script:Workflow.IndexOf('- name: Re-scan repository and generated artifacts after web build', [StringComparison]::Ordinal)
+        Assert-Condition ($buildIndex -ge 0) 'The web build step is missing.'
+        Assert-Condition ($postBuildIndex -gt $buildIndex) 'The generated-artifact scan must run after the web build.'
+        Assert-Condition (([regex]::Matches($script:Workflow, '(?m)^\s*\$scanOutput = @\(& \.\\scripts\\check-repository-secrets\.ps1 -Root \$PWD\.Path 2>&1\)\s*$')).Count -eq 2) 'The workflow must run exactly one pre-dependency scan and one post-build scan.'
+        Assert-Condition ($script:Workflow -match 'The post-build Secret scanner did not emit exactly one success marker\.') 'The post-build success marker must be checked.'
+        Assert-Condition ($script:Workflow -match 'The post-build real-Secret boundary marker is missing or duplicated\.') 'The post-build closed-boundary marker must be checked.'
     }
 
     It 'runs the full Rust and locked web verification commands' {

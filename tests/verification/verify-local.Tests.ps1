@@ -15,9 +15,8 @@ $originalPath = $env:PATH
 $originalFailure = $env:KEYATLAS_TEST_FAIL_STAGE
 $fixtureDirectory = Join-Path $PSScriptRoot 'fixtures'
 $fixtureCargo = Join-Path $fixtureDirectory 'cargo.cmd'
-$fixtureRg = Join-Path $fixtureDirectory 'rg.cmd'
 $temporaryToolDirectory = Join-Path ([IO.Path]::GetTempPath()) ("keyatlas-verifier-tools-$([Guid]::NewGuid().ToString('N'))")
-$temporaryRg = Join-Path $temporaryToolDirectory 'rg.cmd'
+$temporarySecretCandidate = Join-Path $repositoryRoot 'synthetic-secret-candidate.txt'
 $passed = 0
 
 function Assert-Condition {
@@ -63,20 +62,13 @@ try {
     if (-not (Test-Path -LiteralPath $fixtureCargo -PathType Leaf)) {
         throw 'The synthetic Cargo fixture is missing; no Cargo command was started.'
     }
-    if (-not (Test-Path -LiteralPath $fixtureRg -PathType Leaf)) {
-        throw 'The synthetic rg fixture is missing; no verification command was started.'
-    }
-    # Do not fall back to a developer's real Cargo or rg if a fixture cannot resolve.
+    # Do not fall back to a developer's real Cargo if the fixture cannot resolve.
+    # The repository Secret scanner is implemented only with PowerShell/.NET.
     $env:PATH = $fixtureDirectory
     $resolvedCargo = Get-Command cargo -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    $resolvedRg = Get-Command rg -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (($null -eq $resolvedCargo) -or
         (-not [string]::Equals($resolvedCargo.Source, $fixtureCargo, [StringComparison]::OrdinalIgnoreCase))) {
         throw 'The synthetic Cargo fixture must be the only resolved Cargo command.'
-    }
-    if (($null -eq $resolvedRg) -or
-        (-not [string]::Equals($resolvedRg.Source, $fixtureRg, [StringComparison]::OrdinalIgnoreCase))) {
-        throw 'The synthetic rg fixture must be the only resolved rg command.'
     }
     Push-Location -LiteralPath ([IO.Path]::GetTempPath())
     try {
@@ -103,7 +95,23 @@ try {
         $passed++
         Write-Output 'PASS: workspace coverage'
 
-        $result = Invoke-Runner -Scope 'Focused' -FailStage 'secret-scan'
+        if (Test-Path -LiteralPath $temporarySecretCandidate) {
+            throw 'The synthetic Secret candidate path must not exist before the regression.'
+        }
+        $candidateEncoding = New-Object Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText(
+            $temporarySecretCandidate,
+            ('api_' + 'key = "synthetic-verifier-candidate-123456"'),
+            $candidateEncoding
+        )
+        try {
+            $result = Invoke-Runner -Scope 'Focused'
+        }
+        finally {
+            if (Test-Path -LiteralPath $temporarySecretCandidate -PathType Leaf) {
+                Remove-Item -LiteralPath $temporarySecretCandidate -Force
+            }
+        }
         Assert-Condition ($result.Code -eq 1) 'A Secret finding must fail the verifier.'
         Assert-SecurityBoundary -Text $result.Text
         Assert-Condition ($result.Text.Contains('SECRET_SCAN_FINDINGS=1')) 'A Secret finding count must reach the caller.'
@@ -152,7 +160,6 @@ try {
         $fixturePath = $env:PATH
         try {
             New-Item -ItemType Directory -Path $temporaryToolDirectory -ErrorAction Stop | Out-Null
-            Copy-Item -LiteralPath $fixtureRg -Destination $temporaryRg -ErrorAction Stop
             $env:PATH = $temporaryToolDirectory
             $result = Invoke-Runner -Scope 'Focused'
             Assert-Condition ($result.Code -ne 0) 'Missing Cargo must fail.'
@@ -188,8 +195,8 @@ catch {
 finally {
     $env:PATH = $originalPath
     $env:KEYATLAS_TEST_FAIL_STAGE = $originalFailure
-    if (Test-Path -LiteralPath $temporaryRg -PathType Leaf) {
-        Remove-Item -LiteralPath $temporaryRg -Force
+    if (Test-Path -LiteralPath $temporarySecretCandidate -PathType Leaf) {
+        Remove-Item -LiteralPath $temporarySecretCandidate -Force
     }
     if (Test-Path -LiteralPath $temporaryToolDirectory -PathType Container) {
         Remove-Item -LiteralPath $temporaryToolDirectory -Force

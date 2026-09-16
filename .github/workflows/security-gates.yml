@@ -120,3 +120,19 @@ jobs:
         shell: pwsh
         working-directory: apps/web
         run: npm run build
+
+      # Generated bundles do not exist in a clean checkout. Scan them only
+      # after the release build, while retaining the same closed boundary.
+      - name: Re-scan repository and generated artifacts after web build
+        shell: pwsh
+        run: |
+          $scanOutput = @(& .\scripts\check-repository-secrets.ps1 -Root $PWD.Path 2>&1)
+          $scanExit = $LASTEXITCODE
+          $scanOutput | ForEach-Object { Write-Output $_ }
+          if ($scanExit -ne 0) { exit $scanExit }
+          if (@($scanOutput | Where-Object { $_ -eq 'SECRET_SCAN_PASSED' }).Count -ne 1) {
+            throw 'The post-build Secret scanner did not emit exactly one success marker.'
+          }
+          if (@($scanOutput | Where-Object { $_ -eq 'REAL_SECRET_GATE=CLOSED' }).Count -ne 1) {
+            throw 'The post-build real-Secret boundary marker is missing or duplicated.'
+          }

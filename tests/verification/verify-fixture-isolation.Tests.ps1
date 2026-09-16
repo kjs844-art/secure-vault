@@ -47,7 +47,6 @@ function Copy-TestProject {
         $fixtureDirectory = Join-Path $verificationDirectory 'fixtures'
         New-Item -ItemType Directory -Path $fixtureDirectory | Out-Null
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\cargo.cmd') -Destination (Join-Path $fixtureDirectory 'cargo.cmd')
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fixtures\rg.cmd') -Destination (Join-Path $fixtureDirectory 'rg.cmd')
     }
     Join-Path $verificationDirectory 'verify-local.Tests.ps1'
 }

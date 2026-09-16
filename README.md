@@ -74,7 +74,7 @@ pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1 -Scope Workspac
 # 저장소 Secret 패턴 검사기의 탐지·비노출·fail-closed 회귀 테스트
 pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1
 
-# 검증 스크립트 자체의 실패 전파/옵션/경로 회귀 테스트 (가짜 Cargo와 가짜 rg 사용)
+# 검증 스크립트 자체의 실패 전파/옵션/경로 회귀 테스트 (가짜 Cargo 사용)
 pwsh -NoProfile -NonInteractive -File .\tests\verification\verify-local.Tests.ps1
 
 # 테스트 대역 누락 시 실제 Cargo로 넘어가지 않는지 검사 (PowerShell 7)
@@ -85,9 +85,9 @@ pwsh -NoProfile -File .\tests\verification\verify-fixture-isolation.Tests.ps1
 
 작업 폴더가 이동해도 스크립트 위치에서 저장소 루트를 찾습니다. 다른 폴더에서는 스크립트의 전체 경로를 지정하세요. [2026-09-07 검증·작업 기록](docs/verification/2026-09-07-local-verification-maintenance.md)과 [2026-09-16 Secret gate 통합 기록](docs/verification/2026-09-16-repository-secret-gate-integration.md)에서 실제 실행 범위와 남은 조건을 확인할 수 있습니다.
 
-검사 스크립트의 회귀 테스트는 `fixtures/cargo.cmd`와 `fixtures/rg.cmd`만 사용하며, 파일이 없거나 다른 실행 파일로 해석되면 실제 도구를 시작하기 전에 실패합니다. 격리 검사는 소유한 임시 복사본과 실행 여부를 기록하는 대역만 사용하고 원래 Cargo 경로를 상속하지 않습니다. [대역 격리 보강 기록](docs/verification/2026-09-07-fixture-isolation.md)을 참고하세요. 기본 실행 안내는 이 호스트에서 그대로 동작한 PowerShell 7(`pwsh`) 기준입니다. 2026-09-16 Windows PowerShell 5.1 호환성 검사는 호스트 정책 때문에 별도 프로세스에만 `-ExecutionPolicy Bypass`를 적용해 실행했으며 사용자용 기본 명령으로 권장하지 않습니다.
+검증 스크립트의 회귀 테스트는 `fixtures/cargo.cmd`만 사용하며, 파일이 없거나 다른 실행 파일로 해석되면 실제 Cargo를 시작하기 전에 실패합니다. 저장소 Secret 검사기는 외부 검색 실행기나 추가 모듈 없이 PowerShell 5.1/.NET 기본 기능만 사용합니다. 격리 검사는 소유한 임시 복사본과 실행 여부를 기록하는 Cargo 대역만 사용하고 원래 Cargo 경로를 상속하지 않습니다. [대역 격리 보강 기록](docs/verification/2026-09-07-fixture-isolation.md)을 참고하세요. 기본 실행 안내는 이 호스트에서 그대로 동작한 PowerShell 7(`pwsh`) 기준입니다. 2026-09-16 Windows PowerShell 5.1 호환성 검사는 호스트 정책 때문에 별도 프로세스에만 `-ExecutionPolicy Bypass`를 적용해 실행했으며 사용자용 기본 명령으로 권장하지 않습니다.
 
-Secret 패턴 검사 통과는 제외 디렉터리를 뺀 검사 대상 텍스트 범위에서, 정확히 검토된 합성 기준선 4개를 제외한 조치 대상 고신뢰 후보가 없다는 뜻입니다. 전체 Git 이력, `target`·`node_modules`·`coverage`·`.vite`, 바이너리·압축파일 내부, 모든 공급자 형식 또는 엔트로피 기반 탐지를 보장하지 않으며 실제 Secret 저장 허가, 제품 보안 승인, Phase 0A 승인도 아닙니다.
+Secret 패턴 검사 통과는 정확히 제외된 `.git`·`target`·`node_modules`·`coverage`·`.vite` 디렉터리 밖의 현재 파일에서, 검토된 합성 기준선 4개를 제외한 조치 대상 고신뢰 후보가 없다는 뜻입니다. 텍스트는 BOM을 명시한 UTF-8/16/32 또는 BOM 없는 엄격한 UTF-8로만 해석하며, 구성 파일의 바이너리·잘못된 인코딩, 재분석 지점, 읽기 오류, 8 MiB 초과 파일 및 전체 자원 한계 초과는 실패-폐쇄됩니다. 일반 바이너리도 건너뛰지 않고 ASCII 표면과 2/4-byte lane을 검사해 BOM 없는 UTF-16/32 우회를 막습니다. 파일별 같은 snapshot에서 기준선 hash와 패턴을 확인한 뒤 즉시 해제하며, 원격 workflow는 의존성 실행 전과 웹 build 후에 각각 검사합니다. 압축·암호화된 내부, 전체 Git 이력, 모든 공급자 형식 또는 엔트로피 기반 탐지를 보장하지 않으며 실제 Secret 저장 허가, 제품 보안 승인, Phase 0A 승인도 아닙니다.
 
 ## 문서
 

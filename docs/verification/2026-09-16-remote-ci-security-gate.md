@@ -16,6 +16,7 @@
 - job 전체에 `RUSTUP_TOOLCHAIN=1.95.0`을 고정해 설치만 하고 다른 기본 toolchain으로 검사하는 상태를 막는다.
 - 기본/합성 데모 WASM을 Release 모드로 재생성하고 두 경계를 Node에서 각각 실제 로드해 smoke test한다.
 - Rust는 `scripts/verify-local.ps1 -Scope Workspace`, 웹은 `npm test`, `npm run typecheck`, `npm run build`까지 실행한다.
+- 깨끗한 checkout에는 없는 `dist` 공개 산출물을 포함하기 위해 웹 build 직후 같은 Secret 검사 protocol을 다시 실행한다.
 - npm lifecycle script는 `npm ci --ignore-scripts`로 차단한다.
 - artifact 업로드 단계와 GitHub Secret 참조는 두지 않았다.
 
@@ -34,11 +35,13 @@
 
 Pester도 PowerShell Gallery의 정확한 `5.7.1` 버전으로 제한했지만 별도의 파일 해시를 저장소에서 대조하지는 않는다. 따라서 PowerShell Gallery 전송·패키지 검증에 의존하는 잔여 위험이 있다. 장기적으로는 검토한 패키지 해시를 별도 허용 목록으로 고정하거나, 외부 모듈이 필요 없는 독립 정책 검사기로 교체하는 방안을 검토한다.
 
-첫 Secret 검사는 GitHub `windows-latest` 이미지의 `PATH`에 있는 `rg`와 PCRE2 기능에 의존한다. 스캐너는 실행기 부재·비정상 종료·예상하지 못한 출력에서 실패-폐쇄되므로 검사를 조용히 건너뛰지는 않지만, 러너 이미지가 바뀌면 가용성과 정규식 동작이 달라질 수 있다. 현재는 공식 바이너리 해시를 저장소에서 검증하지 않으므로 공급망·재현성 잔여 위험으로 명시한다. 후속 작업에서는 검토한 `rg` 바이너리와 SHA-256을 고정하거나 외부 실행기가 필요 없는 내장 스캐너로 전환해야 한다.
+첫 Secret 검사는 `windows-latest`의 외부 검색 실행기나 추가 PowerShell 모듈을 사용하지 않고 PowerShell 5.1/.NET 기본 API만 사용한다. 파일 열거·strict decoding·정규식 실행·SHA-256 계산이 모두 스크립트 안에서 이루어지며 정규식에는 호출당 2초 timeout과 culture-invariant 옵션을 둔다. 재분석 지점, 읽기·열거·디코딩 오류, 구성 파일의 바이너리, 파일당 8 MiB 및 전체 256 MiB·50,000개 파일·100,000개 entry·깊이 64 한계 초과는 실패-폐쇄된다. 300초 cooperative 처리 budget은 read·projection loop에서도 주기적으로 확인하지만 blocking OS call을 강제로 중단하는 hard timeout은 아니며, 외부 hard upper bound는 job의 90분 timeout이다. 일반 바이너리는 printable ASCII와 2/4-byte lane을 검사해 BOM 없는 UTF-16/32 우회를 막고, 파일별 같은 snapshot에서 기준선 hash와 정규식을 적용한 뒤 큰 객체를 해제한다. 이 변경은 runner 제공 검색 바이너리의 provenance 위험을 제거하지만 PowerShell/.NET 런타임과 GitHub runner 이미지 자체의 공급망은 계속 신뢰한다.
 
-## 아직 검증되지 않은 것
+## 원격 실행 기록과 아직 검증되지 않은 것
 
-이 작업 시점에는 파일을 원격에 푸시하거나 GitHub Actions를 실제로 실행하지 않았다. 따라서 아래는 원격 실행 전까지 미검증이다.
+기존 `rg` 의존판 commit `5d439eb`은 GitHub Actions run `35046207820`에서 첫 Secret 단계가 `SECRET_SCAN_FAILED setup_or_execution`, `REAL_SECRET_GATE=CLOSED`, exit `1`로 종료됐다. 의존성 설치·Rust·Node 단계는 시작하지 않았다. 오류 원문과 경로를 출력하지 않는 실패-폐쇄 정책 때문에 그 실행만으로 내부 예외 원인을 단정하지 않는다.
+
+후속 built-in scanner는 로컬 PowerShell 7과 Windows PowerShell 5.1에서 각각 99/99, workflow 구조 정책 9/9, 실제 저장소 scan exit 0을 확인했다. 이 기록 시점에는 후속판을 아직 원격에서 실행하지 않았으므로 아래는 계속 미검증이다.
 
 - GitHub 호스팅 `windows-latest` 이미지에서 전체 작업의 실제 성공 여부
 - 러너가 Rust 1.95.0, PowerShell Gallery, Node.js 배포 서버에 접근할 수 있는지
@@ -46,4 +49,4 @@ Pester도 PowerShell Gallery의 정확한 `5.7.1` 버전으로 제한했지만 �
 - CI에서 source-built `wasm-bindgen-cli` 0.2.128과 Rust 1.95.0 조합의 실제 소요 시간 및 호환성
 - 저장소 설정에서 이 워크플로를 필수 브랜치 보호 검사로 지정하는 절차
 
-브랜치 보호 활성화와 원격 실행은 GitHub 저장소 설정을 바꾸는 외부 작업이므로 별도 승인 뒤 진행해야 한다.
+후속판 push는 사용자가 승인했지만, 브랜치 보호 활성화는 GitHub 저장소 설정을 바꾸는 별도 작업이므로 별도 승인 뒤 진행해야 한다.
