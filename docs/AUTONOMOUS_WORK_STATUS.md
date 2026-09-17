@@ -1,9 +1,21 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-staging`.
+기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-capacity`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
-## 최신 체크포인트: 합성 교체 진행의 암호화 저장·재개
+## 최신 체크포인트: 키 교체 완료 공간 예약
+
+반복 중간 저장이 마지막 교체 공간까지 소진하지 않도록, 새 후보의 현재 head별로 완료 공간을 예약한다. 미완료 진행은 ready 저장과 최종 확정 2개 revision, ready 진행은 최종 확정 1개를 남겨둔다. 암호문 실제 크기는 코어 변환·CBOR·padding과 crypto serializer를 재사용해 계산하고 모든 새 변경 경로에서 합산한다. 기존 암호문/과거 진행은 자동 삭제하지 않으며, 과거 예약 없는 v4도 읽기·검토·백업을 유지한다.
+
+- 현재 소스로 재생성한 default/demo WASM smoke **40/1,528 checks**, 웹 **41 files / 1,350 tests**, typecheck/production build, Secret scan/PS7 회귀 99개 통과.
+- crypto lib 18개와 codec/vector 23개, core rotation 58개, scoped crypto/core Clippy, workspace compile-fail doctest 7개 통과. capacity 집중 7개와 독립 리뷰 Critical/Important 0 확인. 전체 archive 실행은 34개 PASS 뒤 64MiB 메모리 할당 실패(exit 1); 남은 21개를 단일 스레드로 실행해 모두 통과(exit 0)했다. 55개 개별 PASS 증거와 단일 전체 실행 성공은 구분한다.
+- 금고 내부 512 revisions/512 KiB 예산의 보장이며 실제 디스크/IndexedDB quota/충돌 보관함 여유를 보장하지 않는다. 새 저장본의 완료 경로를 보호하는 것이지 과거 꽉 찬 저장본이나 무제한 저장까지 보장하는 것은 아니다.
+- 기존 staging 커밋 `c0dedd4`의 원격 CI를 취소하지 않도록 이번 보완은 별도 `codex/firstvibe-rotation-capacity` 브랜치로 분리한다. `main`은 변경하지 않는다.
+- 이후 기존 `c0dedd4`의 [원격 CI 35283835489](https://github.com/kjs844-art/secure-vault/actions/runs/35283835489)가 전체 SUCCESS로 완료됐다. 이 결과는 이번 capacity 변경의 CI 성공을 뜻하지 않는다. 추가 browser smoke는 도구 연결/메모리 문제로 미완료이며 다른 앱 종료나 OS 보안 정책 변경은 하지 않았다.
+
+[이번 파일 역할·정확한 검사·한계](verification/2026-09-18-rotation-capacity-reservation.md)를 최신 기준으로 본다. 실제 Secret gate는 계속 닫혀 있고 전체 자율 목표는 active다.
+
+## 직전 체크포인트: 합성 교체 진행의 암호화 저장·재개
 
 중간 진행 저장 → 잠금/새로고침 → 저장된 진행 인증·복원 → 남은 확인 저장 → 새 동의 → 최종 교체를 코어부터 웹 화면까지 연결했다. Archive v4는 진행 후보를 canonical head와 분리하여 보관하며 기존 암호문·완료 이력을 보존한다. 기존 v1/v2/v3 읽기, 연결 편집, 충돌 후보 보존, 백업/복원은 유지한다.
 
@@ -11,9 +23,9 @@
 - 실제 격리 브라우저 Worker/WASM/IndexedDB에서 일부 확인 저장·새로고침 복원·새 동의·최종 두 번 클릭 한 번 확정을 확인했다. 콘솔은 favicon 404 한 건이 남아 있어 무오류라고 주장하지 않는다.
 - 코어 rotation 55 tests, archive 47 tests 및 마지막 보강된 staging 12 tests, workspace compile-fail doctest 7개 통과. 독립 소스 리뷰 최종 Critical/Important 0.
 - **전체 검증 완료는 아님:** 앱 제어가 WASM 매크로 DLL과 workspace 비밀 타입 테스트 실행을 차단했고, Windows PowerShell 5.1은 실행 정책에 막혔다. 설정을 우회하지 않았다. exact-branch 원격 CI 확인이 필요하다.
-- 현재 합성 단계의 총 512 revisions/512 KiB 한도에는 중간 후보도 포함한다. 가득 차면 최종 확정도 거부되므로 공간 예약·보존 정책이 후속 구현 항목이다. 실제 Secret gate는 닫힌 상태다.
+- 이 체크포인트 당시 총 512 revisions/512 KiB 한도에는 중간 후보도 포함해 가득 차면 최종 확정도 거부됐다. 위 capacity 후속 작업에서 신규 저장의 완료 공간 예약을 추가했다. 실제 Secret gate는 닫힌 상태다.
 
-[변경 파일 역할·정확한 명령·브라우저 증거·미검증 범위](verification/2026-09-18-durable-synthetic-rotation.md)를 최신 기준으로 본다. 이전 UI `bbbe899`의 원격 CI run `35242399539`는 성공했으나 새 구현의 CI 증거로 재사용하지 않는다.
+[당시 변경 파일 역할·정확한 명령·브라우저 증거·미검증 범위](verification/2026-09-18-durable-synthetic-rotation.md)를 참고한다. 이전 UI `bbbe899`의 원격 CI run `35242399539`는 성공했으나 후속 구현의 CI 증거로 재사용하지 않는다.
 
 ## 누적 구현 이력
 
@@ -61,7 +73,7 @@
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
-3. 중간 회전 진행 저장·재개·최종 확정까지 연결했다. 다음은 새 branch exact SHA의 CI, 제한된 공간에서 최종 확정 여유 확보, 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증이다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
+3. 중간 회전 진행 저장·재개·최종 확정과 새 저장의 완료 공간 예약을 연결했다. 다음은 후속 branch exact SHA의 CI, 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증이다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
 4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 중간 회전 저장과도 결합했다. 다음 실제 브라우저 다중 창 경합·폐기·백업 guard를 확인한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
 5. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 6. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.

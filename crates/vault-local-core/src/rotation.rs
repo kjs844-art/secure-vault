@@ -255,7 +255,7 @@ pub(crate) fn completed_synthetic_rotation_timestamp_v1(
     }
 }
 
-fn apply_cutover(
+pub(crate) fn apply_cutover(
     item: &mut CredentialItemV1,
     predecessor_revision: crate::RevisionIdV1,
     selection: &SyntheticRotationCutoverSelectionV1,

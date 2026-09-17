@@ -38,6 +38,9 @@ const DEMO_PASSWORD: &str = "DEMO_VALUE_ONLY_wasm_catalog";
 #[path = "archive_history.rs"]
 mod history;
 
+#[path = "archive_capacity.rs"]
+mod capacity;
+
 #[path = "archive_rotation.rs"]
 mod rotation;
 pub(crate) use rotation::{
@@ -227,6 +230,9 @@ fn verify_candidate(
     let parsed = parse_archive(&candidate)?;
     inspect_envelopes(&parsed)?;
     drop(project_archive(session, &parsed)?);
+    // Only newly generated revision candidates must retain enough room to
+    // complete every active rotation. Reads/restores preserve old full archives.
+    capacity::validate_candidate(session, &parsed, candidate.len())?;
     Ok(candidate)
 }
 

@@ -103,6 +103,33 @@ describe("durable rotation session with mock crypto and real fake-IDB transactio
     expect(await f.store.listConflictArchives()).toEqual([]);
   });
 
+  it.each(["save", "finalize"] as const)("capacity rejection on %s never starts CAS, retries, or changes saved bytes", async (operation) => {
+    const f = await fixture(true);
+    const cas = vi.spyOn(f.store, "compareAndSwapArchivePreservingConflict");
+    const generation = f.session.viewGeneration;
+    if (operation === "save") {
+      f.worker.saveRotationStage.mockRejectedValueOnce(new CatalogAdapterError("LIMITS_EXCEEDED"));
+      await f.session.saveRotationStage(generation, selection);
+      expect(f.worker.saveRotationStage).toHaveBeenCalledTimes(1);
+    } else {
+      const receipt = await f.session.inspectRotationStage(generation, 0);
+      f.worker.createRotationCutoverFromStage.mockRejectedValueOnce(new CatalogAdapterError("LIMITS_EXCEEDED"));
+      await f.session.commitRotationCutoverFromStage(generation, receipt!.reviewVersion);
+      expect(f.worker.createRotationCutoverFromStage).toHaveBeenCalledTimes(1);
+    }
+    expect(f.session.state.phase).toBe("error");
+    expect(f.session.state.errorCode).toBe("LIMITS_EXCEEDED");
+    expect(cas).not.toHaveBeenCalled();
+    expect(await f.store.read()).toEqual(original);
+    expect(await f.store.listConflictArchives()).toEqual([]);
+    await f.session.open();
+    expect(f.session.state.phase).toBe("open");
+    const restored = await f.session.inspectRotationStage(f.session.viewGeneration, 0);
+    expect(restored?.stage).toEqual(projection(true));
+    expect(await f.store.read()).toEqual(original);
+    expect(cas).not.toHaveBeenCalled();
+  });
+
   it("locking during candidate creation wipes late ciphertext and never writes or reopens", async () => {
     const f = await fixture();
     const pending = deferred<Uint8Array>();

@@ -133,7 +133,7 @@ pub(crate) fn create_rotation_cutover_from_stage_candidate(
     Ok(candidate)
 }
 
-fn latest_stage<'a>(
+pub(super) fn latest_stage<'a>(
     parsed: &'a ParsedArchive<'a>,
     reference: usize,
 ) -> Option<&'a StagedEnvelope<'a>> {

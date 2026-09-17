@@ -36,6 +36,9 @@ describe("saved rotation UI consent policy", () => {
     const html = renderToStaticMarkup(createElement(SyntheticRotationStagePanel, { session, vaultGeneration: 9, entries: [] }));
     expect(html).toContain("실제 키 입력 금지");
     expect(html).toContain("진행만 암호화 저장");
+    expect(html).toContain('data-testid="stage-capacity-note"');
+    expect(html).toContain("기존 이력은 자동 삭제하지 않습니다");
+    expect(html).toContain("기기 저장 공간까지 보장하는 것은 아닙니다");
     expect(html).not.toContain('type="password"');
     expect(html).not.toContain('type="text"');
     expect(html).not.toContain("checked=");

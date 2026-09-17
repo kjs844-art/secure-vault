@@ -16,7 +16,7 @@ use crate::model::{
 use crate::persistence::{
     CredentialStorageAuthenticatorV1, OwnedRehydratedCredentialOutcomeV1,
     SyntheticCredentialSuccessorV1, create_synthetic_edited_successor_with_predecessor_v1,
-    inspect_owned_synthetic_predecessor_v1,
+    inspect_owned_synthetic_predecessor_v1, synthetic_edited_successor_envelope_len_v1,
 };
 use crate::record::SealedCredentialRecordV0Alpha1;
 use crate::registration::ConnectionFixture;
@@ -123,6 +123,22 @@ pub struct SyntheticRotationStageProjectionV1 {
     remaining_optional: u32,
 }
 
+/// Bounded ciphertext reservation only; no payload, key or revision is exposed.
+pub struct SyntheticRotationStageCapacityV1 {
+    ready_stage_envelope_bytes: Option<usize>,
+    final_envelope_bytes: usize,
+}
+
+impl SyntheticRotationStageCapacityV1 {
+    pub const fn ready_stage_envelope_bytes(&self) -> Option<usize> {
+        self.ready_stage_envelope_bytes
+    }
+
+    pub const fn final_envelope_bytes(&self) -> usize {
+        self.final_envelope_bytes
+    }
+}
+
 impl SyntheticRotationStageProjectionV1 {
     pub const fn base_generation(&self) -> SyntheticRotationChecklistGenerationV1 {
         self.base_generation
@@ -174,6 +190,56 @@ pub fn inspect_synthetic_rotation_stage_v1(
     stage_envelope: &[u8],
 ) -> Result<SyntheticRotationStageProjectionV1, LocalVaultError> {
     authenticate_stage(session, base, stage_envelope).map(|(projection, _)| projection)
+}
+
+/// Authenticate the exact base/stage pair before reserving future ciphertext.
+/// Pending progress reserves a ready sibling with every nonremoved fixture
+/// completed, including optional fixtures, and confirmed revocation. Both
+/// supported evidence sources have the same canonical one-byte enum width.
+/// An already-ready stage reserves only its exact selected final sibling.
+/// No entropy or candidate encryption is used to compute these lengths.
+pub fn inspect_synthetic_rotation_stage_capacity_v1(
+    session: &VaultSession,
+    base: &SealedCredentialRecordV0Alpha1,
+    stage_envelope: &[u8],
+) -> Result<SyntheticRotationStageCapacityV1, LocalVaultError> {
+    let (projection, selected) = authenticate_stage(session, base, stage_envelope)?;
+    let ready = projection.ready_for_cutover();
+    let selection = if ready {
+        selected
+    } else {
+        let all = projection
+            .entries
+            .iter()
+            .map(|entry| match entry.fixture {
+                SyntheticRotationChecklistFixtureV1::Mcp => 0,
+                SyntheticRotationChecklistFixtureV1::Cli => 1,
+                SyntheticRotationChecklistFixtureV1::Ci => 2,
+            })
+            .collect::<Vec<_>>();
+        SyntheticRotationStageSelectionV1::from_fixture_ids(
+            &all,
+            &[],
+            SyntheticRotationStageRevocationV1::UserConfirmed,
+        )?
+    };
+    let ready_stage_envelope_bytes = if ready {
+        None
+    } else {
+        Some(synthetic_edited_successor_envelope_len_v1(
+            session,
+            base,
+            |item, revision| apply_stage(item, revision, &selection),
+        )?)
+    };
+    let final_envelope_bytes =
+        synthetic_edited_successor_envelope_len_v1(session, base, |item, revision| {
+            crate::rotation::apply_cutover(item, revision, &selection.cutover)
+        })?;
+    Ok(SyntheticRotationStageCapacityV1 {
+        ready_stage_envelope_bytes,
+        final_envelope_bytes,
+    })
 }
 
 /// The stored stage supplies all completion choices. The returned final sibling

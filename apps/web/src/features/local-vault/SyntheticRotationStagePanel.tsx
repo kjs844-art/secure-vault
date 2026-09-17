@@ -90,6 +90,7 @@ export function SyntheticRotationStagePanel({ session, vaultGeneration, entries 
     <div className="vault-actions"><button type="button" disabled={loading || entries.length === 0} data-testid="stage-save"
       onClick={() => { setAcknowledged(false); void session.saveRotationStage(vaultGeneration, selection); }}>진행만 암호화 저장</button></div>
     <p>저장·새로고침 후에는 항목을 다시 선택하고 ‘저장한 진행 불러오기’를 누르세요. 선택을 바꿨다면 먼저 중간 저장해야 최종 확정에 반영됩니다.</p>
+    <p data-testid="stage-capacity-note">새 진행 저장이 승인되면 키 교체를 끝내는 데 필요한 금고 내부 공간도 남겨둡니다. 한도에 가까우면 반복 중간 저장이나 다른 항목 추가가 거부될 수 있으며, 기존 이력은 자동 삭제하지 않습니다. 기기 저장 공간까지 보장하는 것은 아닙니다.</p>
     <p role="status" aria-live="polite" data-testid="stage-status">
       {review.phase === "idle" && "현재 키는 유지됩니다. 중간 저장하거나 저장한 진행을 불러올 수 있습니다."}
       {review.phase === "loading" && "저장한 암호문과 진행 내용을 인증하고 있습니다."}

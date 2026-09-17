@@ -381,7 +381,200 @@ fn closed_selection_and_envelope_bounds_reject_invalid_inputs_without_changes() 
     let future = crate::record::seal_synthetic_future_inner_v2(&session).unwrap();
     for bytes in [&[][..], &[0][..], future.envelope.as_slice()] {
         assert!(inspect_synthetic_rotation_stage_v1(&session, &base, bytes).is_err());
+        assert!(inspect_synthetic_rotation_stage_capacity_v1(&session, &base, bytes).is_err());
     }
     assert!(inspect_synthetic_rotation_stage_v1(&session, &base, &vec![0; 65_537]).is_err());
+    assert!(
+        inspect_synthetic_rotation_stage_capacity_v1(&session, &base, &vec![0; 65_537]).is_err()
+    );
     assert!(base.envelope == before);
+}
+
+#[test]
+fn capacity_matches_all_valid_three_fixture_choices_and_both_generations() {
+    let session = session();
+    let original =
+        seal_synthetic_fixture_v1(&session, SyntheticCredentialFixtureId::MultipleConsumers)
+            .unwrap();
+    let first = current(&reseal(&session, &original, |item| {
+        for connection in &mut item.connections {
+            connection.required_for_cutover =
+                connection.consumer_type != crate::model::ConsumerTypeV1::CiCd;
+        }
+    }));
+    let all = selection(
+        &[0, 1, 2],
+        SyntheticRotationStageRevocationV1::UserConfirmed,
+    );
+    let first_ready = create_synthetic_rotation_stage_v1(&session, &first, &all).unwrap();
+    let second =
+        create_synthetic_rotation_cutover_from_stage_v1(&session, &first, first_ready.envelope())
+            .unwrap();
+    let second = current(second.persistence_projection_v1().envelope());
+    for base in [&first, &second] {
+        let before = base.envelope.clone();
+        let max_stage = create_synthetic_rotation_stage_v1(&session, base, &all).unwrap();
+        let max_final =
+            create_synthetic_rotation_cutover_from_stage_v1(&session, base, max_stage.envelope())
+                .unwrap();
+        let max_final_len = max_final.persistence_projection_v1().envelope().len();
+        let mut accepted = 0;
+        for choices in 0_u32..27 {
+            let mut states = choices;
+            let mut user = Vec::new();
+            let mut provider = Vec::new();
+            for fixture in 0..3 {
+                match states % 3 {
+                    1 => user.push(fixture),
+                    2 => provider.push(fixture),
+                    _ => {}
+                }
+                states /= 3;
+            }
+            for revocation in [
+                SyntheticRotationStageRevocationV1::Pending,
+                SyntheticRotationStageRevocationV1::UserConfirmed,
+                SyntheticRotationStageRevocationV1::ProviderVerified,
+            ] {
+                let selected = SyntheticRotationStageSelectionV1::from_fixture_ids(
+                    &user, &provider, revocation,
+                )
+                .unwrap();
+                let stage = create_synthetic_rotation_stage_v1(&session, base, &selected);
+                let required_complete = [0, 1]
+                    .iter()
+                    .all(|id| user.contains(id) || provider.contains(id));
+                if !required_complete && revocation != SyntheticRotationStageRevocationV1::Pending {
+                    assert!(stage.is_err());
+                    continue;
+                }
+                accepted += 1;
+                let stage = stage.unwrap();
+                let capacity =
+                    inspect_synthetic_rotation_stage_capacity_v1(&session, base, stage.envelope())
+                        .unwrap();
+                if revocation == SyntheticRotationStageRevocationV1::Pending {
+                    assert_eq!(
+                        capacity.ready_stage_envelope_bytes(),
+                        Some(max_stage.envelope().len())
+                    );
+                    assert_eq!(capacity.final_envelope_bytes(), max_final_len);
+                    assert!(
+                        stage.envelope().len() <= capacity.ready_stage_envelope_bytes().unwrap()
+                    );
+                } else {
+                    let actual = create_synthetic_rotation_cutover_from_stage_v1(
+                        &session,
+                        base,
+                        stage.envelope(),
+                    )
+                    .unwrap();
+                    assert_eq!(capacity.ready_stage_envelope_bytes(), None);
+                    assert_eq!(
+                        capacity.final_envelope_bytes(),
+                        actual.persistence_projection_v1().envelope().len()
+                    );
+                    assert!(capacity.final_envelope_bytes() <= max_final_len);
+                }
+            }
+        }
+        assert_eq!(accepted, 51);
+        assert!(base.envelope == before);
+        let final_record = current(max_final.persistence_projection_v1().envelope());
+        let ancestors = if base.locator.revision_id == first.locator.revision_id {
+            vec![&first]
+        } else {
+            vec![&second, &first]
+        };
+        let history =
+            inspect_synthetic_rotation_history_v1(&session, &final_record, &ancestors).unwrap();
+        assert_eq!(history.events().len(), ancestors.len());
+    }
+}
+
+#[test]
+fn capacity_reserves_completion_growth_across_the_padding_boundary() {
+    let session = session();
+    let original = base(&session);
+    let selected = selection(&[0], SyntheticRotationStageRevocationV1::UserConfirmed);
+    let mut template = payload(&session, &original);
+    template.notes = Some("x".repeat(256));
+    crate::rotation_lifecycle::prepare_rotation_successor_v1(&mut template).unwrap();
+    apply_stage(&mut template, original.locator.revision_id, &selected).unwrap();
+    template.parent_revision_id = Some(original.locator.revision_id);
+    let mut placeholder = *original.locator.revision_id.as_bytes();
+    placeholder[0] ^= 1;
+    let revision = RevisionIdV1::from_bytes(placeholder);
+    let baseline_len = encode_current_item(&template, revision)
+        .unwrap()
+        .expose_secret()
+        .len();
+    assert!(baseline_len < 4_092);
+    let mut previous_ready_bytes = None;
+    for target in [4_092, 4_093] {
+        let notes_len = 256 + target - baseline_len;
+        let base_bytes = reseal(&session, &original, |item| {
+            item.notes = Some("x".repeat(notes_len))
+        });
+        let base = current(&base_bytes);
+        let pending = create_synthetic_rotation_stage_v1(
+            &session,
+            &base,
+            &selection(&[], SyntheticRotationStageRevocationV1::Pending),
+        )
+        .unwrap();
+        let ready = create_synthetic_rotation_stage_v1(&session, &base, &selected).unwrap();
+        let actual_payload = payload(&session, &current(ready.envelope()));
+        assert_eq!(
+            encode_current_item(&actual_payload, revision)
+                .unwrap()
+                .expose_secret()
+                .len(),
+            target
+        );
+        let capacity =
+            inspect_synthetic_rotation_stage_capacity_v1(&session, &base, pending.envelope())
+                .unwrap();
+        assert_eq!(
+            capacity.ready_stage_envelope_bytes(),
+            Some(ready.envelope().len())
+        );
+        let actual_final =
+            create_synthetic_rotation_cutover_from_stage_v1(&session, &base, ready.envelope())
+                .unwrap();
+        assert_eq!(
+            capacity.final_envelope_bytes(),
+            actual_final.persistence_projection_v1().envelope().len()
+        );
+        if let Some(previous) = previous_ready_bytes {
+            assert!(ready.envelope().len() > previous);
+            assert!(capacity.ready_stage_envelope_bytes().unwrap() > pending.envelope().len());
+        }
+        previous_ready_bytes = Some(ready.envelope().len());
+    }
+}
+
+#[test]
+fn capacity_authenticates_the_pair_and_rejects_changed_or_wrong_stage() {
+    let session = session();
+    let base = base(&session);
+    let wrong_base = self::base(&session);
+    let stage = create_synthetic_rotation_stage_v1(
+        &session,
+        &base,
+        &selection(&[], SyntheticRotationStageRevocationV1::Pending),
+    )
+    .unwrap();
+    assert!(
+        inspect_synthetic_rotation_stage_capacity_v1(&session, &wrong_base, stage.envelope())
+            .is_err()
+    );
+    let mut corrupt = stage.envelope().to_vec();
+    let last = corrupt.len() - 1;
+    corrupt[last] ^= 1;
+    assert!(inspect_synthetic_rotation_stage_capacity_v1(&session, &base, &corrupt).is_err());
+    let altered = reseal(&session, &current(stage.envelope()), |item| {
+        item.notes = Some("DEMO_VALUE_ONLY_changed".to_owned())
+    });
+    assert!(inspect_synthetic_rotation_stage_capacity_v1(&session, &base, &altered).is_err());
 }

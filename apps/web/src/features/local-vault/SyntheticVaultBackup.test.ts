@@ -685,6 +685,37 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
 
+  it.each([32, MAX_SYNTHETIC_ARCHIVE_BYTES])(
+    "preserves an older full-count v4 backup of %i bytes without applying new-mutation reservations",
+    async (length) => {
+      // Mock authentication deliberately accepts this header-only fixture. This
+      // verifies JS backup compatibility, NOT actual WASM authentication or a
+      // recoverable old archive. Native full-v4 compatibility is tested separately.
+      const bytes = fakeArchive(length);
+      bytes.set(withHeader(4, 3, 3, 509));
+      const expected = bytes.slice();
+      const sender = fixture(bytes);
+      const exported = await sender.backup.exportArchive();
+      expectArchiveBytesEqual(exported, expected);
+      expect(exported.buffer).not.toBe(bytes.buffer);
+      expect(sender.worker.open).toHaveBeenCalledOnce();
+      expectArchiveBytesEqual(sender.worker.open.mock.calls[0]![0], expected);
+      expect(sender.store.createIfAbsent).not.toHaveBeenCalled();
+
+      const destination = fixture();
+      await destination.backup.restoreArchive(exported);
+      expect(destination.worker.open).toHaveBeenCalledOnce();
+      expectArchiveBytesEqual(destination.worker.open.mock.calls[0]![0], expected);
+      expect(destination.store.createIfAbsent).toHaveBeenCalledOnce();
+      const restored = await destination.store.read();
+      expect(restored).not.toBeNull();
+      expectArchiveBytesEqual(restored!, expected);
+      expect(restored!.buffer).not.toBe(exported.buffer);
+      expectArchiveBytesEqual(bytes, expected);
+      expectArchiveBytesEqual(exported, expected);
+    },
+  );
+
   it.each(["export", "restore"] as const)("requires full validation for v2 %s and preserves bytes on validation failure", async (operation) => {
     const bytes = withHeader(2, 4);
     const expected = bytes.slice();

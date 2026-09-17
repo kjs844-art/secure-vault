@@ -59,10 +59,11 @@ pub use rotation_history::{
     inspect_synthetic_rotation_history_v1,
 };
 pub use rotation_staging::{
-    SyntheticRotationStageCompletionV1, SyntheticRotationStageEntryV1,
-    SyntheticRotationStageProjectionV1, SyntheticRotationStageRevocationV1,
-    SyntheticRotationStageSelectionV1, SyntheticRotationStageV1,
-    create_synthetic_rotation_cutover_from_stage_v1, create_synthetic_rotation_stage_v1,
+    SyntheticRotationStageCapacityV1, SyntheticRotationStageCompletionV1,
+    SyntheticRotationStageEntryV1, SyntheticRotationStageProjectionV1,
+    SyntheticRotationStageRevocationV1, SyntheticRotationStageSelectionV1,
+    SyntheticRotationStageV1, create_synthetic_rotation_cutover_from_stage_v1,
+    create_synthetic_rotation_stage_v1, inspect_synthetic_rotation_stage_capacity_v1,
     inspect_synthetic_rotation_stage_v1,
 };
 pub use synthetic::SyntheticCredentialFixtureId;
