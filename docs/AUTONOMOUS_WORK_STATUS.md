@@ -1,7 +1,23 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-ui`.
+기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-staging`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
+
+## 최신 체크포인트: 합성 교체 진행의 암호화 저장·재개
+
+중간 진행 저장 → 잠금/새로고침 → 저장된 진행 인증·복원 → 남은 확인 저장 → 새 동의 → 최종 교체를 코어부터 웹 화면까지 연결했다. Archive v4는 진행 후보를 canonical head와 분리하여 보관하며 기존 암호문·완료 이력을 보존한다. 기존 v1/v2/v3 읽기, 연결 편집, 충돌 후보 보존, 백업/복원은 유지한다.
+
+- 최종 웹 전체 **41 files / 1,346 tests**, 타입 검사·production build·default/demo 실제 WASM smoke·Secret scan 통과. 실제 WASM + fake IndexedDB의 저장/재개/확정 및 v4 백업복원도 통과했다.
+- 실제 격리 브라우저 Worker/WASM/IndexedDB에서 일부 확인 저장·새로고침 복원·새 동의·최종 두 번 클릭 한 번 확정을 확인했다. 콘솔은 favicon 404 한 건이 남아 있어 무오류라고 주장하지 않는다.
+- 코어 rotation 55 tests, archive 47 tests 및 마지막 보강된 staging 12 tests, workspace compile-fail doctest 7개 통과. 독립 소스 리뷰 최종 Critical/Important 0.
+- **전체 검증 완료는 아님:** 앱 제어가 WASM 매크로 DLL과 workspace 비밀 타입 테스트 실행을 차단했고, Windows PowerShell 5.1은 실행 정책에 막혔다. 설정을 우회하지 않았다. exact-branch 원격 CI 확인이 필요하다.
+- 현재 합성 단계의 총 512 revisions/512 KiB 한도에는 중간 후보도 포함한다. 가득 차면 최종 확정도 거부되므로 공간 예약·보존 정책이 후속 구현 항목이다. 실제 Secret gate는 닫힌 상태다.
+
+[변경 파일 역할·정확한 명령·브라우저 증거·미검증 범위](verification/2026-09-18-durable-synthetic-rotation.md)를 최신 기준으로 본다. 이전 UI `bbbe899`의 원격 CI run `35242399539`는 성공했으나 새 구현의 CI 증거로 재사용하지 않는다.
+
+## 누적 구현 이력
+
+아래는 각 이전 단계 당시의 증거다. '미구현/미확인' 표기는 해당 시점의 경계이며, 중간 저장 기능의 최신 상태는 위 체크포인트를 우선한다.
 
 별도 `codex/firstvibe-synthetic-rotation-checklist` 체크포인트: 합성 연결처의 필수 완료 조건을 확인하고 최종 암호문 후보만 생성하는 코어를 추가했다. 새 코어 11 tests와 SQLite 충돌/재실행 테스트를 포함해 Node 타입 수정판 `06349e8`의 원격 run `35106829156`이 전체 성공했다. 기존 PR #4의 `ce518ee`도 run `35106625311` 전체 성공을 확인했다. 로컬 Windows 앱 제어 4551 정책은 변경하지 않았다. 단발성 코어이며 후속 회전·연결 편집·UI는 미지원이다. [검증 기록](verification/2026-09-16-synthetic-rotation-cutover.md)을 참고한다.
 
@@ -17,7 +33,7 @@
 
 현재 키 교체 화면: 합성 항목·연결처 확인 선택 → 검토 → 명시적 동의 → 기존 CAS 저장을 연결했다. 최종 ready 알림 이후에도 유효한 검토만 frozen receipt를 반환하고, 화면은 그 receipt의 version과 모든 선택 필드를 저장 조건에 묶는다. initial RED Important 1의 재진입 결합 문제를 고쳤고 재개 후 독립 리뷰도 Critical/Important 0이다. 최종 웹 33 files/1169 tests, 타입 검사를 포함한 production build, 절대 경로 Secret scan이 통과했다. 실제 브라우저에서 발견한 중복 항목명 표시를 예시 번호로 구분한 뒤 관련 41 tests와 build도 통과했다. 격리 브라우저의 실제 Worker/WASM/IndexedDB로 검토 후 선택 변경 차단, 두 번 클릭해도 한 번 교체, 새로고침 뒤 0002 복원, 두 번째 교체와 terminal_0003 추가 저장 차단을 확인했다. 모바일 검증 중 브라우저가 재연결되어 그 이후 범위는 미검증이다. 중간 체크리스트 저장도 아직 없다. [현재 검증 기록](verification/2026-09-18-synthetic-rotation-ui.md)을 따른다. 기준 Session/CAS 커밋 `7d61e9a`는 실제 GitHub 원격과 일치함을 재확인했다.
 
-## 현재 확인한 것
+## 기존 단계별 증거와 미해결 경계
 
 | 항목 | 현재 증거 | 남은 일 |
 |---|---|---|
@@ -45,8 +61,8 @@
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
-3. 합성 키 교체 화면까지 연결했다. 다음 기능은 일부 연결처 확인 저장 → 잠금/새로고침 → 진행 상태 재인증·복원 → 나머지 확인 → 최종 교체 저장이다. 완료 event/history와 분리된 중간 workflow 상태를 설계하고 코어부터 UI까지 연결한다. 실제 Secret gate는 닫힌 채 유지하며 지원되는 환경의 browser-level 검증을 보완한다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
-4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 실제 브라우저 다중 창 검증과 intermediate 회전 checklist 저장·optional 연결 확인 API로 진행한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
+3. 중간 회전 진행 저장·재개·최종 확정까지 연결했다. 다음은 새 branch exact SHA의 CI, 제한된 공간에서 최종 확정 여유 확보, 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증이다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
+4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 중간 회전 저장과도 결합했다. 다음 실제 브라우저 다중 창 경합·폐기·백업 guard를 확인한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
 5. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 6. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
 

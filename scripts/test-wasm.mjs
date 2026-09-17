@@ -256,7 +256,8 @@ async function run() {
   check(typeof api.WasmCatalogV1.from_snapshot === 'undefined');
   for (const name of ['syntheticCatalog', 'createSyntheticArchive', 'openSyntheticArchive',
     'appendSyntheticRegistration', 'editSyntheticConnections',
-    'inspectSyntheticRotationChecklist', 'createSyntheticRotationCutover']) {
+    'inspectSyntheticRotationChecklist', 'createSyntheticRotationCutover',
+    'inspectSyntheticRotationStage', 'createSyntheticRotationStage', 'createSyntheticRotationCutoverFromStage']) {
     check(typeof api[name] === (demo ? 'function' : 'undefined'));
     check(typeof wasmExports[name] === (demo ? 'function' : 'undefined'));
   }
@@ -266,6 +267,8 @@ async function run() {
   }
   check(typeof api.WasmRotationChecklistV1 === (demo ? 'function' : 'undefined'));
   check(Object.prototype.hasOwnProperty.call(api, 'WasmRotationChecklistV1') === demo);
+  check(typeof api.WasmRotationStageV1 === (demo ? 'function' : 'undefined'));
+  check(Object.prototype.hasOwnProperty.call(api, 'WasmRotationStageV1') === demo);
   // wasm-bindgen emits an ownership helper. It is not a secret getter;
   // WASM is not a hostile-JavaScript security sandbox.
   const expected = ['constructor', '__destroy_into_raw', 'free', 'length', 'isLocked', 'lock',
@@ -478,7 +481,7 @@ async function run() {
   badMagic[0] ^= 1;
   reject(badMagic, 'INVALID_ARCHIVE');
   reject(withU32(archive, 8, 0), 'INVALID_ARCHIVE');
-  reject(withU32(archive, 8, 4), 'UPGRADE_REQUIRED');
+  reject(withU32(archive, 8, 5), 'UPGRADE_REQUIRED');
   reject(withU32(archive, 12, 2), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 0), 'INVALID_ARCHIVE');
   reject(withU32(archive, 16, 65_537), 'LIMITS_EXCEEDED');
@@ -540,7 +543,7 @@ async function run() {
   rejectSelection(0, 0, [0, 0]);
   rejectSelection(0, 0, [0, 1, 2, 0], 'LIMITS_EXCEEDED');
   reject(withU32(current, 8, 1), 'INVALID_ARCHIVE');
-  reject(withU32(current, 8, 4), 'UPGRADE_REQUIRED');
+  reject(withU32(current, 8, 5), 'UPGRADE_REQUIRED');
   reject(withU32(current, 12, 2), 'INVALID_ARCHIVE');
   reject(withU32(current, 12, 129), 'LIMITS_EXCEEDED');
   const corruptV2 = current.slice();

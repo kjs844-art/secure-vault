@@ -26,6 +26,7 @@ const ARCHIVE_MAGIC: &[u8; 8] = b"KATLDEMO";
 const ARCHIVE_VERSION: u32 = 1;
 const MUTABLE_ARCHIVE_VERSION: u32 = 2;
 const HISTORY_ARCHIVE_VERSION: u32 = 3;
+const STAGING_ARCHIVE_VERSION: u32 = 4;
 const RECORD_COUNT: usize = 3;
 const MAX_RECORD_COUNT: usize = 128;
 const MAX_REVISION_COUNT: usize = 512;
@@ -42,6 +43,13 @@ mod rotation;
 pub(crate) use rotation::{
     ArchiveRotationChecklistV1, ArchiveRotationFixtureV1, ArchiveRotationGenerationV1,
     ArchiveRotationReadinessStateV1, create_rotation_cutover_candidate, inspect_rotation_checklist,
+};
+
+#[path = "archive_staging.rs"]
+mod staging;
+pub(crate) use staging::{
+    create_rotation_cutover_from_stage_candidate, create_rotation_stage_candidate,
+    inspect_rotation_stage,
 };
 
 #[cfg(test)]
@@ -76,6 +84,14 @@ struct ParsedArchive<'a> {
     records: Vec<&'a [u8]>,
     // Ordered indexes into records; no record/revision ID crosses the UI boundary.
     heads: Vec<usize>,
+    // Append-only encrypted siblings, never canonical revisions or heads.
+    stages: Vec<StagedEnvelope<'a>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct StagedEnvelope<'a> {
+    base_index: usize,
+    envelope: &'a [u8],
 }
 
 pub(crate) fn create_archive() -> Result<Vec<u8>, ArchiveError> {
@@ -115,7 +131,9 @@ pub(crate) fn append_registration(
             .map_err(|error| map_local_error(error.code()))?;
     let parsed = parse_archive(input)?;
     inspect_envelopes(&parsed)?;
-    if parsed.heads.len() >= MAX_RECORD_COUNT || parsed.records.len() >= MAX_REVISION_COUNT {
+    if parsed.heads.len() >= MAX_RECORD_COUNT
+        || parsed.records.len() + parsed.stages.len() >= MAX_REVISION_COUNT
+    {
         return Err(ArchiveError::LimitsExceeded);
     }
     let password = demo_password()?;
@@ -130,7 +148,9 @@ pub(crate) fn append_registration(
     let mut records = parsed.records;
     heads.push(records.len());
     records.push(projection.envelope());
-    let candidate = if parsed.version == HISTORY_ARCHIVE_VERSION {
+    let candidate = if parsed.version == STAGING_ARCHIVE_VERSION {
+        staging::encode(parsed.password_envelope, &records, &heads, &parsed.stages)
+    } else if parsed.version == HISTORY_ARCHIVE_VERSION {
         history::encode(parsed.password_envelope, &records, &heads)
     } else {
         encode_archive_version(MUTABLE_ARCHIVE_VERSION, parsed.password_envelope, &records)
@@ -155,7 +175,7 @@ pub(crate) fn edit_connections(
         .heads
         .get(reference)
         .ok_or(ArchiveError::InvalidArchive)?;
-    if parsed.records.len() >= MAX_REVISION_COUNT {
+    if parsed.records.len() + parsed.stages.len() >= MAX_REVISION_COUNT {
         return Err(ArchiveError::LimitsExceeded);
     }
     let session = unlock_vault_v0alpha1(&demo_password()?, parsed.password_envelope)
@@ -163,7 +183,7 @@ pub(crate) fn edit_connections(
     // Includes non-head revisions. Legacy open remains compatible, but a legacy
     // successor without its ancestors must not be promoted into fabricated history.
     drop(project_archive(&session, &parsed)?);
-    if parsed.version != HISTORY_ARCHIVE_VERSION {
+    if parsed.version < HISTORY_ARCHIVE_VERSION {
         history::validate(&session, &parsed)?;
     }
     let predecessor = match CredentialStorageAuthenticatorV1::new(&session)
@@ -190,7 +210,11 @@ pub(crate) fn edit_connections(
     let mut heads = parsed.heads;
     heads[reference] = records.len();
     records.push(after.envelope());
-    let candidate = history::encode(parsed.password_envelope, &records, &heads)?;
+    let candidate = if parsed.version == STAGING_ARCHIVE_VERSION {
+        staging::encode(parsed.password_envelope, &records, &heads, &parsed.stages)
+    } else {
+        history::encode(parsed.password_envelope, &records, &heads)
+    }?;
     verify_candidate(&session, candidate)
 }
 
@@ -210,8 +234,11 @@ fn project_archive(
     session: &vault_crypto::VaultSession,
     parsed: &ParsedArchive<'_>,
 ) -> Result<ClientCatalogSnapshotV1, ArchiveError> {
-    if parsed.version == HISTORY_ARCHIVE_VERSION {
+    if parsed.version >= HISTORY_ARCHIVE_VERSION {
         history::validate(session, parsed)?;
+    }
+    if parsed.version == STAGING_ARCHIVE_VERSION {
+        staging::validate(session, parsed)?;
     }
     project_records(
         session,
@@ -280,7 +307,7 @@ fn encode_archive_version(
     password_envelope: &[u8],
     records: &[&[u8]],
 ) -> Result<Vec<u8>, ArchiveError> {
-    if version == HISTORY_ARCHIVE_VERSION {
+    if version == HISTORY_ARCHIVE_VERSION || version == STAGING_ARCHIVE_VERSION {
         // v3 requires an explicit revision count and head map; use history::encode.
         return Err(ArchiveError::InvalidArchive);
     }
@@ -318,18 +345,30 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
     }
     let version = cursor.u32()?;
     match version {
-        ARCHIVE_VERSION | MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION => {}
-        version if version > HISTORY_ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
+        ARCHIVE_VERSION
+        | MUTABLE_ARCHIVE_VERSION
+        | HISTORY_ARCHIVE_VERSION
+        | STAGING_ARCHIVE_VERSION => {}
+        version if version > STAGING_ARCHIVE_VERSION => return Err(ArchiveError::UpgradeRequired),
         _ => return Err(ArchiveError::InvalidArchive),
     }
     let record_count = usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?;
     check_record_count(version, record_count)?;
-    let revision_count = if version == HISTORY_ARCHIVE_VERSION {
+    let revision_count = if version >= HISTORY_ARCHIVE_VERSION {
         usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?
     } else {
         record_count
     };
-    if revision_count > MAX_REVISION_COUNT {
+    let stage_count = if version == STAGING_ARCHIVE_VERSION {
+        usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?
+    } else {
+        0
+    };
+    if revision_count
+        .checked_add(stage_count)
+        .ok_or(ArchiveError::LimitsExceeded)?
+        > MAX_REVISION_COUNT
+    {
         return Err(ArchiveError::LimitsExceeded);
     }
     if revision_count < record_count {
@@ -340,7 +379,7 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
     for _ in 0..revision_count {
         records.push(cursor.envelope()?);
     }
-    let heads = if version == HISTORY_ARCHIVE_VERSION {
+    let heads = if version >= HISTORY_ARCHIVE_VERSION {
         let mut heads = Vec::with_capacity(record_count);
         let mut seen = std::collections::BTreeSet::new();
         for _ in 0..record_count {
@@ -354,6 +393,18 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
     } else {
         (0..record_count).collect()
     };
+    let mut stages = Vec::with_capacity(stage_count);
+    for _ in 0..stage_count {
+        let base_index =
+            usize::try_from(cursor.u32()?).map_err(|_| ArchiveError::LimitsExceeded)?;
+        if base_index >= revision_count {
+            return Err(ArchiveError::InvalidArchive);
+        }
+        stages.push(StagedEnvelope {
+            base_index,
+            envelope: cursor.envelope()?,
+        });
+    }
     if cursor.position != input.len() {
         return Err(ArchiveError::InvalidArchive);
     }
@@ -362,6 +413,7 @@ fn parse_archive(input: &[u8]) -> Result<ParsedArchive<'_>, ArchiveError> {
         password_envelope,
         records,
         heads,
+        stages,
     })
 }
 
@@ -369,12 +421,20 @@ fn check_record_count(version: u32, count: usize) -> Result<(), ArchiveError> {
     match version {
         ARCHIVE_VERSION if count == RECORD_COUNT => Ok(()),
         ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
-        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION if count > MAX_RECORD_COUNT => {
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION | STAGING_ARCHIVE_VERSION
+            if count > MAX_RECORD_COUNT =>
+        {
             Err(ArchiveError::LimitsExceeded)
         }
-        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION if count >= RECORD_COUNT => Ok(()),
-        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION => Err(ArchiveError::InvalidArchive),
-        version if version > HISTORY_ARCHIVE_VERSION => Err(ArchiveError::UpgradeRequired),
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION | STAGING_ARCHIVE_VERSION
+            if count >= RECORD_COUNT =>
+        {
+            Ok(())
+        }
+        MUTABLE_ARCHIVE_VERSION | HISTORY_ARCHIVE_VERSION | STAGING_ARCHIVE_VERSION => {
+            Err(ArchiveError::InvalidArchive)
+        }
+        version if version > STAGING_ARCHIVE_VERSION => Err(ArchiveError::UpgradeRequired),
         _ => Err(ArchiveError::InvalidArchive),
     }
 }
@@ -389,7 +449,12 @@ fn inspect_envelopes(parsed: &ParsedArchive<'_>) -> Result<(), ArchiveError> {
             return Err(ArchiveError::UpgradeRequired);
         }
     }
-    for envelope in &parsed.records {
+    for envelope in parsed
+        .records
+        .iter()
+        .copied()
+        .chain(parsed.stages.iter().map(|stage| stage.envelope))
+    {
         match inspect_record_envelope_for_storage_v1(envelope)
             .map_err(|error| map_crypto_error(error.code()))?
         {
@@ -559,7 +624,7 @@ mod tests {
     #[test]
     fn future_archive_version_is_preserved_not_reinitialized() {
         let mut future = fixture().to_vec();
-        future[8..12].copy_from_slice(&4_u32.to_le_bytes());
+        future[8..12].copy_from_slice(&5_u32.to_le_bytes());
         assert_rejected_unchanged(&future, ArchiveError::UpgradeRequired);
     }
 

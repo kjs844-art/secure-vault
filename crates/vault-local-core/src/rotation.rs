@@ -106,7 +106,10 @@ impl SyntheticRotationCutoverSelectionV1 {
         })
     }
 
-    fn evidence_for(&self, fixture: ConnectionFixture) -> Option<SyntheticVerificationEvidenceV1> {
+    pub(crate) fn evidence_for(
+        &self,
+        fixture: ConnectionFixture,
+    ) -> Option<SyntheticVerificationEvidenceV1> {
         self.completed
             .iter()
             .find_map(|(selected, evidence)| (*selected == fixture).then_some(*evidence))
@@ -155,16 +158,16 @@ pub fn create_synthetic_rotation_cutover_successor_v1(
     )
 }
 
-struct RotationInspection {
-    field_id: EntityIdV1,
-    required_connection_ids: Vec<EntityIdV1>,
-    remaining_required: u32,
-    remaining_optional: u32,
-    next_secret: &'static [u8],
-    timestamp: &'static str,
+pub(crate) struct RotationInspection {
+    pub(crate) field_id: EntityIdV1,
+    pub(crate) required_connection_ids: Vec<EntityIdV1>,
+    pub(crate) remaining_required: u32,
+    pub(crate) remaining_optional: u32,
+    pub(crate) next_secret: &'static [u8],
+    pub(crate) timestamp: &'static str,
 }
 
-fn inspect_item(
+pub(crate) fn inspect_item(
     item: &CredentialItemV1,
     selection: &SyntheticRotationCutoverSelectionV1,
 ) -> Result<RotationInspection, LocalVaultError> {
@@ -326,7 +329,9 @@ const fn fixture_bit(fixture: ConnectionFixture) -> u8 {
     }
 }
 
-const fn verification_source(evidence: SyntheticVerificationEvidenceV1) -> VerificationSourceV1 {
+pub(crate) const fn verification_source(
+    evidence: SyntheticVerificationEvidenceV1,
+) -> VerificationSourceV1 {
     match evidence {
         SyntheticVerificationEvidenceV1::UserConfirmed => VerificationSourceV1::User,
         SyntheticVerificationEvidenceV1::ProviderVerified => {
@@ -335,7 +340,7 @@ const fn verification_source(evidence: SyntheticVerificationEvidenceV1) -> Verif
     }
 }
 
-const fn revocation_evidence(
+pub(crate) const fn revocation_evidence(
     evidence: SyntheticVerificationEvidenceV1,
 ) -> (ExternalRevocationStatusV1, ExternalRevocationAttestationV1) {
     match evidence {
@@ -350,7 +355,7 @@ const fn revocation_evidence(
     }
 }
 
-fn rotation_timestamp(timestamp: &str) -> Result<UtcTimestampV1, LocalVaultError> {
+pub(crate) fn rotation_timestamp(timestamp: &str) -> Result<UtcTimestampV1, LocalVaultError> {
     UtcTimestampV1::new(timestamp.to_owned())
 }
 

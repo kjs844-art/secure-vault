@@ -3,6 +3,13 @@ use crate::archive;
 use vault_local_core::SyntheticVerificationEvidenceV1;
 use wasm_bindgen::prelude::*;
 
+#[path = "demo_staging.rs"]
+mod staging;
+pub use staging::{
+    WasmRotationStageV1, create_synthetic_rotation_cutover_from_stage,
+    create_synthetic_rotation_stage, inspect_synthetic_rotation_stage,
+};
+
 /// Getter-only projection of one authenticated synthetic rotation checklist.
 /// It exposes fixed classifications and counts only. Direct JavaScript
 /// construction is rejected, so usable instances come only from inspection.

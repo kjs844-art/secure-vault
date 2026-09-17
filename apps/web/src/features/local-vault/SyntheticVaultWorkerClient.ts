@@ -11,6 +11,11 @@ import {
 import {
   projectRotationChecklistV1, type LocalRotationChecklistV1,
 } from "../../bridge/rotationProtocol";
+import { projectRotationStageV1, type LocalRotationStageV1 } from "../../bridge/rotationStageProtocol";
+import {
+  parseSyntheticRotationStageReference, parseSyntheticRotationStageSelection,
+  type SyntheticRotationStageSelection,
+} from "./syntheticRotationStage";
 
 export const SYNTHETIC_ARCHIVE_MAX_BYTES = 524_288;
 export const SYNTHETIC_WORKER_TIMEOUT_MS = 90_000;
@@ -29,7 +34,10 @@ type Request = { op: "create" } | { op: "open"; bytes: Uint8Array }
   | { op: "append"; bytes: Uint8Array; selection: SyntheticRegistrationSelection }
   | { op: "editConnections"; bytes: Uint8Array; selection: SyntheticConnectionEditSelection }
   | { op: "inspectRotation"; bytes: Uint8Array; selection: SyntheticRotationSelection }
-  | { op: "createRotationCutover"; bytes: Uint8Array; selection: SyntheticRotationSelection };
+  | { op: "createRotationCutover"; bytes: Uint8Array; selection: SyntheticRotationSelection }
+  | { op: "inspectRotationStage"; bytes: Uint8Array; reference: number }
+  | { op: "saveRotationStage"; bytes: Uint8Array; selection: SyntheticRotationStageSelection }
+  | { op: "createRotationCutoverFromStage"; bytes: Uint8Array; reference: number };
 const utf8 = new TextEncoder();
 const typedArrayByteLength = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "byteLength",
@@ -117,6 +125,39 @@ export class BrowserSyntheticVaultWorker {
     });
   }
 
+  async inspectRotationStage(bytes: Uint8Array, reference: number): Promise<LocalRotationStageV1 | null> {
+    this.cancel();
+    const selected = parseSyntheticRotationStageReference(reference);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "inspectRotationStage", bytes: input, reference: selected }, (data) => {
+      const response = exactStageResponse(data, ["ok", "kind", "stage"]);
+      if (response.kind !== "rotationStage") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return response.stage === null ? null : projectRotationStageV1(response.stage);
+    });
+  }
+
+  async saveRotationStage(bytes: Uint8Array, selection: SyntheticRotationStageSelection): Promise<Uint8Array> {
+    this.cancel();
+    const selected = parseSyntheticRotationStageSelection(selection);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "saveRotationStage", bytes: input, selection: selected }, (data) => {
+      const response = exactStageResponse(data, ["ok", "kind", "bytes"]);
+      if (response.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return copyArchive(response.bytes);
+    });
+  }
+
+  async createRotationCutoverFromStage(bytes: Uint8Array, reference: number): Promise<Uint8Array> {
+    this.cancel();
+    const selected = parseSyntheticRotationStageReference(reference);
+    const input = copyArchive(bytes);
+    return this.#run({ op: "createRotationCutoverFromStage", bytes: input, reference: selected }, (data) => {
+      const response = exactStageResponse(data, ["ok", "kind", "bytes"]);
+      if (response.kind !== "archive") throw new CatalogAdapterError("BRIDGE_FAILURE");
+      return copyArchive(response.bytes);
+    });
+  }
+
   #run<T>(request: Request, project: (data: Record<string, unknown>) => T): Promise<T> {
     this.cancel();
     return new Promise<T>((resolve, reject) => {
@@ -145,13 +186,19 @@ export class BrowserSyntheticVaultWorker {
       worker.onmessage = (event) => {
         if (settled) return;
         try {
-          const data = object(event.data, "BRIDGE_FAILURE");
+          const stageOperation = request.op === "inspectRotationStage"
+            || request.op === "saveRotationStage" || request.op === "createRotationCutoverFromStage";
+          const data = stageOperation ? stageResponse(event.data, request.op === "inspectRotationStage")
+            : object(event.data, "BRIDGE_FAILURE");
           if (data.ok === false) throw new CatalogAdapterError(safeCode(data.code));
           if (data.ok !== true) throw new CatalogAdapterError("BRIDGE_FAILURE");
           const result = project(data);
           if (finish()) resolve(result);
         } catch (error: unknown) {
-          fail(error instanceof CatalogAdapterError ? safeCode(error.code) : "BRIDGE_FAILURE");
+          let code: CatalogErrorCodeV1 = "BRIDGE_FAILURE";
+          try { if (error instanceof CatalogAdapterError) code = safeCode(error.code); }
+          catch { /* A hostile thrown object is not an allowlisted error. */ }
+          fail(code);
         }
       };
       worker.onerror = () => fail("BRIDGE_FAILURE");
@@ -166,6 +213,31 @@ export class BrowserSyntheticVaultWorker {
 function safeCode(value: unknown): CatalogErrorCodeV1 {
   return typeof value === "string" && CATALOG_ERROR_CODES_V1.some((code) => code === value)
     ? value as CatalogErrorCodeV1 : "BRIDGE_FAILURE";
+}
+
+function exactStageResponse(value: Record<string, unknown>, allowed: readonly string[]): Record<string, unknown> {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) throw new CatalogAdapterError("BRIDGE_FAILURE");
+  const fields = Object.getOwnPropertyDescriptors(value);
+  const keys = Reflect.ownKeys(fields);
+  if (keys.length !== allowed.length || keys.some((key) => typeof key !== "string" || !allowed.includes(key))) {
+    throw new CatalogAdapterError("BRIDGE_FAILURE");
+  }
+  for (const key of allowed) {
+    const descriptor = fields[key];
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) throw new CatalogAdapterError("BRIDGE_FAILURE");
+  }
+  return Object.fromEntries(allowed.map((key) => [key, fields[key]!.value]));
+}
+
+function stageResponse(value: unknown, inspecting: boolean): Record<string, unknown> {
+  const data = object(value, "BRIDGE_FAILURE");
+  const ok = Object.getOwnPropertyDescriptor(data, "ok");
+  if (!ok || !("value" in ok) || !ok.enumerable || typeof ok.value !== "boolean") {
+    throw new CatalogAdapterError("BRIDGE_FAILURE");
+  }
+  return exactStageResponse(data, ok.value === false ? ["ok", "code"]
+    : ["ok", "kind", inspecting ? "stage" : "bytes"]);
 }
 
 function copyArchive(value: unknown): Uint8Array {

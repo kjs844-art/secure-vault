@@ -20,6 +20,8 @@ import {
 import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
 import { parseSyntheticConnectionEdit, type SyntheticConnectionEditSelection } from "./syntheticConnectionEdit";
 import { parseSyntheticRotationSelection, type SyntheticRotationSelection } from "./syntheticRotation";
+import { projectRotationStageV1, type LocalRotationStageV1 } from "../../bridge/rotationStageProtocol";
+import { parseSyntheticRotationStageSelection, type SyntheticRotationStageSelection } from "./syntheticRotationStage";
 
 export interface SyntheticVaultWorker {
   create(): Promise<Uint8Array>;
@@ -44,6 +46,36 @@ export interface SyntheticRotationWorker extends SyntheticVaultWorker {
     bytes: Uint8Array,
     selection: SyntheticRotationSelection,
   ): Promise<Uint8Array>;
+}
+
+export interface SyntheticRotationStageWorker extends SyntheticVaultWorker {
+  inspectRotationStage(bytes: Uint8Array, reference: number): Promise<LocalRotationStageV1 | null>;
+  saveRotationStage(bytes: Uint8Array, selection: SyntheticRotationStageSelection): Promise<Uint8Array>;
+  createRotationCutoverFromStage(bytes: Uint8Array, reference: number): Promise<Uint8Array>;
+}
+
+export interface SyntheticRotationStageReviewState {
+  readonly phase: "idle" | "loading" | "ready" | "error";
+  readonly reviewVersion: number;
+  readonly stage: LocalRotationStageV1 | null;
+  readonly errorCode: string | null;
+}
+
+export interface SyntheticRotationStageReceipt {
+  readonly reviewVersion: number;
+  readonly reference: number;
+  readonly stage: LocalRotationStageV1 | null;
+}
+
+type RotationWrite = { readonly kind: "cutover"; readonly selection: SyntheticRotationSelection }
+  | { readonly kind: "stage"; readonly selection: SyntheticRotationStageSelection }
+  | { readonly kind: "saved-cutover"; readonly reference: number };
+
+function stageReviewState(
+  phase: SyntheticRotationStageReviewState["phase"], reviewVersion: number,
+  stage: LocalRotationStageV1 | null = null, errorCode: string | null = null,
+): SyntheticRotationStageReviewState {
+  return Object.freeze({ phase, reviewVersion, stage, errorCode });
 }
 
 class RegistrationStateError extends Error {
@@ -344,7 +376,7 @@ function snapshotEntries(entries: readonly LocalCatalogEntryV1[]): readonly Loca
 export class SyntheticVaultSession {
   readonly #store: SyntheticCiphertextStore & Partial<SyntheticConflictCiphertextStore>;
   readonly #worker: SyntheticVaultWorker
-    & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker>;
+    & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker & SyntheticRotationStageWorker>;
   readonly #listeners = new Set<() => void>();
   #generation = 0;
   #state: SyntheticVaultSessionState = emptyState("locked");
@@ -364,11 +396,14 @@ export class SyntheticVaultSession {
     readonly expectedBytes: Uint8Array;
     readonly selection: SyntheticRotationSelection;
   } | undefined;
+  #stageReviewVersion = 0;
+  #stageReviewState: SyntheticRotationStageReviewState = stageReviewState("idle", 0);
+  #stageReviewSnapshot: { readonly expectedBytes: Uint8Array; readonly reference: number } | undefined;
 
   constructor(
     store: SyntheticCiphertextStore & Partial<SyntheticConflictCiphertextStore>,
     worker: SyntheticVaultWorker
-      & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker>,
+      & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker & SyntheticRotationStageWorker>,
   ) {
     this.#store = store;
     this.#worker = worker;
@@ -379,6 +414,7 @@ export class SyntheticVaultSession {
   get conflictReviewState(): SyntheticConflictReviewState { return this.#conflictReviewState; }
 
   get rotationReviewState(): SyntheticRotationReviewState { return this.#rotationReviewState; }
+  get rotationStageReviewState(): SyntheticRotationStageReviewState { return this.#stageReviewState; }
 
   // Ephemeral UI identity only, never a stored record ID or authorization token.
   // A fresh key lets React discard view-local search state even if it batches
@@ -592,6 +628,74 @@ export class SyntheticVaultSession {
 
     const before = new Uint8Array(reviewed.expectedBytes);
     const selection = parseSyntheticRotationSelection(reviewed.selection);
+    await this.#commitRotationCandidate(before, { kind: "cutover", selection });
+  }
+
+  /** Save ciphertext progress without advancing the canonical credential head. */
+  async saveRotationStage(expectedVaultGeneration: number, input: unknown): Promise<void> {
+    if (!this.#canSaveRotationStage(expectedVaultGeneration)) return;
+    let selection: SyntheticRotationStageSelection;
+    try { selection = parseSyntheticRotationStageSelection(input); }
+    catch { return; }
+    // A hostile selection Proxy can reenter even descriptor-only parsers.
+    if (!this.#canSaveRotationStage(expectedVaultGeneration) || !this.#displayedArchive) return;
+    const before = new Uint8Array(this.#displayedArchive);
+    await this.#commitRotationCandidate(before, { kind: "stage", selection });
+  }
+
+  /** A receipt belongs to these exact displayed bytes, reference and review. */
+  async inspectRotationStage(expectedVaultGeneration: number, reference: number): Promise<SyntheticRotationStageReceipt | null> {
+    if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
+        || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding"
+        || !Number.isSafeInteger(reference) || Object.is(reference, -0) || reference < 0 || reference > 127) return null;
+    const before = new Uint8Array(this.#displayedArchive);
+    this.#invalidateAuxiliaryReviews();
+    const reviewVersion = this.#stageReviewVersion;
+    this.#stageReviewState = stageReviewState("loading", reviewVersion);
+    let owned = false;
+    try {
+      this.#worker.cancel();
+      this.#notify();
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      const inspect = this.#worker.inspectRotationStage;
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      if (typeof inspect !== "function") throw new RegistrationStateError("ROTATION_UNAVAILABLE");
+      const raw = await withArchiveCopy(before, (bytes) => inspect.call(this.#worker, bytes, reference));
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      const stage = raw === null ? null : projectRotationStageV1(raw);
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      this.#stageReviewSnapshot = Object.freeze({ expectedBytes: before, reference });
+      owned = true;
+      this.#stageReviewState = stageReviewState("ready", reviewVersion, stage);
+      this.#notify();
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)
+          || this.#stageReviewState.phase !== "ready") return null;
+      return Object.freeze({ reviewVersion, reference, stage });
+    } catch (error: unknown) {
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      const code = fixedErrorCode(error);
+      if (!this.#isStageReviewCurrent(expectedVaultGeneration, reviewVersion)) return null;
+      this.#stageReviewState = stageReviewState("error", reviewVersion, null, code);
+      this.#notify();
+      return null;
+    } finally { if (!owned) before.fill(0); }
+  }
+
+  async commitRotationCutoverFromStage(expectedVaultGeneration: number, expectedReviewVersion: number): Promise<void> {
+    const review = this.#stageReviewState;
+    const reviewed = this.#stageReviewSnapshot;
+    if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
+        || expectedReviewVersion !== this.#stageReviewVersion || review.phase !== "ready"
+        || review.reviewVersion !== expectedReviewVersion || !review.stage?.readyForCutover
+        || !reviewed || !this.#displayedArchive
+        || !sameArchive(this.#displayedArchive, reviewed.expectedBytes)) return;
+    await this.#commitRotationCandidate(new Uint8Array(reviewed.expectedBytes), {
+      kind: "saved-cutover", reference: reviewed.reference,
+    });
+  }
+
+  /** Shared CAS/outbox/readback path; no write mode can skip authentication. */
+  async #commitRotationCandidate(before: Uint8Array, operation: RotationWrite): Promise<void> {
     const generation = ++this.#generation;
     this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
@@ -604,20 +708,30 @@ export class SyntheticVaultSession {
       this.#worker.cancel();
       this.#notify();
       if (!this.#isCurrent(generation)) return;
-      const createCutover = this.#worker.createRotationCutover;
+      const createCandidate = operation.kind === "cutover" ? this.#worker.createRotationCutover
+        : operation.kind === "stage" ? this.#worker.saveRotationStage
+          : this.#worker.createRotationCutoverFromStage;
       const open = this.#worker.open;
       const read = this.#store.read;
       const preservingCas = this.#store.compareAndSwapArchivePreservingConflict;
       const preserveAfterReadback = this.#store.preserveConflictArchiveIfCurrentDiffers;
       if (!this.#isCurrent(generation)) return;
-      if (typeof createCutover !== "function" || typeof open !== "function"
+      if (typeof createCandidate !== "function" || typeof open !== "function"
           || typeof read !== "function" || typeof preservingCas !== "function"
           || typeof preserveAfterReadback !== "function") {
         throw new RegistrationStateError("ROTATION_UNAVAILABLE");
       }
       rawCandidate = await withArchiveCopy(
         before,
-        (cutoverInput) => createCutover.call(this.#worker, cutoverInput, selection),
+        (cutoverInput) => {
+          // The discriminated operation selects the exact method argument.
+          if (operation.kind === "saved-cutover") return (createCandidate as SyntheticRotationStageWorker["createRotationCutoverFromStage"])
+            .call(this.#worker, cutoverInput, operation.reference);
+          if (operation.kind === "stage") return (createCandidate as SyntheticRotationStageWorker["saveRotationStage"])
+            .call(this.#worker, cutoverInput, operation.selection);
+          return (createCandidate as SyntheticRotationWorker["createRotationCutover"])
+            .call(this.#worker, cutoverInput, operation.selection);
+        },
       );
       if (!this.#isCurrent(generation)) return;
       candidate = copyArchive(rawCandidate as Uint8Array);
@@ -939,6 +1053,7 @@ export class SyntheticVaultSession {
   }
 
   #startConflictReview(phase: "loading"): number {
+    this.#invalidateStageReview();
     this.#invalidateRotationReview();
     this.#invalidateConflictReview();
     this.#conflictReviewState = conflictReviewState(phase, this.#reviewVersion);
@@ -946,6 +1061,7 @@ export class SyntheticVaultSession {
   }
 
   #startRotationReview(phase: "loading"): number {
+    this.#invalidateStageReview();
     this.#invalidateConflictReview();
     this.#invalidateRotationReview();
     this.#rotationReviewState = rotationReviewState(phase, this.#rotationReviewVersion);
@@ -978,6 +1094,24 @@ export class SyntheticVaultSession {
   #invalidateAuxiliaryReviews(): void {
     this.#invalidateConflictReview();
     this.#invalidateRotationReview();
+    this.#invalidateStageReview();
+  }
+
+  #isStageReviewCurrent(generation: number, reviewVersion: number): boolean {
+    return generation === this.#generation && reviewVersion === this.#stageReviewVersion
+      && this.#state.phase === "open";
+  }
+
+  #canSaveRotationStage(generation: number): boolean {
+    return this.#state.phase === "open" && generation === this.#generation
+      && this.#displayedArchive !== undefined && this.#conflictReviewState.phase !== "discarding";
+  }
+
+  #invalidateStageReview(): void {
+    this.#stageReviewVersion += 1;
+    this.#stageReviewSnapshot?.expectedBytes.fill(0);
+    this.#stageReviewSnapshot = undefined;
+    this.#stageReviewState = stageReviewState("idle", this.#stageReviewVersion);
   }
 
   #forgetArchive(): void {

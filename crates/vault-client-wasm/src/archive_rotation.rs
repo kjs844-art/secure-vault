@@ -108,8 +108,8 @@ struct Receipt {
     parent_revision_id: Option<vault_local_core::RevisionIdV1>,
 }
 
-struct SelectedChain {
-    head: OwnedRehydratedCredentialV1,
+pub(super) struct SelectedChain {
+    pub(super) head: OwnedRehydratedCredentialV1,
     ancestors: Vec<OwnedRehydratedCredentialV1>,
 }
 
@@ -121,10 +121,10 @@ struct RotationHistorySummary {
     )>,
 }
 
-struct PreparedArchive<'a> {
-    parsed: ParsedArchive<'a>,
-    session: vault_crypto::VaultSession,
-    selected: SelectedChain,
+pub(super) struct PreparedArchive<'a> {
+    pub(super) parsed: ParsedArchive<'a>,
+    pub(super) session: vault_crypto::VaultSession,
+    pub(super) selected: SelectedChain,
     checklist: HeadChecklist,
     rotation_history: RotationHistorySummary,
 }
@@ -193,7 +193,7 @@ pub(crate) fn create_rotation_cutover_candidate(
         .generation
         .next()
         .ok_or(ArchiveError::InvalidArchive)?;
-    if prepared.parsed.records.len() >= MAX_REVISION_COUNT {
+    if prepared.parsed.records.len() + prepared.parsed.stages.len() >= MAX_REVISION_COUNT {
         return Err(ArchiveError::LimitsExceeded);
     }
 
@@ -223,7 +223,16 @@ pub(crate) fn create_rotation_cutover_candidate(
     records.push(successor_projection.envelope());
     let mut heads = prepared.parsed.heads.clone();
     heads[reference] = appended_index;
-    let candidate = super::history::encode(prepared.parsed.password_envelope, &records, &heads)?;
+    let candidate = if prepared.parsed.version == STAGING_ARCHIVE_VERSION {
+        super::staging::encode(
+            prepared.parsed.password_envelope,
+            &records,
+            &heads,
+            &prepared.parsed.stages,
+        )
+    } else {
+        super::history::encode(prepared.parsed.password_envelope, &records, &heads)
+    }?;
     let candidate = verify_candidate(&prepared.session, candidate)?;
 
     // Reparse/re-authenticate the assembled output rather than trusting the
@@ -257,7 +266,7 @@ pub(crate) fn create_rotation_cutover_candidate(
     Ok(candidate)
 }
 
-fn prepare_archive<'a>(
+pub(super) fn prepare_archive<'a>(
     input: &'a [u8],
     reference: u32,
 ) -> Result<PreparedArchive<'a>, ArchiveError> {
@@ -368,16 +377,23 @@ fn validate_selected_chain(
         .iter()
         .map(OwnedRehydratedCredentialV1::sealed_record)
         .collect::<Vec<_>>();
-    let history =
-        inspect_synthetic_rotation_history_v1(session, selected.head.sealed_record(), &ancestors)
-            .map_err(|error| map_local_error(error.code()))?;
+    validate_record_chain(session, selected.head.sealed_record(), &ancestors)
+}
+
+fn validate_record_chain(
+    session: &vault_crypto::VaultSession,
+    head: &vault_local_core::SealedCredentialRecordV0Alpha1,
+    ancestors: &[&vault_local_core::SealedCredentialRecordV0Alpha1],
+) -> Result<(HeadChecklist, RotationHistorySummary), ArchiveError> {
+    let history = inspect_synthetic_rotation_history_v1(session, head, ancestors)
+        .map_err(|error| map_local_error(error.code()))?;
     ensure_complete_history(
         history
             .events()
             .iter()
             .map(|event| event.recorded_completion()),
     )?;
-    let checklist = inspect_synthetic_rotation_checklist_v1(session, selected.head.sealed_record())
+    let checklist = inspect_synthetic_rotation_checklist_v1(session, head)
         .map_err(|error| map_local_error(error.code()))?;
     let generation = match checklist.generation() {
         SyntheticRotationChecklistGenerationV1::Initial0001 => {
@@ -418,6 +434,75 @@ fn validate_selected_chain(
     ))
 }
 
+/// v4 reserves its canonical set for completed histories. Authenticating IDs
+/// alone would let a valid encrypted stage be reframed as a canonical head or
+/// ancestor. Reuse the full rotation history checks for every canonical chain.
+/// Rehydrate the bounded canonical set once, not once per head.
+pub(super) fn validate_canonical_chains(
+    session: &vault_crypto::VaultSession,
+    parsed: &ParsedArchive<'_>,
+) -> Result<(), ArchiveError> {
+    let authenticator = CredentialStorageAuthenticatorV1::new(session);
+    let mut owned = Vec::with_capacity(parsed.records.len());
+    let mut receipts = Vec::with_capacity(parsed.records.len());
+    let mut by_revision = BTreeMap::new();
+    for (index, envelope) in parsed.records.iter().enumerate() {
+        let receipt = match authenticator
+            .authenticate_stored_credential_v1(envelope)
+            .map_err(|error| map_local_error(error.code()))?
+        {
+            StoredCredentialAuthenticationOutcomeV1::Current(receipt) => receipt,
+            StoredCredentialAuthenticationOutcomeV1::AuthenticatedFutureInner(_) => {
+                return Err(ArchiveError::UpgradeRequired);
+            }
+        };
+        if by_revision.insert(receipt.revision_id(), index).is_some() {
+            return Err(ArchiveError::InvalidArchive);
+        }
+        receipts.push(Receipt {
+            record_id: receipt.record_id(),
+            parent_revision_id: receipt.parent_revision_id(),
+        });
+        let record = match authenticator
+            .rehydrate_owned_stored_credential_v1(envelope.to_vec())
+            .map_err(|error| map_local_error(error.code()))?
+        {
+            OwnedRehydratedCredentialOutcomeV1::Current(record) => record,
+            OwnedRehydratedCredentialOutcomeV1::UpgradeRequired(_) => {
+                return Err(ArchiveError::UpgradeRequired);
+            }
+        };
+        owned.push(record);
+    }
+    for &head_index in &parsed.heads {
+        let head = owned
+            .get(head_index)
+            .ok_or(ArchiveError::InvalidArchive)?
+            .sealed_record();
+        let head_receipt = receipts
+            .get(head_index)
+            .ok_or(ArchiveError::InvalidArchive)?;
+        let mut ancestors = Vec::new();
+        let mut next = head_receipt.parent_revision_id;
+        while let Some(parent) = next {
+            let index = *by_revision
+                .get(&parent)
+                .ok_or(ArchiveError::InvalidArchive)?;
+            let record = owned[index].sealed_record();
+            let receipt = &receipts[index];
+            if receipt.record_id != head_receipt.record_id
+                || ancestors.len() >= parsed.records.len()
+            {
+                return Err(ArchiveError::InvalidArchive);
+            }
+            ancestors.push(record);
+            next = receipt.parent_revision_id;
+        }
+        validate_record_chain(session, head, &ancestors)?;
+    }
+    Ok(())
+}
+
 fn cutover_selection(
     user_confirmed: &[u32],
     provider_verified: &[u32],
@@ -443,7 +528,10 @@ fn ensure_complete_history(
     Ok(())
 }
 
-fn checked_reference(parsed: &ParsedArchive<'_>, reference: u32) -> Result<usize, ArchiveError> {
+pub(super) fn checked_reference(
+    parsed: &ParsedArchive<'_>,
+    reference: u32,
+) -> Result<usize, ArchiveError> {
     let reference = usize::try_from(reference).map_err(|_| ArchiveError::InvalidArchive)?;
     parsed
         .heads
@@ -452,13 +540,18 @@ fn checked_reference(parsed: &ParsedArchive<'_>, reference: u32) -> Result<usize
     Ok(reference)
 }
 
-fn verify_candidate_layout(
+pub(super) fn verify_candidate_layout(
     before: &ParsedArchive<'_>,
     after: &ParsedArchive<'_>,
     selected_reference: usize,
     appended_envelope: &[u8],
 ) -> Result<(), ArchiveError> {
-    if after.version != HISTORY_ARCHIVE_VERSION
+    let expected_version = if before.version == STAGING_ARCHIVE_VERSION {
+        STAGING_ARCHIVE_VERSION
+    } else {
+        HISTORY_ARCHIVE_VERSION
+    };
+    if after.version != expected_version
         || after.password_envelope != before.password_envelope
         || after.records.len()
             != before
@@ -469,6 +562,7 @@ fn verify_candidate_layout(
         || after.records[..before.records.len()] != before.records[..]
         || after.records.last().copied() != Some(appended_envelope)
         || after.heads.len() != before.heads.len()
+        || after.stages != before.stages
     {
         return Err(ArchiveError::InvalidArchive);
     }

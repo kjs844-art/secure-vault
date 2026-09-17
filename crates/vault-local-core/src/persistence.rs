@@ -298,6 +298,21 @@ pub(crate) fn inspect_synthetic_predecessor_v1<T>(
     inspect(&item, metadata.revision_id)
 }
 
+/// Owned authenticated payload for reconstructing a closed candidate. The
+/// canonical envelope, not the cached locator, supplies both identities.
+pub(crate) fn inspect_owned_synthetic_predecessor_v1<T>(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    inspect: impl FnOnce(CredentialItemV1, RecordIdV1, RevisionIdV1) -> Result<T, LocalVaultError>,
+) -> Result<T, LocalVaultError> {
+    let AuthenticatedItem::Current { metadata, item } =
+        authenticate_current_envelope(session, &predecessor.envelope)?
+    else {
+        return Err(LocalVaultError::CryptoFailure);
+    };
+    inspect(*item, metadata.record_id, metadata.revision_id)
+}
+
 pub(crate) fn create_synthetic_edited_successor_with_predecessor_v1(
     session: &VaultSession,
     predecessor: &SealedCredentialRecordV0Alpha1,

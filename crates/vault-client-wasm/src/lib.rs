@@ -17,9 +17,11 @@ mod archive;
 mod demo;
 #[cfg(feature = "synthetic-demo")]
 pub use demo::{
-    WasmRotationChecklistV1, append_synthetic_registration, create_synthetic_archive,
-    create_synthetic_rotation_cutover, edit_synthetic_connections,
-    inspect_synthetic_rotation_checklist, open_synthetic_archive, synthetic_catalog,
+    WasmRotationChecklistV1, WasmRotationStageV1, append_synthetic_registration,
+    create_synthetic_archive, create_synthetic_rotation_cutover,
+    create_synthetic_rotation_cutover_from_stage, create_synthetic_rotation_stage,
+    edit_synthetic_connections, inspect_synthetic_rotation_checklist,
+    inspect_synthetic_rotation_stage, open_synthetic_archive, synthetic_catalog,
 };
 
 /// Owns one catalog. Every getter checks this object's lock state.

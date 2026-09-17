@@ -41,12 +41,13 @@ function expectArchiveBytesEqual(actual: Uint8Array, expected: Uint8Array): void
   expect(actualBytes.equals(expectedBytes)).toBe(true);
 }
 
-function withHeader(version: number, count = 3, revisions = count): Uint8Array {
+function withHeader(version: number, count = 3, revisions = count, stages = 0): Uint8Array {
   const bytes = fakeArchive();
   const header = new DataView(bytes.buffer);
   header.setUint32(8, version, true);
   header.setUint32(12, count, true);
-  if (version === 3) header.setUint32(16, revisions, true);
+  if (version === 3 || version === 4) header.setUint32(16, revisions, true);
+  if (version === 4) header.setUint32(20, stages, true);
   return bytes;
 }
 
@@ -588,7 +589,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(worker.open).not.toHaveBeenCalled();
   });
 
-  it.each([[1, 3], [2, 3], [2, 4], [2, 128], [3, 3], [3, 128]])(
+  it.each([[1, 3], [2, 3], [2, 4], [2, 128], [3, 3], [3, 128], [4, 3], [4, 128]])(
     "delegates supported archive v%i count %i to full validation and preserves its exact bytes", async (version, count) => {
       const bytes = withHeader(version, count);
       const expected = bytes.slice();
@@ -607,7 +608,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     },
   );
 
-  it.each([0, 4, 0xffff_ffff])("refuses unsupported archive version %i without storage or validation", async (version) => {
+  it.each([0, 5, 0xffff_ffff])("refuses unsupported archive version %i without storage or validation", async (version) => {
     const { backup, store, worker } = fixture();
     await expect(backup.restoreArchive(withHeader(version))).rejects.toMatchObject({ code: "UNSUPPORTED_VERSION" });
     expect(store.read).not.toHaveBeenCalled();
@@ -663,6 +664,27 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
     expect(store.createIfAbsent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    withHeader(4).slice(0, 20), withHeader(4).slice(0, 23),
+    withHeader(4, 3, 2, 1), withHeader(4, 3, 512, 1),
+    withHeader(4, 3, 3, 510), withHeader(4, 3, 3, 0xffff_ffff),
+  ])("rejects v4 combined stage/revision bounds before storage or authentication", async (bytes) => {
+    const { backup, store, worker } = fixture();
+    await expect(backup.restoreArchive(bytes)).rejects.toHaveProperty("code", "INVALID_BACKUP");
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+  });
+
+  it("a bounded v4 header still requires every canonical and staged envelope to authenticate", async () => {
+    const { backup, store, worker } = fixture();
+    worker.open.mockRejectedValueOnce(new CatalogAdapterError("AUTHENTICATION_FAILED"));
+    await expect(backup.restoreArchive(withHeader(4, 3, 3, 509)))
+      .rejects.toHaveProperty("code", "VALIDATION_FAILED");
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+  });
+
   it.each(["export", "restore"] as const)("requires full validation for v2 %s and preserves bytes on validation failure", async (operation) => {
     const bytes = withHeader(2, 4);
     const expected = bytes.slice();
@@ -687,7 +709,7 @@ describe("SyntheticVaultBackup with fake bytes and an injected test worker", () 
 
   it.each([
     ["bad header", new Uint8Array(32), "INVALID_BACKUP"],
-    ["future version", withHeader(4), "UNSUPPORTED_VERSION"],
+    ["future version", withHeader(5), "UNSUPPORTED_VERSION"],
     ["v2 low count", withHeader(2, 2), "INVALID_BACKUP"],
     ["v2 excessive count", withHeader(2, 129), "INVALID_BACKUP"],
     ["oversized", fakeArchive(MAX_SYNTHETIC_ARCHIVE_BYTES + 1), "LIMIT_EXCEEDED"],
@@ -1061,7 +1083,7 @@ describe("SyntheticVaultBackup with fake IndexedDB and fake validation (not real
     expect(worker.open).toHaveBeenCalledTimes(2);
   });
 
-  it.each([[1, 3], [2, 4], [3, 4]])("round-trips v%i count %i exact bytes across separate database factories and new store instances", async (version, count) => {
+  it.each([[1, 3], [2, 4], [3, 4], [4, 4]])("round-trips v%i count %i exact bytes across separate database factories and new store instances", async (version, count) => {
     const sourceFactory = new IDBFactory();
     const destinationFactory = new IDBFactory();
     const source = createSyntheticCiphertextStore(sourceFactory);

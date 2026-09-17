@@ -198,7 +198,7 @@ describe("synthetic backup actual-WASM integration (Node)", { concurrent: false 
 
   it("refuses a future archive version without writing a recipient archive", async () => {
     const future = archive.slice();
-    new DataView(future.buffer).setUint32(8, 4, true);
+    new DataView(future.buffer).setUint32(8, 5, true);
     const snapshot = future.slice();
     const store = createSyntheticCiphertextStore(new IDBFactory());
     const create = vi.spyOn(store, "createIfAbsent");

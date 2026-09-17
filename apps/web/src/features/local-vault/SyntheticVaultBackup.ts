@@ -72,18 +72,21 @@ function snapshotArchive(value: Uint8Array): Uint8Array {
   const header = new DataView(bytes.buffer);
   const version = header.getUint32(8, true);
   const count = header.getUint32(12, true);
-  if (version !== 1 && version !== 2 && version !== 3) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
+  if (version !== 1 && version !== 2 && version !== 3 && version !== 4) throw new SyntheticBackupError("UNSUPPORTED_VERSION");
   if (count < LEGACY_SYNTHETIC_RECORD_COUNT || count > MAX_SYNTHETIC_RECORD_COUNT
       || (version === 1 && count !== LEGACY_SYNTHETIC_RECORD_COUNT)) {
     throw new SyntheticBackupError("INVALID_BACKUP");
   }
-  if (version === 3) {
-    if (bytes.byteLength < 20) throw new SyntheticBackupError("INVALID_BACKUP");
+  if (version === 3 || version === 4) {
+    if (bytes.byteLength < (version === 4 ? 24 : 20)) throw new SyntheticBackupError("INVALID_BACKUP");
     const revisions = header.getUint32(16, true);
     if (revisions < count || revisions > 512) throw new SyntheticBackupError("INVALID_BACKUP");
+    if (version === 4 && revisions + header.getUint32(20, true) > 512) {
+      throw new SyntheticBackupError("INVALID_BACKUP");
+    }
   }
-  // v3 retains historical revisions. Header acceptance does not authenticate
-  // framing, head indexes or any records; the existing Worker/Rust path does.
+  // v3/v4 retain history; v4 also carries encrypted staged siblings. Header
+  // acceptance authenticates nothing: Worker/Rust validates every envelope.
   return bytes;
 }
 
