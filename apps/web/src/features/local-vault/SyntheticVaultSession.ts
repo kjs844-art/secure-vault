@@ -4,6 +4,10 @@ import {
   type LocalCatalogEntryV1,
 } from "../../bridge/catalogProtocol";
 import {
+  projectRotationChecklistV1,
+  type LocalRotationChecklistV1,
+} from "../../bridge/rotationProtocol";
+import {
   MAX_SYNTHETIC_CONFLICT_ARCHIVES,
   MAX_SYNTHETIC_ARCHIVE_BYTES,
   SyntheticStorageError,
@@ -15,6 +19,7 @@ import {
 } from "../../storage/SyntheticCiphertextStore";
 import { parseSyntheticRegistration, type SyntheticRegistrationSelection } from "./syntheticRegistration";
 import { parseSyntheticConnectionEdit, type SyntheticConnectionEditSelection } from "./syntheticConnectionEdit";
+import { parseSyntheticRotationSelection, type SyntheticRotationSelection } from "./syntheticRotation";
 
 export interface SyntheticVaultWorker {
   create(): Promise<Uint8Array>;
@@ -30,9 +35,20 @@ export interface SyntheticConnectionEditWorker extends SyntheticVaultWorker {
   editConnections(bytes: Uint8Array, selection: SyntheticConnectionEditSelection): Promise<Uint8Array>;
 }
 
+export interface SyntheticRotationWorker extends SyntheticVaultWorker {
+  inspectRotation(
+    bytes: Uint8Array,
+    selection: SyntheticRotationSelection,
+  ): Promise<LocalRotationChecklistV1>;
+  createRotationCutover(
+    bytes: Uint8Array,
+    selection: SyntheticRotationSelection,
+  ): Promise<Uint8Array>;
+}
+
 class RegistrationStateError extends Error {
   constructor(readonly code: "REGISTRATION_UNAVAILABLE" | "CONNECTION_EDIT_UNAVAILABLE"
-    | "CONFLICT_REVIEW_UNAVAILABLE" | "CONFLICT_REVIEW_STALE"
+    | "ROTATION_UNAVAILABLE" | "CONFLICT_REVIEW_UNAVAILABLE" | "CONFLICT_REVIEW_STALE"
     | "STORAGE_CONFLICT" | "STORAGE_CONFLICT_PRESERVED" | "STORAGE_MISSING") {
     super(code);
   }
@@ -59,6 +75,13 @@ export interface SyntheticConflictReviewState {
   readonly errorCode: string | null;
 }
 
+export interface SyntheticRotationReviewState {
+  readonly phase: "idle" | "loading" | "ready" | "error";
+  readonly reviewVersion: number;
+  readonly checklist: LocalRotationChecklistV1 | null;
+  readonly errorCode: string | null;
+}
+
 const EMPTY_ENTRIES: readonly LocalCatalogEntryV1[] = Object.freeze([]);
 const EMPTY_CONFLICT_REVIEW_ITEMS: readonly SyntheticConflictReviewItem[] = Object.freeze([]);
 const STORAGE_ERROR_CODES = new Set([
@@ -72,9 +95,13 @@ const typedArrayByteLength = Object.getOwnPropertyDescriptor(
 const typedArrayBuffer = Object.getOwnPropertyDescriptor(
   Object.getPrototypeOf(Uint8Array.prototype), "buffer",
 )!.get!;
+const typedArrayByteOffset = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), "byteOffset",
+)!.get!;
 const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
   ArrayBuffer.prototype, "byteLength",
 )!.get!;
+const typedArrayFill = Uint8Array.prototype.fill;
 
 function hasExclusiveArrayBuffer(value: Uint8Array): boolean {
   try {
@@ -98,6 +125,44 @@ function copyArchive(value: Uint8Array): Uint8Array {
   if (length > MAX_SYNTHETIC_ARCHIVE_BYTES) throw new CatalogAdapterError("LIMITS_EXCEEDED");
   try { return new Uint8Array(value); }
   catch { throw new CatalogAdapterError("INVALID_ARCHIVE"); }
+}
+
+/** Best-effort wipe without consulting an injected value's own properties. */
+function wipeArchive(value: unknown): void {
+  try {
+    const buffer = typedArrayBuffer.call(value) as ArrayBufferLike;
+    // Reject SharedArrayBuffer and detached/foreign backing stores before a
+    // byte-wise view is constructed.
+    arrayBufferByteLength.call(buffer);
+    const byteOffset = typedArrayByteOffset.call(value) as number;
+    const byteLength = typedArrayByteLength.call(value) as number;
+    if (byteLength < 1) return;
+    const bytes = new Uint8Array(buffer as ArrayBuffer, byteOffset, byteLength);
+    typedArrayFill.call(bytes, 0);
+  } catch { /* Hostile, shared or detached values cannot be safely wiped here. */ }
+}
+
+async function withArchiveCopy<T>(
+  source: Uint8Array,
+  use: (copy: Uint8Array) => Promise<T>,
+): Promise<T> {
+  const copy = new Uint8Array(source);
+  try { return await use(copy); }
+  finally { wipeArchive(copy); }
+}
+
+async function withArchivePair<T>(
+  first: Uint8Array,
+  second: Uint8Array,
+  use: (firstCopy: Uint8Array, secondCopy: Uint8Array) => Promise<T>,
+): Promise<T> {
+  const firstCopy = new Uint8Array(first);
+  const secondCopy = new Uint8Array(second);
+  try { return await use(firstCopy, secondCopy); }
+  finally {
+    wipeArchive(firstCopy);
+    wipeArchive(secondCopy);
+  }
 }
 
 function sameArchive(left: Uint8Array, right: Uint8Array): boolean {
@@ -217,6 +282,15 @@ function conflictReviewState(
   return Object.freeze({ phase, reviewVersion, items, pendingReference, errorCode });
 }
 
+function rotationReviewState(
+  phase: SyntheticRotationReviewState["phase"],
+  reviewVersion: number,
+  checklist: LocalRotationChecklistV1 | null = null,
+  errorCode: string | null = null,
+): SyntheticRotationReviewState {
+  return Object.freeze({ phase, reviewVersion, checklist, errorCode });
+}
+
 function fixedErrorCode(error: unknown): string {
   try {
     if (error instanceof RegistrationStateError) return error.code;
@@ -263,7 +337,8 @@ function snapshotEntries(entries: readonly LocalCatalogEntryV1[]): readonly Loca
  */
 export class SyntheticVaultSession {
   readonly #store: SyntheticCiphertextStore & Partial<SyntheticConflictCiphertextStore>;
-  readonly #worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker>;
+  readonly #worker: SyntheticVaultWorker
+    & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker>;
   readonly #listeners = new Set<() => void>();
   #generation = 0;
   #state: SyntheticVaultSessionState = emptyState("locked");
@@ -277,10 +352,17 @@ export class SyntheticVaultSession {
     readonly conflictId: string;
     readonly expectedBytes: Uint8Array;
   }>();
+  #rotationReviewVersion = 0;
+  #rotationReviewState: SyntheticRotationReviewState = rotationReviewState("idle", 0);
+  #rotationReviewSnapshot: {
+    readonly expectedBytes: Uint8Array;
+    readonly selection: SyntheticRotationSelection;
+  } | undefined;
 
   constructor(
     store: SyntheticCiphertextStore & Partial<SyntheticConflictCiphertextStore>,
-    worker: SyntheticVaultWorker & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker>,
+    worker: SyntheticVaultWorker
+      & Partial<SyntheticRegistrationWorker & SyntheticConnectionEditWorker & SyntheticRotationWorker>,
   ) {
     this.#store = store;
     this.#worker = worker;
@@ -289,6 +371,8 @@ export class SyntheticVaultSession {
   get state(): SyntheticVaultSessionState { return this.#state; }
 
   get conflictReviewState(): SyntheticConflictReviewState { return this.#conflictReviewState; }
+
+  get rotationReviewState(): SyntheticRotationReviewState { return this.#rotationReviewState; }
 
   // Ephemeral UI identity only, never a stored record ID or authorization token.
   // A fresh key lets React discard view-local search state even if it batches
@@ -306,7 +390,7 @@ export class SyntheticVaultSession {
   /** Authenticate every candidate before publishing any conflict projection. */
   async loadConflictReviews(expectedVaultGeneration: number): Promise<void> {
     if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
-        || !this.#displayedArchive) return;
+        || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding") return;
     const vaultGeneration = this.#generation;
     const reviewVersion = this.#startConflictReview("loading");
     let candidates: readonly SyntheticConflictArchive[] | undefined;
@@ -427,11 +511,192 @@ export class SyntheticVaultSession {
     }
   }
 
+  /** Inspect one exact authenticated display snapshot without changing its vault generation. */
+  async inspectRotation(expectedVaultGeneration: number, input: unknown): Promise<void> {
+    if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
+        || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding") return;
+    const vaultGeneration = this.#generation;
+    const before = new Uint8Array(this.#displayedArchive);
+    const reviewVersion = this.#startRotationReview("loading");
+    let snapshotOwnedBySession = false;
+    try {
+      this.#worker.cancel();
+      this.#notify();
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      const selection = parseSyntheticRotationSelection(input);
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      const inspect = this.#worker.inspectRotation;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (typeof inspect !== "function") {
+        throw new RegistrationStateError("ROTATION_UNAVAILABLE");
+      }
+      const rawChecklist = await withArchiveCopy(
+        before,
+        (inspectionInput) => inspect.call(this.#worker, inspectionInput, selection),
+      );
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      const checklist = projectRotationChecklistV1(rawChecklist);
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      this.#rotationReviewSnapshot = Object.freeze({
+        expectedBytes: before,
+        selection,
+      });
+      snapshotOwnedBySession = true;
+      this.#rotationReviewState = rotationReviewState(
+        "ready", reviewVersion, checklist, null,
+      );
+      this.#notify();
+    } catch (error: unknown) {
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      const errorCode = fixedErrorCode(error);
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      this.#rotationReviewState = rotationReviewState("error", reviewVersion, null, errorCode);
+      this.#notify();
+    } finally {
+      if (!snapshotOwnedBySession) before.fill(0);
+    }
+  }
+
+  /**
+   * Commit only the exact reviewed archive and selection. A generated candidate
+   * is not success until atomic storage, authoritative reread and reauthentication.
+   */
+  async commitRotationCutover(
+    expectedVaultGeneration: number,
+    expectedReviewVersion: number,
+  ): Promise<void> {
+    const review = this.#rotationReviewState;
+    const reviewed = this.#rotationReviewSnapshot;
+    if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
+        || review.phase !== "ready" || expectedReviewVersion !== this.#rotationReviewVersion
+        || review.reviewVersion !== expectedReviewVersion
+        || review.checklist?.readinessState !== "ready"
+        || !reviewed || !this.#displayedArchive
+        || !sameArchive(this.#displayedArchive, reviewed.expectedBytes)) return;
+
+    const before = new Uint8Array(reviewed.expectedBytes);
+    const selection = parseSyntheticRotationSelection(reviewed.selection);
+    const generation = ++this.#generation;
+    this.#invalidateAuxiliaryReviews();
+    this.#forgetArchive();
+    this.#state = emptyState("busy");
+    let candidate: Uint8Array | undefined;
+    let authenticatedArchive: Uint8Array | undefined;
+    let rawCandidate: unknown;
+    let saved: unknown;
+    try {
+      this.#worker.cancel();
+      this.#notify();
+      if (!this.#isCurrent(generation)) return;
+      const createCutover = this.#worker.createRotationCutover;
+      const open = this.#worker.open;
+      const read = this.#store.read;
+      const preservingCas = this.#store.compareAndSwapArchivePreservingConflict;
+      const preserveAfterReadback = this.#store.preserveConflictArchiveIfCurrentDiffers;
+      if (!this.#isCurrent(generation)) return;
+      if (typeof createCutover !== "function" || typeof open !== "function"
+          || typeof read !== "function" || typeof preservingCas !== "function"
+          || typeof preserveAfterReadback !== "function") {
+        throw new RegistrationStateError("ROTATION_UNAVAILABLE");
+      }
+      rawCandidate = await withArchiveCopy(
+        before,
+        (cutoverInput) => createCutover.call(this.#worker, cutoverInput, selection),
+      );
+      if (!this.#isCurrent(generation)) return;
+      candidate = copyArchive(rawCandidate as Uint8Array);
+      wipeArchive(rawCandidate);
+      rawCandidate = undefined;
+      if (sameArchive(before, candidate)) {
+        throw new CatalogAdapterError("INVALID_ARCHIVE");
+      }
+      if (!this.#isCurrent(generation)) return;
+      // Authenticate the complete candidate before any storage write. This
+      // projection is deliberately discarded.
+      await withArchiveCopy(
+        candidate,
+        (authenticationInput) => open.call(this.#worker, authenticationInput),
+      );
+      if (!this.#isCurrent(generation)) return;
+      const rawCommitted = await withArchivePair(
+        before,
+        candidate,
+        (expectedInput, candidateInput) => preservingCas.call(
+          this.#store, expectedInput, candidateInput,
+        ),
+      );
+      if (!this.#isCurrent(generation)) return;
+      const committed = parseConflictPreservingResult(rawCommitted);
+      if (!this.#isCurrent(generation)) return;
+      if (committed.kind === "missing") {
+        throw new RegistrationStateError("STORAGE_MISSING");
+      }
+      if (committed.kind === "conflict-preserved") {
+        throw new RegistrationStateError("STORAGE_CONFLICT_PRESERVED");
+      }
+
+      saved = await read.call(this.#store);
+      if (!this.#isCurrent(generation)) return;
+      if (saved === null) throw new RegistrationStateError("STORAGE_MISSING");
+      const readbackMatches = sameArchive(candidate, saved as Uint8Array);
+      if (!this.#isCurrent(generation)) return;
+      if (!readbackMatches) {
+        wipeArchive(saved);
+        saved = undefined;
+        const rawPreserved = await withArchiveCopy(
+          candidate,
+          (candidateInput) => preserveAfterReadback.call(this.#store, candidateInput),
+        );
+        if (!this.#isCurrent(generation)) return;
+        const preserved = parseConflictPreservationResult(rawPreserved);
+        if (!this.#isCurrent(generation)) return;
+        if (preserved.kind === "missing") {
+          throw new RegistrationStateError("STORAGE_MISSING");
+        }
+        if (preserved.kind === "conflict-preserved") {
+          throw new RegistrationStateError("STORAGE_CONFLICT_PRESERVED");
+        }
+        throw new RegistrationStateError("STORAGE_CONFLICT");
+      }
+
+      authenticatedArchive = copyArchive(saved as Uint8Array);
+      wipeArchive(saved);
+      saved = undefined;
+      if (!sameArchive(candidate, authenticatedArchive)) {
+        throw new RegistrationStateError("STORAGE_CONFLICT");
+      }
+      if (!this.#isCurrent(generation)) return;
+      const entries = await withArchiveCopy(
+        authenticatedArchive,
+        (authenticationInput) => open.call(this.#worker, authenticationInput),
+      );
+      if (!this.#isCurrent(generation)) return;
+      const snapshot = snapshotEntries(entries);
+      if (!this.#isCurrent(generation)) return;
+      this.#displayedArchive = authenticatedArchive;
+      authenticatedArchive = undefined;
+      this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
+      this.#notify();
+    } catch (error: unknown) {
+      if (!this.#isCurrent(generation)) return;
+      const code = fixedErrorCode(error);
+      if (!this.#isCurrent(generation)) return;
+      this.#state = emptyState("error", code);
+      this.#notify();
+    } finally {
+      wipeArchive(before);
+      wipeArchive(rawCandidate);
+      wipeArchive(candidate);
+      wipeArchive(saved);
+      wipeArchive(authenticatedArchive);
+    }
+  }
+
   /** No implicit unlock, retry or create. Only the reread/authenticated saved result is shown. */
   async register(input: unknown): Promise<void> {
     if (this.#state.phase !== "open") return;
     const generation = ++this.#generation;
-    this.#invalidateConflictReview();
+    this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
     this.#state = emptyState("busy");
     try {
@@ -488,7 +753,7 @@ export class SyntheticVaultSession {
     if (this.#state.phase !== "open" || expectedGeneration !== this.#generation || !this.#displayedArchive) return;
     const before = new Uint8Array(this.#displayedArchive);
     const generation = ++this.#generation;
-    this.#invalidateConflictReview();
+    this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
     this.#state = emptyState("busy");
     try {
@@ -591,7 +856,7 @@ export class SyntheticVaultSession {
 
   lock(): void {
     this.#generation += 1;
-    this.#invalidateConflictReview();
+    this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
     this.#state = emptyState("locked");
     try { this.#worker.cancel(); } catch { /* Cleared state stays locked even if cleanup fails. */ }
@@ -600,7 +865,7 @@ export class SyntheticVaultSession {
 
   async #run(allowCreation: boolean): Promise<void> {
     const generation = ++this.#generation;
-    this.#invalidateConflictReview();
+    this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
     this.#state = emptyState("busy");
     try {
@@ -651,10 +916,24 @@ export class SyntheticVaultSession {
       && this.#state.phase === "open";
   }
 
+  #isRotationReviewCurrent(vaultGeneration: number, reviewVersion: number): boolean {
+    return vaultGeneration === this.#generation
+      && reviewVersion === this.#rotationReviewVersion
+      && this.#state.phase === "open";
+  }
+
   #startConflictReview(phase: "loading"): number {
+    this.#invalidateRotationReview();
     this.#invalidateConflictReview();
     this.#conflictReviewState = conflictReviewState(phase, this.#reviewVersion);
     return this.#reviewVersion;
+  }
+
+  #startRotationReview(phase: "loading"): number {
+    this.#invalidateConflictReview();
+    this.#invalidateRotationReview();
+    this.#rotationReviewState = rotationReviewState(phase, this.#rotationReviewVersion);
+    return this.#rotationReviewVersion;
   }
 
   #finishConflictReview(phase: "discarded" | "error", errorCode: string | null): void {
@@ -671,6 +950,18 @@ export class SyntheticVaultSession {
     }
     this.#conflictReviewSnapshots.clear();
     this.#conflictReviewState = conflictReviewState("idle", this.#reviewVersion);
+  }
+
+  #invalidateRotationReview(): void {
+    this.#rotationReviewVersion += 1;
+    this.#rotationReviewSnapshot?.expectedBytes.fill(0);
+    this.#rotationReviewSnapshot = undefined;
+    this.#rotationReviewState = rotationReviewState("idle", this.#rotationReviewVersion);
+  }
+
+  #invalidateAuxiliaryReviews(): void {
+    this.#invalidateConflictReview();
+    this.#invalidateRotationReview();
   }
 
   #forgetArchive(): void {
