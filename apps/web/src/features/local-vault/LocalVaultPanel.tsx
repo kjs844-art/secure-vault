@@ -7,6 +7,7 @@ import { SyntheticEditableCatalog } from "./SyntheticConnectionEditor";
 import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import { SyntheticConflictReviewPanel } from "./SyntheticConflictReviewPanel";
+import { SyntheticRotationPanel } from "./SyntheticRotationPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -53,6 +54,10 @@ export function LocalVaultPanel() {
 
       {state.phase === "open" && <SyntheticConflictReviewPanel
         key={`conflict-review-${generation}`} session={session} vaultGeneration={generation}
+      />}
+      {state.phase === "open" && <SyntheticRotationPanel
+        key={`rotation-${generation}`} session={session} vaultGeneration={generation}
+        entries={state.entries}
       />}
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}

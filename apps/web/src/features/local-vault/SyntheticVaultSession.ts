@@ -82,6 +82,12 @@ export interface SyntheticRotationReviewState {
   readonly errorCode: string | null;
 }
 
+/** Returned only when this exact review is still ready after all notifications. */
+export interface SyntheticRotationInspectionReceipt {
+  readonly reviewVersion: number;
+  readonly selection: SyntheticRotationSelection;
+}
+
 const EMPTY_ENTRIES: readonly LocalCatalogEntryV1[] = Object.freeze([]);
 const EMPTY_CONFLICT_REVIEW_ITEMS: readonly SyntheticConflictReviewItem[] = Object.freeze([]);
 const STORAGE_ERROR_CODES = new Set([
@@ -512,9 +518,12 @@ export class SyntheticVaultSession {
   }
 
   /** Inspect one exact authenticated display snapshot without changing its vault generation. */
-  async inspectRotation(expectedVaultGeneration: number, input: unknown): Promise<void> {
+  async inspectRotation(
+    expectedVaultGeneration: number,
+    input: unknown,
+  ): Promise<SyntheticRotationInspectionReceipt | null> {
     if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
-        || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding") return;
+        || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding") return null;
     const vaultGeneration = this.#generation;
     const before = new Uint8Array(this.#displayedArchive);
     const reviewVersion = this.#startRotationReview("loading");
@@ -522,11 +531,11 @@ export class SyntheticVaultSession {
     try {
       this.#worker.cancel();
       this.#notify();
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       const selection = parseSyntheticRotationSelection(input);
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       const inspect = this.#worker.inspectRotation;
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       if (typeof inspect !== "function") {
         throw new RegistrationStateError("ROTATION_UNAVAILABLE");
       }
@@ -534,9 +543,9 @@ export class SyntheticVaultSession {
         before,
         (inspectionInput) => inspect.call(this.#worker, inspectionInput, selection),
       );
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       const checklist = projectRotationChecklistV1(rawChecklist);
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       this.#rotationReviewSnapshot = Object.freeze({
         expectedBytes: before,
         selection,
@@ -546,12 +555,19 @@ export class SyntheticVaultSession {
         "ready", reviewVersion, checklist, null,
       );
       this.#notify();
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)
+          || this.#rotationReviewState.phase !== "ready") return null;
+      return Object.freeze({
+        reviewVersion,
+        selection: Object.freeze({ ...selection }),
+      });
     } catch (error: unknown) {
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       const errorCode = fixedErrorCode(error);
-      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return;
+      if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       this.#rotationReviewState = rotationReviewState("error", reviewVersion, null, errorCode);
       this.#notify();
+      return null;
     } finally {
       if (!snapshotOwnedBySession) before.fill(0);
     }

@@ -31,3 +31,14 @@
 .synthetic-connection-editor input[type="checkbox"] { flex: 0 0 auto; margin-top: 4px; }
 .synthetic-connection-editor input:focus-visible, .synthetic-connection-editor h4:focus { outline: 3px solid #2877ba; outline-offset: 4px; }
 .connection-removal-warning { padding: 10px; background: #fff8e9; border-left: 3px solid #a96416; }
+.synthetic-rotation form { display: grid; gap: 12px; }
+.synthetic-rotation select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.synthetic-rotation fieldset { min-width: 0; border: 1px solid #dce2e8; padding: 12px; }
+.synthetic-rotation fieldset label { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr); align-items: center; gap: 10px; margin: 10px 0; }
+.synthetic-rotation input:focus-visible, .synthetic-rotation select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.rotation-acknowledgement { display: flex; align-items: flex-start; gap: 8px; margin: 14px 0; }
+.rotation-acknowledgement input { flex: 0 0 auto; margin-top: 4px; }
+
+@media (max-width: 560px) {
+  .synthetic-rotation fieldset label { grid-template-columns: minmax(0, 1fr); }
+}

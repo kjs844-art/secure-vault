@@ -163,7 +163,7 @@ describe("snapshot-bound synthetic rotation session", () => {
       inspectedSnapshot = bytes.slice();
       return checklist();
     });
-    await f.session.inspectRotation(generation, input);
+    const receipt = await f.session.inspectRotation(generation, input);
 
     const state = f.session.rotationReviewState;
     expect(state).toEqual({
@@ -175,6 +175,9 @@ describe("snapshot-bound synthetic rotation session", () => {
     expect(Object.isFrozen(state)).toBe(true);
     expect(Object.isFrozen(state.checklist)).toBe(true);
     expect(Object.isFrozen(state.checklist?.entries)).toBe(true);
+    expect(receipt).toEqual({ reviewVersion: 2, selection: selection() });
+    expect(Object.isFrozen(receipt)).toBe(true);
+    expect(Object.isFrozen(receipt?.selection)).toBe(true);
     const [bytes, parsed] = f.worker.inspectRotation.mock.calls[0]!;
     expect(inspectedSnapshot).toEqual(original);
     expect(bytes).toEqual(new Uint8Array(original.length));
@@ -184,6 +187,57 @@ describe("snapshot-bound synthetic rotation session", () => {
     expect(Object.isFrozen(parsed)).toBe(true);
     input.reference = 0;
     expect(parsed.reference).toBe(1);
+    expect(receipt?.selection.reference).toBe(1);
+  });
+
+  it("returns no receipt when a loading notification re-enters with another review", async () => {
+    const f = fixture();
+    await f.session.open();
+    const generation = f.session.viewGeneration;
+    const secondSelection = Object.freeze({ ...selection(), reference: 0 });
+    let started = false;
+    let second: ReturnType<typeof f.session.inspectRotation> | undefined;
+    const unsubscribe = f.session.subscribe(() => {
+      if (!started && f.session.rotationReviewState.phase === "loading") {
+        started = true;
+        second = f.session.inspectRotation(generation, secondSelection);
+      }
+    });
+
+    const firstReceipt = await f.session.inspectRotation(generation, selection());
+    const secondReceipt = await second;
+    unsubscribe();
+
+    expect(firstReceipt).toBeNull();
+    expect(secondReceipt).toEqual({ reviewVersion: 3, selection: secondSelection });
+    expect(f.session.rotationReviewState).toMatchObject({ phase: "ready", reviewVersion: 3 });
+    expect(f.worker.inspectRotation).toHaveBeenCalledOnce();
+    expect(f.worker.inspectRotation.mock.calls[0]![1]).toEqual(secondSelection);
+  });
+
+  it("returns no receipt when a ready notification is replaced re-entrantly", async () => {
+    const f = fixture();
+    await f.session.open();
+    const generation = f.session.viewGeneration;
+    const secondSelection = Object.freeze({ ...selection(), reference: 0 });
+    let started = false;
+    let second: ReturnType<typeof f.session.inspectRotation> | undefined;
+    const unsubscribe = f.session.subscribe(() => {
+      if (!started && f.session.rotationReviewState.phase === "ready") {
+        started = true;
+        second = f.session.inspectRotation(generation, secondSelection);
+      }
+    });
+
+    const firstReceipt = await f.session.inspectRotation(generation, selection());
+    const secondReceipt = await second;
+    unsubscribe();
+
+    expect(firstReceipt).toBeNull();
+    expect(secondReceipt).toEqual({ reviewVersion: 3, selection: secondSelection });
+    expect(f.session.rotationReviewState).toMatchObject({ phase: "ready", reviewVersion: 3 });
+    expect(f.worker.inspectRotation).toHaveBeenCalledTimes(2);
+    expect(f.worker.inspectRotation.mock.calls[1]![1]).toEqual(secondSelection);
   });
 
   it("is a true no-op while locked or for a stale vault generation", async () => {

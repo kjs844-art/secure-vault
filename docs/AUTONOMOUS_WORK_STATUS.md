@@ -1,6 +1,6 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-17, 현재 작업 브랜치 `codex/firstvibe-rotation-session-cas`.
+기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-ui`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
 별도 `codex/firstvibe-synthetic-rotation-checklist` 체크포인트: 합성 연결처의 필수 완료 조건을 확인하고 최종 암호문 후보만 생성하는 코어를 추가했다. 새 코어 11 tests와 SQLite 충돌/재실행 테스트를 포함해 Node 타입 수정판 `06349e8`의 원격 run `35106829156`이 전체 성공했다. 기존 PR #4의 `ce518ee`도 run `35106625311` 전체 성공을 확인했다. 로컬 Windows 앱 제어 4551 정책은 변경하지 않았다. 단발성 코어이며 후속 회전·연결 편집·UI는 미지원이다. [검증 기록](verification/2026-09-16-synthetic-rotation-cutover.md)을 참고한다.
@@ -14,6 +14,8 @@
 현재 Worker/Client slice: 닫힌 합성 rotation 선택을 Worker 전에 검증·복사하고, 실제 demo WASM checklist/cutover를 작업별 고정 응답으로 연결했다. checklist handle은 두 차례 exact boolean lock 상태를 확인한 뒤 lock/free되고, structured clone 뒤에도 client가 고정 필드·상태 불변식을 다시 검증해 frozen projection만 공개한다. cutover ciphertext는 경계마다 복사하고 Worker 소유 buffer만 transfer한다. 첫 RED 리뷰의 truthiness fail-open Important 1건은 두 검사와 10개 회귀로 수정했으며 독립 재리뷰는 Critical/Important 0이다. mock 경계뿐 아니라 실제 생성 WASM handle과 어댑터의 결합도 별도 검사했다. 저장 CAS와 UI는 아직 연결하지 않았다. [검증 기록](verification/2026-09-17-synthetic-rotation-worker-client.md)을 따른다.
 
 현재 rotation Session/IndexedDB CAS slice: 표시 중인 authenticated bytes·vault generation·review version을 exact snapshot으로 묶고, 후보를 저장 전에 인증한 뒤 conflict-preserving CAS를 한 번만 수행한다. 경쟁 패자와 CAS 직후 displacement된 세션 후보는 bounded conflict outbox에 보존하며, authoritative readback의 byte equality와 재인증이 끝나기 전에는 성공을 게시하지 않는다. getter/subscriber 재진입, stale 두-token replay, hostile result, alias mutation, 모든 await 단계의 lock과 임시 ciphertext wipe를 회귀로 고정했다. 실제 WASM+fake IndexedDB 3 tests, 관련 9 files/210 tests, 전체 웹 32 files/1161 tests, typecheck/build/Secret scan을 통과했고 독립 최종 RED는 Critical/Important 0이다. 실제 browser Worker/IndexedDB 또는 UI 완료 증거는 아니다. [검증 기록](verification/2026-09-17-synthetic-rotation-session-cas.md)을 따른다.
+
+현재 키 교체 화면: 합성 항목·연결처 확인 선택 → 검토 → 명시적 동의 → 기존 CAS 저장을 연결했다. 최종 ready 알림 이후에도 유효한 검토만 frozen receipt를 반환하고, 화면은 그 receipt의 version과 모든 선택 필드를 저장 조건에 묶는다. initial RED Important 1의 재진입 결합 문제를 고쳤고 재개 후 독립 리뷰도 Critical/Important 0이다. 최종 웹 33 files/1169 tests, 타입 검사를 포함한 production build, 절대 경로 Secret scan이 통과했다. 실제 브라우저에서 발견한 중복 항목명 표시를 예시 번호로 구분한 뒤 관련 41 tests와 build도 통과했다. 격리 브라우저의 실제 Worker/WASM/IndexedDB로 검토 후 선택 변경 차단, 두 번 클릭해도 한 번 교체, 새로고침 뒤 0002 복원, 두 번째 교체와 terminal_0003 추가 저장 차단을 확인했다. 모바일 검증 중 브라우저가 재연결되어 그 이후 범위는 미검증이다. 중간 체크리스트 저장도 아직 없다. [현재 검증 기록](verification/2026-09-18-synthetic-rotation-ui.md)을 따른다. 기준 Session/CAS 커밋 `7d61e9a`는 실제 GitHub 원격과 일치함을 재확인했다.
 
 ## 현재 확인한 것
 
@@ -31,10 +33,11 @@
 | 합성 회전 archive/WASM | 인증된 선택 head에서 고정 checklist를 투영하고 v1/v2 genesis를 v3 history로 옮기거나 `0001→0002→0003` 후보를 생성한다. 기존 envelope와 다른 head를 보존하고 선택 head만 전진시키며 assembled archive를 다시 인증한다. JS API는 `synthetic-demo` 전용, 직접 생성 거부/getter-only/lockable checklist와 엄격한 primitive 입력만 노출. 최종 native 40 tests, default release WASM 32 checks, demo release WASM 1520 checks(5 checklist, 2 cutover, 100 rejection), 웹 25 files/997 tests·typecheck·production build 통과 | 현재 branch exact SHA 원격 CI, 저장 CAS, Worker/session/UI, 실제 Secret/provider proof, latest-head/rollback anchor 미검증 |
 | 합성 회전 Worker/Client | exact 5-field 선택 parser, 실제 WASM handle 소유 adapter, Worker의 checklist/cutover dispatch와 client structured-clone 재검증을 구현. 입력·출력 복사, lock/free, 고정 오류, 취소·timeout·늦은 응답, 동기 transport 실패, owned transfer/detach를 회귀로 고정. 독립 수정 후 RED Critical/Important 0 | 실제 브라우저 Worker 왕복과 UI 미구현 |
 | 합성 회전 Session/IndexedDB CAS | 현재 표시 bytes·vault generation·review version을 exact 결박하고 후보 사전 인증 → conflict-preserving CAS 1회 → authoritative reread byte equality → 재인증 뒤에만 성공 게시. CAS loser와 post-CAS displacement candidate를 정확한 bytes로 conflict 보존하며 fallback/retry/merge/overwrite 없음. unit 33, 실제 WASM+fake IDB 3, 관련 9 files/210, 전체 웹 32 files/1161 tests와 RED Critical/Important 0 | 실제 browser Worker/IndexedDB·멀티탭/오프라인·UI, 실제 Secret/provider proof, signed latest-head/rollback/누락 anchor 미검증 |
+| 합성 키 교체 UI | 고정 항목/연결처 선택, receipt 일치·동의 후 저장. 최종 전체 웹 33 files/1169 tests, 관련 41 tests·build, 독립 RED Critical/Important 0. 실제 브라우저의 두 번 클릭·0001→0002→0003 저장·새로고침 재열기·terminal 차단 확인 | 모바일/포커스·멀티탭·오프라인 및 required-pending 실제 브라우저 검증은 남음. 중간 진행 상황 암호화 저장/재개 미구현. 실제 Secret 입력은 계속 닫힘 |
 | 암호문 conflict outbox | DB v1/store 유지, 최대 8개 무퇴거 후보, CAS loser 보존, 전체 인증 뒤 위치 기반 검토, exact-byte 2단계 폐기, 미해결 후보 backup 차단 | 자동 병합·승격 정책과 outbox 포함 백업 형식, 실제 브라우저 멀티탭·모바일 검증 |
 | 웹 연결 편집 UI | 검토 UI 포함 통합 웹 932 tests, typecheck/build exit 0; 독립 보안 리뷰 Critical/Important 0 | 저장/취소/포커스/잠금·멀티탭 충돌의 실제 브라우저 검증과 모바일 검증 |
 | 공유 메모리 입력 경계 | Store·Session·Worker client/worker·Backup에서 SharedArrayBuffer를 DB/Worker/WASM 작업 전에 고정 오류로 거부 | cross-origin-isolated 실제 브라우저의 동시 변경 통합 검사는 미실행 |
-| 원격 CI 보안 gate | `ce518ee`, `06349e8`, atomic-backup 후속 run `35112935398`, lifecycle/history `8ef81d9` run `35119009675` attempt 2의 성공 확인 | 현재 미커밋 rotation archive/WASM 변경은 원격 검증 전. branch protection과 ignored 보안 gate 승인은 별도 |
+| 원격 CI 보안 gate | `ce518ee`, `06349e8`, atomic-backup 후속 run `35112935398`, lifecycle/history `8ef81d9` run `35119009675` attempt 2의 성공 확인. 현재 UI 기준 `7d61e9a`는 실제 원격 SHA 일치 | 2026-09-18 CLI의 Actions 조회가 HTTP 404라 후속판 원격 CI 결과는 미확인. branch protection과 ignored 보안 gate 승인은 별도 |
 | SQLite 읽기 전용 preflight | 8 DB_CONFIG를 첫 SQL 전에 적용하고 query_only와 공통 hardening을 읽기 전용 연결에도 강제; 패키지 91 passed/1 ignored, 독립 재리뷰 Critical/Important 0 | 악성 schema 실제 통합 fixture와 WR 대칭 profile assertion은 residual |
 | 네이티브 전체 QA | `5d439eb` 기능 묶음 기준 Workspace Secret scan·format·Clippy·tests·ordinary VFS·doctests exit 0. 후속 scanner-only 트리는 집중 회귀와 실제 저장소 scan 통과 | 후속판 전체 Workspace 재실행과 명시적으로 ignored인 Phase 0A 보안 gate·권위 승인은 별도 필요 |
 
@@ -42,7 +45,7 @@
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
-3. 합성 회전 Session/IndexedDB CAS checkpoint 뒤에는 실제 Secret gate를 열지 않은 채 intermediate rotation workflow의 durable 상태 모델 또는 지원되는 환경의 browser-level Worker/IndexedDB 검증을 진행한다. 자동 retry·merge·overwrite 없이 현재 exact snapshot과 conflict 보존 원칙을 유지한다.
+3. 합성 키 교체 화면까지 연결했다. 다음 기능은 일부 연결처 확인 저장 → 잠금/새로고침 → 진행 상태 재인증·복원 → 나머지 확인 → 최종 교체 저장이다. 완료 event/history와 분리된 중간 workflow 상태를 설계하고 코어부터 UI까지 연결한다. 실제 Secret gate는 닫힌 채 유지하며 지원되는 환경의 browser-level 검증을 보완한다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
 4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 실제 브라우저 다중 창 검증과 intermediate 회전 checklist 저장·optional 연결 확인 API로 진행한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
 5. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 6. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
