@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
 import type { LocalRotationStageV1 } from "../../bridge/rotationStageProtocol";
 import type { SyntheticRotationStageReceipt, SyntheticRotationStageReviewState } from "./SyntheticVaultSession";
 import { canCommitSavedRotation, selectionFromSavedStage, SyntheticRotationStagePanel } from "./SyntheticRotationStagePanel";
@@ -13,7 +14,54 @@ const stage: LocalRotationStageV1 = {
 const receipt: SyntheticRotationStageReceipt = { reviewVersion: 3, reference: 2, stage };
 const review: SyntheticRotationStageReviewState = { phase: "ready", reviewVersion: 3, stage, errorCode: null };
 
+function row(reference: number, credentialType: "password" | "api_key"): LocalCatalogEntryV1 {
+  return { reference, credentialType, status: "active", secretFieldCount: 1, connectionCount: 0,
+    mcpConnectionCount: 0, connections: [], issuerAccountIdentifier: null,
+    issuerOrganizationOrWorkspace: null, issuerProject: null, issuerEnvironment: null,
+    providerName: credentialType === "password" ? "Example Password Service" : "Example AI Workshop",
+    itemName: `Example ${credentialType} ${reference}` };
+}
+
+function renderRows(entries: readonly LocalCatalogEntryV1[]) {
+  const session = { subscribe: vi.fn(() => () => {}), rotationStageReviewState: review,
+    inspectRotationStage: vi.fn(async () => null), saveRotationStage: vi.fn(async () => {}),
+    commitRotationCutoverFromStage: vi.fn(async () => {}) };
+  return { session, html: renderToStaticMarkup(createElement(SyntheticRotationStagePanel,
+    { session, vaultGeneration: 9, entries })) };
+}
+
 describe("saved rotation UI consent policy", () => {
+  // Static rendering assertions are not browser interaction/persistence proof.
+  it("offers only API-key references without renumbering a mixed catalog", () => {
+    const { html, session } = renderRows([row(2, "password"), row(17, "api_key"), row(31, "password"), row(42, "api_key")]);
+    const targets = html.match(/<select[^>]*data-testid="stage-reference"[^>]*>(.*?)<\/select>/)?.[1];
+    expect(targets).toBeDefined();
+    expect(targets).toContain('value="17" selected=""');
+    expect(targets).toContain('value="42"');
+    expect(targets).not.toContain('value="2"');
+    expect(targets).not.toContain('value="31"');
+    expect(targets).not.toContain("Example Password Service");
+    expect(html).toContain("비밀번호 2개는 금고 목록에 그대로 보관");
+    expect(html).not.toContain('data-testid="stage-no-api-keys"');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-testid="stage-commit"/);
+    expect(session.inspectRotationStage).not.toHaveBeenCalled();
+    expect(session.saveRotationStage).not.toHaveBeenCalled();
+    expect(session.commitRotationCutoverFromStage).not.toHaveBeenCalled();
+  });
+
+  it.each([{ entries: [] }, { entries: [row(7, "password"), row(19, "password")] }])("disables all rotation actions when no API key exists", ({ entries }) => {
+    const { html, session } = renderRows(entries);
+    expect(html).toContain('data-testid="stage-no-api-keys"');
+    expect(html).toContain("교체할 API 키 항목이 없습니다");
+    for (const id of ["stage-load", "stage-save", "stage-commit"]) {
+      expect(html.match(/<button\b[^>]*>/g)?.find((tag) => tag.includes(`data-testid="${id}"`))).toContain('disabled=""');
+    }
+    expect(html.match(/<select\b[^>]*>/g)?.find((tag) => tag.includes('data-testid="stage-reference"'))).toContain('disabled=""');
+    expect(html).toContain('<fieldset disabled=""');
+    expect(session.inspectRotationStage).not.toHaveBeenCalled();
+    expect(session.saveRotationStage).not.toHaveBeenCalled();
+    expect(session.commitRotationCutoverFromStage).not.toHaveBeenCalled();
+  });
   it("requires the current saved receipt, unchanged selection and new explicit consent", () => {
     const selection = selectionFromSavedStage(2, stage);
     expect(selection).toEqual({ reference: 2, mcp: "user_confirmed", cli: "pending", ci: "pending", supersededRevocation: "user_confirmed" });

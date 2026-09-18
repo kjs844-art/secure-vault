@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeAll, describe, expect, it } from "vitest";
 import init, { appendSyntheticRegistration, createSyntheticArchive, openSyntheticArchive } from "../../generated/vault-wasm-demo/vault_client_wasm.js";
@@ -75,4 +76,58 @@ describe("registration real-WASM/session/IndexedDB adapter integration", { concu
     expect(session.state.entries).toEqual([]);
     expect(await store.read()).toEqual(corrupt);
   }, 30_000);
+
+  it("persists both closed Password forms with API siblings, clears views on lock and reopens exact saved rows", async () => {
+    const database = new IDBFactory();
+    const store = createSyntheticCiphertextStore(database);
+    const session = new SyntheticVaultSession(store, actualWorker());
+    await session.create();
+    const original = (await store.read())!;
+    const originalRows = [...session.state.entries];
+    for (const credentialId of [1, 2] as const) {
+      const before = (await store.read())!;
+      await session.register({ profileId: 2, credentialId, connectionIds: [] });
+      expect(session.state.phase).toBe("open");
+      expect(session.state.entries.at(-1)).toEqual({
+        reference: credentialId + 2,
+        itemName: credentialId === 1 ? "Example Password Only" : "Example Password With Identifier",
+        providerName: "Example Password Service",
+        issuerAccountIdentifier: null,
+        issuerOrganizationOrWorkspace: null,
+        issuerProject: null,
+        issuerEnvironment: null,
+        credentialType: "password",
+        status: "active",
+        connectionCount: 0,
+        secretFieldCount: credentialId,
+        mcpConnectionCount: 0,
+        connections: [],
+      });
+      const saved = (await store.read())!;
+      expect(saved.slice(16, before.length)).toEqual(before.slice(16));
+    }
+    const saved = (await store.read())!;
+    const expected = [...session.state.entries];
+    expect(expected.slice(0, 3)).toEqual(originalRows);
+    expect(expected).toHaveLength(5);
+    expect(saved.slice(16, original.length)).toEqual(original.slice(16));
+    expect(new DataView(saved.buffer, saved.byteOffset).getUint32(8, true)).toBe(2);
+    expect(new DataView(saved.buffer, saved.byteOffset).getUint32(12, true)).toBe(5);
+    for (const plaintext of [
+      "DEMO_VALUE_ONLY_PASSWORD_FIXTURE_0001",
+      "DEMO_VALUE_ONLY_PASSWORD_IDENTIFIER_0001",
+    ]) {
+      expect(Buffer.from(saved).includes(Buffer.from(plaintext, "utf8"))).toBe(false);
+      expect(JSON.stringify(expected)).not.toContain(plaintext);
+    }
+    session.lock();
+    expect(session.state).toEqual({ phase: "locked", entries: [], errorCode: null });
+    const restarted = new SyntheticVaultSession(createSyntheticCiphertextStore(database), actualWorker());
+    expect(restarted.state.entries).toEqual([]);
+    await restarted.open();
+    expect(restarted.state.entries).toEqual(expected);
+    expect(await store.read()).toEqual(saved);
+    restarted.lock();
+    expect(restarted.state.entries).toEqual([]);
+  }, 90_000);
 });

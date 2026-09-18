@@ -11,6 +11,7 @@ use crate::model::{
     ExternalRevocationStatusV1, FieldRoleV1, RevealPolicyV1, SensitivityV1,
 };
 use crate::record::record_context;
+use crate::synthetic_password::inspect_synthetic_password_record_v1;
 
 fn error_code<T>(result: Result<T, LocalVaultError>) -> LocalVaultErrorCode {
     match result {
@@ -64,7 +65,14 @@ fn validated_selection_does_not_borrow_the_callers_connection_buffer() {
     let mut ids = [2, 0];
     let selection = SyntheticRegistrationSelectionV1::from_ids(0, 0, &ids).unwrap();
     ids.fill(u32::MAX);
-    let item = build_registration(&selection).unwrap();
+    let RegistrationSelectionKind::ApiKey {
+        profile,
+        connections,
+    } = &selection.kind
+    else {
+        panic!("API selection must retain its kind");
+    };
+    let item = build_api_registration(profile, connections).unwrap();
     assert!(item.connections.len() == 2);
     assert!(item.connections[0].consumer_type == ConsumerTypeV1::CiCd);
     assert!(item.connections[1].consumer_type == ConsumerTypeV1::McpServer);
@@ -265,5 +273,119 @@ fn both_profiles_with_zero_one_and_three_connections_preserve_every_field_after_
             sealed.envelope == before,
             "reopening must not change ciphertext"
         );
+    }
+}
+
+#[test]
+fn registration_profile_and_credential_matrix_has_only_four_closed_combinations() {
+    for profile in [0, 1, 2, 3, u32::MAX] {
+        for credential in [0, 1, 2, 3, u32::MAX] {
+            let selection = SyntheticRegistrationSelectionV1::from_ids(profile, credential, &[]);
+            match (profile, credential) {
+                (0 | 1, 0) => {
+                    assert!(matches!(
+                        selection.unwrap().kind,
+                        RegistrationSelectionKind::ApiKey { .. }
+                    ));
+                }
+                (2, 1) => {
+                    assert!(matches!(
+                        selection.unwrap().kind,
+                        RegistrationSelectionKind::Password(
+                            SyntheticPasswordFixtureIdV1::PasswordOnly
+                        )
+                    ));
+                }
+                (2, 2) => {
+                    assert!(matches!(
+                        selection.unwrap().kind,
+                        RegistrationSelectionKind::Password(
+                            SyntheticPasswordFixtureIdV1::WithIdentifier
+                        )
+                    ));
+                }
+                _ => assert_eq!(error_code(selection), LocalVaultErrorCode::InvalidItem),
+            }
+        }
+    }
+}
+
+#[test]
+fn password_registration_never_ignores_connection_ids() {
+    for credential in [1, 2] {
+        for connections in [&[0][..], &[1], &[2], &[3], &[u32::MAX], &[0, 1, 2], &[0, 0]] {
+            assert_eq!(
+                error_code(SyntheticRegistrationSelectionV1::from_ids(
+                    2,
+                    credential,
+                    connections
+                )),
+                LocalVaultErrorCode::InvalidItem,
+            );
+        }
+        assert_eq!(
+            error_code(SyntheticRegistrationSelectionV1::from_ids(
+                2,
+                credential,
+                &[0, 1, 2, 0]
+            )),
+            LocalVaultErrorCode::LimitsExceeded,
+        );
+    }
+}
+
+#[test]
+fn both_password_registration_shapes_reuse_closed_factory_and_survive_reunlock() {
+    let master =
+        MasterPassword::from_utf8("DEMO_VALUE_ONLY_password_registration_master".to_owned())
+            .unwrap();
+    let created = create_vault_v0alpha1(&master).unwrap();
+    let mut records = Vec::new();
+    let mut field_ids = BTreeSet::new();
+    for (credential, expected_count, expected_name) in [
+        (1, 1, "Example Password Only"),
+        (2, 2, "Example Password With Identifier"),
+    ] {
+        let selection = SyntheticRegistrationSelectionV1::from_ids(2, credential, &[]).unwrap();
+        let sealed = seal_synthetic_registration_v1(&created.session, &selection).unwrap();
+        inspect_synthetic_password_record_v1(&created.session, &sealed).unwrap();
+        let expected = decode_sealed(&created.session, &sealed);
+        assert!(expected.credential_type == CredentialTypeV1::Password);
+        assert!(expected.item_name == expected_name);
+        assert!(expected.provider_name == "Example Password Service");
+        assert!(expected.secret_fields.len() == expected_count);
+        assert!(expected.connections.is_empty());
+        assert!(expected.parent_revision_id.is_none());
+        assert!(
+            sealed
+                .persistence_projection_v1()
+                .expected_revision_id()
+                .is_none()
+        );
+        for field in &expected.secret_fields {
+            assert!(field_ids.insert(field.field_id));
+        }
+        for marker in [
+            b"DEMO_VALUE_ONLY_PASSWORD_FIXTURE_0001".as_slice(),
+            b"DEMO_VALUE_ONLY_PASSWORD_IDENTIFIER_0001".as_slice(),
+            b"Example Password Service".as_slice(),
+        ] {
+            assert!(
+                !sealed
+                    .envelope
+                    .windows(marker.len())
+                    .any(|window| window == marker)
+            );
+        }
+        records.push((expected, sealed));
+    }
+    let password_envelope = created.password_envelope;
+    drop(created.session);
+    let reopened = unlock_vault_v0alpha1(&master, &password_envelope).unwrap();
+    for (expected, sealed) in records {
+        let before = sealed.envelope.clone();
+        inspect_synthetic_password_record_v1(&reopened, &sealed).unwrap();
+        assert_item_preserved(&expected, &decode_sealed(&reopened, &sealed));
+        assert!(sealed.envelope == before);
     }
 }

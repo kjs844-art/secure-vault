@@ -43,6 +43,70 @@ function invalidLengthArchive(kind: string): Uint8Array {
   return Object.defineProperty(bytes, "byteLength", { value: 1 });
 }
 
+describe("closed Password registration worker dispatch (mock WASM boundary)", () => {
+  it.each([1, 2])("owns Password form %i selection and archive before asynchronous initialization", async (credentialId) => {
+    let initialize!: () => void;
+    wasm.init.mockReturnValueOnce(new Promise<void>((resolve) => { initialize = resolve; }));
+    const candidate = new Uint8Array([1, 2, 3]);
+    wasm.append.mockReturnValueOnce(candidate);
+    const { port, send, closed } = await harness();
+    const bytes = new Uint8Array([1, 2]);
+    const selection = { profileId: 2, credentialId, connectionIds: [] as number[] };
+    send({ op: "append", bytes, selection });
+    expect(wasm.init).toHaveBeenCalledOnce();
+    expect(wasm.append).not.toHaveBeenCalled();
+    bytes.fill(9);
+    selection.profileId = 0;
+    selection.credentialId = 0;
+    selection.connectionIds.push(0);
+    initialize();
+    await closed;
+    expect(wasm.append).toHaveBeenCalledExactlyOnceWith(
+      new Uint8Array([1, 2]), 2, credentialId, new Float64Array(),
+    );
+    const response = port.postMessage.mock.calls[0]![0];
+    expect(response).toEqual({ ok: true, kind: "archive", bytes: new Uint8Array([1, 2, 3]) });
+    expect(response.bytes).not.toBe(candidate);
+    candidate.fill(9);
+    expect(response.bytes).toEqual(new Uint8Array([1, 2, 3]));
+    expect(wasm.open).not.toHaveBeenCalled();
+    expect(wasm.create).not.toHaveBeenCalled();
+    expect(port.close).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { profileId: 2, credentialId: 0, connectionIds: [] },
+    { profileId: 0, credentialId: 1, connectionIds: [] },
+    { profileId: 1, credentialId: 2, connectionIds: [] },
+    { profileId: 2, credentialId: 1, connectionIds: [0] },
+    { profileId: 2, credentialId: 2, connectionIds: [2] },
+    { profileId: 2, credentialId: 3, connectionIds: [] },
+  ])("rejects a non-closed Password tuple before WASM initialization", async (selection) => {
+    const { port, send, closed } = await harness();
+    send({ op: "append", bytes: new Uint8Array([1]), selection });
+    await closed;
+    expect(wasm.init).not.toHaveBeenCalled();
+    expect(wasm.append).not.toHaveBeenCalled();
+    expect(wasm.create).not.toHaveBeenCalled();
+    expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ ok: false, code: "INVALID_ARCHIVE" });
+    expect(port.close).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a Password selection accessor without invoking it or initializing WASM", async () => {
+    const { port, send, closed } = await harness();
+    const getter = vi.fn(() => 1);
+    const selection = Object.defineProperty({ profileId: 2, connectionIds: [] }, "credentialId", {
+      enumerable: true, get: getter,
+    });
+    send({ op: "append", bytes: new Uint8Array([1]), selection });
+    await closed;
+    expect(getter).not.toHaveBeenCalled();
+    expect(wasm.init).not.toHaveBeenCalled();
+    expect(wasm.append).not.toHaveBeenCalled();
+    expect(port.postMessage).toHaveBeenCalledExactlyOnceWith({ ok: false, code: "INVALID_ARCHIVE" });
+  });
+});
+
 describe("synthetic connection-edit worker dispatch (mock WASM boundary)", () => {
   it.each(["empty", "oversized", "detached", "shared"])("rejects %s spoofed archive before WASM initialization", async (kind) => {
     const { port, send, closed } = await harness();

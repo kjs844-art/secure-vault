@@ -4,6 +4,35 @@ import { parseSyntheticRegistration } from "./syntheticRegistration";
 const valid = () => ({ profileId: 0, credentialId: 0, connectionIds: [0, 1, 2] });
 
 describe("closed synthetic registration selection", () => {
+  it.each([1, 2])("accepts and detaches fixed Password shape %i with no connections", (credentialId) => {
+    const input = { profileId: 2, credentialId, connectionIds: [] as number[] };
+    const result = parseSyntheticRegistration(input);
+    expect(result).toEqual(input);
+    expect(result.connectionIds).not.toBe(input.connectionIds);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.connectionIds)).toBe(true);
+    input.credentialId = 0; input.connectionIds.push(0);
+    expect(result).toEqual({ profileId: 2, credentialId, connectionIds: [] });
+  });
+  it.each([
+    { profileId: 2, credentialId: 0, connectionIds: [] },
+    { profileId: 2, credentialId: 3, connectionIds: [] },
+    { profileId: 2, credentialId: "1", connectionIds: [] },
+    { profileId: 2, credentialId: 1, connectionIds: [0] },
+    { profileId: 2, credentialId: 2, connectionIds: [2] },
+    { profileId: 0, credentialId: 1, connectionIds: [] },
+    { profileId: 1, credentialId: 2, connectionIds: [] },
+    { profileId: 2, credentialId: 1, connectionIds: [], password: "DEMO_VALUE_ONLY" },
+    { profileId: 2, credentialId: 2, connectionIds: [], identifier: "DEMO_VALUE_ONLY" },
+  ])("rejects cross-kind selections and arbitrary Password data", (input) => {
+    expect(() => parseSyntheticRegistration(input)).toThrow("INVALID_ARCHIVE");
+  });
+  it("rejects Password connections before enumerating their values", () => {
+    const enumerate = vi.fn(() => { throw new Error("must not enumerate"); });
+    const connections = new Proxy([0], { ownKeys: enumerate });
+    expect(() => parseSyntheticRegistration({ profileId: 2, credentialId: 1, connectionIds: connections })).toThrow("INVALID_ARCHIVE");
+    expect(enumerate).not.toHaveBeenCalled();
+  });
   it.each([{ connections: [] }, { connections: [0] }, { connections: [2, 0, 1] }])("copies and freezes allowed ordered connections $connections", ({ connections }) => {
     const input = { profileId: 1, credentialId: 0, connectionIds: connections };
     const result = parseSyntheticRegistration(input);

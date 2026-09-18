@@ -483,3 +483,171 @@ fn mixed_candidate_still_reserves_space_for_active_api_completion() {
         Err(ArchiveError::LimitsExceeded)
     );
 }
+
+fn assert_registration_preserves_existing_archive(before: &[u8], after: &[u8]) {
+    let before = parse_archive(before).unwrap();
+    let after = parse_archive(after).unwrap();
+    assert_eq!(after.version, before.version.max(MUTABLE_ARCHIVE_VERSION));
+    assert_eq!(after.password_envelope, before.password_envelope);
+    assert_eq!(&after.records[..before.records.len()], before.records);
+    assert_eq!(&after.heads[..before.heads.len()], before.heads);
+    assert_eq!(after.records.len(), before.records.len() + 1);
+    assert_eq!(after.heads.len(), before.heads.len() + 1);
+    assert_eq!(after.heads.last(), Some(&before.records.len()));
+    assert_eq!(after.stages.len(), before.stages.len());
+    for (actual, expected) in after.stages.iter().zip(&before.stages) {
+        assert_eq!(actual.base_index, expected.base_index);
+        assert_eq!(actual.envelope, expected.envelope);
+    }
+}
+
+#[test]
+fn closed_password_registration_and_api_append_reopen_in_all_archive_versions() {
+    for version in 1..=4 {
+        let original = genesis(version);
+        let saved = original.clone();
+        let password_only = append_registration(&original, 2, 1, &[]).unwrap();
+        assert_registration_preserves_existing_archive(&original, &password_only);
+        // Each public open unlocks a fresh session: candidate success alone is
+        // not treated as proof of reopening/restoring the committed bytes.
+        let reopened = open_archive(&password_only).unwrap();
+        assert_eq!(reopened.len(), 4);
+        assert!(reopened.entry(3).unwrap().credential_type() == CatalogCredentialTypeV1::Password);
+        assert_eq!(reopened.entry(3).unwrap().secret_field_count(), 1);
+        assert_eq!(reopened.entry(3).unwrap().connection_count(), 0);
+
+        let with_identifier = append_registration(&password_only, 2, 2, &[]).unwrap();
+        assert_registration_preserves_existing_archive(&password_only, &with_identifier);
+        let reopened = open_archive(&with_identifier).unwrap();
+        assert_eq!(reopened.len(), 5);
+        assert!(reopened.entry(4).unwrap().credential_type() == CatalogCredentialTypeV1::Password);
+        assert_eq!(reopened.entry(4).unwrap().secret_field_count(), 2);
+        assert_eq!(reopened.entry(4).unwrap().connection_count(), 0);
+
+        let api = append_registration(&with_identifier, 1, 0, &[2, 0, 1]).unwrap();
+        assert_registration_preserves_existing_archive(&with_identifier, &api);
+        let reopened = open_archive(&api).unwrap();
+        assert_eq!(reopened.len(), 6);
+        assert!(reopened.entry(5).unwrap().credential_type() == CatalogCredentialTypeV1::ApiKey);
+        assert_eq!(reopened.entry(5).unwrap().connection_count(), 3);
+        assert_eq!(original, saved);
+        for marker in [
+            b"DEMO_VALUE_ONLY_PASSWORD_FIXTURE_0001".as_slice(),
+            b"DEMO_VALUE_ONLY_PASSWORD_IDENTIFIER_0001".as_slice(),
+        ] {
+            assert!(!api.windows(marker.len()).any(|window| window == marker));
+        }
+    }
+}
+
+#[test]
+fn password_registration_preserves_pending_api_stage_and_its_completion_capacity() {
+    let original = password_history(4);
+    let pending = create_rotation_stage_candidate(&original, 1, &[0], &[], PENDING).unwrap();
+    let password_only = append_registration(&pending, 2, 1, &[]).unwrap();
+    let with_identifier = append_registration(&password_only, 2, 2, &[]).unwrap();
+    assert_registration_preserves_existing_archive(&pending, &password_only);
+    assert_registration_preserves_existing_archive(&password_only, &with_identifier);
+    assert!(
+        !inspect_rotation_stage(&with_identifier, 1)
+            .unwrap()
+            .unwrap()
+            .ready_for_cutover()
+    );
+    let session = session();
+    let parsed = parse_archive(&with_identifier).unwrap();
+    assert_eq!(
+        capacity::validate_candidate(&session, &parsed, with_identifier.len()),
+        Ok(())
+    );
+    assert_eq!(
+        capacity::validate_candidate(&session, &parsed, MAX_ARCHIVE_BYTES),
+        Err(ArchiveError::LimitsExceeded)
+    );
+    let ready = create_rotation_stage_candidate(&with_identifier, 1, &[0], &[1], USER).unwrap();
+    let finalized = create_rotation_cutover_from_stage_candidate(&ready, 1).unwrap();
+    let after = parse_archive(&finalized).unwrap();
+    assert_eq!(&after.records[..parsed.records.len()], parsed.records);
+    assert_eq!(after.heads[3], parsed.heads[3]);
+    assert_eq!(after.heads[4], parsed.heads[4]);
+    assert_eq!(open_archive(&finalized).unwrap().len(), 5);
+}
+
+#[test]
+fn invalid_password_registration_combinations_and_corrupt_inputs_return_no_candidate() {
+    let original = genesis(4);
+    let saved = original.clone();
+    for (profile, credential, connections) in [
+        (2, 0, &[][..]),
+        (2, 3, &[][..]),
+        (0, 1, &[][..]),
+        (1, 2, &[][..]),
+        (3, 1, &[][..]),
+        (u32::MAX, 2, &[][..]),
+        (2, 1, &[0][..]),
+        (2, 2, &[1][..]),
+        (2, 1, &[u32::MAX][..]),
+        (2, 2, &[0, 1, 2][..]),
+    ] {
+        assert_eq!(
+            append_registration(&original, profile, credential, connections).err(),
+            Some(ArchiveError::InvalidArchive)
+        );
+    }
+    assert_eq!(
+        append_registration(&original, 2, 1, &[0, 1, 2, 0]).err(),
+        Some(ArchiveError::LimitsExceeded)
+    );
+    assert_eq!(original, saved);
+
+    let mut corrupt_record = fixture().records[2].clone();
+    *corrupt_record.last_mut().unwrap() ^= 1;
+    let corrupt = frame(
+        4,
+        &[
+            &fixture().records[0],
+            &fixture().records[1],
+            &corrupt_record,
+        ],
+        &[0, 1, 2],
+    );
+    let saved = corrupt.clone();
+    for credential in [1, 2] {
+        assert_eq!(
+            append_registration(&corrupt, 2, credential, &[]).err(),
+            Some(ArchiveError::AuthenticationFailed)
+        );
+        assert_eq!(corrupt, saved);
+    }
+}
+
+#[test]
+fn password_registration_cannot_exceed_the_existing_item_count_limit() {
+    let session = session();
+    let mut records = fixture().records.clone();
+    while records.len() < MAX_RECORD_COUNT {
+        let closed = seal_synthetic_password_fixture_v1(
+            &session,
+            SyntheticPasswordFixtureIdV1::PasswordOnly,
+        )
+        .unwrap();
+        records.push(closed.persistence_projection_v1().envelope().to_vec());
+    }
+    let refs = records.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let heads = (0..MAX_RECORD_COUNT).collect::<Vec<_>>();
+    let full = frame(4, &refs, &heads);
+    assert_eq!(
+        project_archive(&session, &parse_archive(&full).unwrap())
+            .unwrap()
+            .len(),
+        MAX_RECORD_COUNT
+    );
+    let saved = full.clone();
+    for credential in [1, 2] {
+        assert_eq!(
+            append_registration(&full, 2, credential, &[]).err(),
+            Some(ArchiveError::LimitsExceeded)
+        );
+        assert_eq!(full, saved);
+    }
+}

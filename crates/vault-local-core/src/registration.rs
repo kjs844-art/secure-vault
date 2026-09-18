@@ -16,6 +16,7 @@ use crate::model::{
 };
 use crate::record::{SealedCredentialRecordV0Alpha1, seal_item_v1};
 use crate::secret::SecretValueV1;
+use crate::synthetic_password::{SyntheticPasswordFixtureIdV1, seal_synthetic_password_fixture_v1};
 
 const API_KEY_VALUE: &[u8] = b"DEMO_VALUE_ONLY_API_KEY_0001";
 const FIELD_LABEL: &str = "EXAMPLE_API_KEY";
@@ -69,15 +70,24 @@ pub(crate) enum ConnectionFixture {
 /// Validated local selections, not a credential DTO or authorization token.
 /// The private fields prevent replacing the compile-time fixture contents.
 pub struct SyntheticRegistrationSelectionV1 {
-    profile: &'static RegistrationProfile,
-    connections: Vec<ConnectionFixture>,
+    kind: RegistrationSelectionKind,
+}
+
+enum RegistrationSelectionKind {
+    ApiKey {
+        profile: &'static RegistrationProfile,
+        connections: Vec<ConnectionFixture>,
+    },
+    Password(SyntheticPasswordFixtureIdV1),
 }
 
 impl SyntheticRegistrationSelectionV1 {
-    /// Profiles: 0 = Example AI Workshop, 1 = Example Cloud Lab.
-    /// Credential: 0 = the fixed synthetic API key only.
-    /// Connections: 0 = Example MCP, 1 = Example CLI, 2 = Example CI.
-    /// Zero to three distinct connections are accepted in caller-selected order.
+    /// API profiles: 0 = Example AI Workshop, 1 = Example Cloud Lab, each with
+    /// credential 0 and zero to three distinct connections in selected order:
+    /// 0 = Example MCP, 1 = Example CLI, 2 = Example CI.
+    /// Password profile: 2 = Example Password Service, with credential 1 for
+    /// PasswordOnly or 2 for WithIdentifier and NO connections. All cross-kind
+    /// combinations are rejected, never silently replaced or ignored.
     pub fn from_ids(
         profile_id: u32,
         credential_id: u32,
@@ -86,14 +96,21 @@ impl SyntheticRegistrationSelectionV1 {
         if connection_ids.len() > 3 {
             return Err(LocalVaultError::LimitsExceeded);
         }
-        let profile = match profile_id {
-            0 => &PROFILES[0],
-            1 => &PROFILES[1],
+        let profile = match (profile_id, credential_id) {
+            (0, 0) => &PROFILES[0],
+            (1, 0) => &PROFILES[1],
+            (2, 1 | 2) if connection_ids.is_empty() => {
+                let fixture = if credential_id == 1 {
+                    SyntheticPasswordFixtureIdV1::PasswordOnly
+                } else {
+                    SyntheticPasswordFixtureIdV1::WithIdentifier
+                };
+                return Ok(Self {
+                    kind: RegistrationSelectionKind::Password(fixture),
+                });
+            }
             _ => return Err(LocalVaultError::InvalidItem),
         };
-        if credential_id != 0 {
-            return Err(LocalVaultError::InvalidItem);
-        }
         let mut seen = 0_u8;
         let mut connections = Vec::with_capacity(connection_ids.len());
         for &id in connection_ids {
@@ -110,8 +127,10 @@ impl SyntheticRegistrationSelectionV1 {
             connections.push(fixture);
         }
         Ok(Self {
-            profile,
-            connections,
+            kind: RegistrationSelectionKind::ApiKey {
+                profile,
+                connections,
+            },
         })
     }
 }
@@ -123,14 +142,21 @@ pub fn seal_synthetic_registration_v1(
     session: &VaultSession,
     selection: &SyntheticRegistrationSelectionV1,
 ) -> Result<SealedCredentialRecordV0Alpha1, LocalVaultError> {
-    let item = build_registration(selection)?;
-    seal_item_v1(session, item)
+    match &selection.kind {
+        RegistrationSelectionKind::ApiKey {
+            profile,
+            connections,
+        } => seal_item_v1(session, build_api_registration(profile, connections)?),
+        RegistrationSelectionKind::Password(fixture) => {
+            seal_synthetic_password_fixture_v1(session, *fixture)
+        }
+    }
 }
 
-fn build_registration(
-    selection: &SyntheticRegistrationSelectionV1,
+fn build_api_registration(
+    profile: &RegistrationProfile,
+    selected_connections: &[ConnectionFixture],
 ) -> Result<CredentialItemV1, LocalVaultError> {
-    let profile = selection.profile;
     let mut item = build_registration_item_v1(
         RegistrationMetadataV1 {
             item_name: profile.item_name.to_owned(),
@@ -155,8 +181,8 @@ fn build_registration(
         },
     )?;
     let field_id = item.secret_fields[0].field_id;
-    let mut connections = Vec::with_capacity(selection.connections.len());
-    for &fixture in &selection.connections {
+    let mut connections = Vec::with_capacity(selected_connections.len());
+    for &fixture in selected_connections {
         connections.push(build_connection(profile, fixture, field_id)?);
     }
     item.connections = connections;

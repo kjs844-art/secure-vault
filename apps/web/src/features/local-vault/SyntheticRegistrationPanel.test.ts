@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 
-/** SSR shape only; interaction and lock/reopen are verified in the browser. */
+/** SSR shape only; this file does not prove browser interaction or persistence. */
 describe("synthetic registration initial UI boundary", () => {
   it("renders only closed choices without reading or writing a vault", () => {
     const register = vi.fn(async () => {});
@@ -11,7 +11,11 @@ describe("synthetic registration initial UI boundary", () => {
       session: { register }, entryCount: 3,
     }));
     expect(register).not.toHaveBeenCalled();
-    expect(html.match(/<option /g)).toHaveLength(2);
+    expect(html.match(/<option /g)).toHaveLength(5);
+    expect(html).toContain('value="api_key"');
+    expect(html).toContain('value="password_only"');
+    expect(html).toContain('value="password_with_identifier"');
+    expect(html).toContain("비밀번호 + 계정 식별자");
     expect(html.match(/<input /g)).toHaveLength(4);
     expect(html.match(/type="checkbox"/g)).toHaveLength(4);
     expect(html).not.toMatch(/<(textarea|iframe)|type="(text|password|file|email)"/);

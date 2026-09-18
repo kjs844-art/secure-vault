@@ -40,6 +40,9 @@ export function SyntheticConnectionEditor({ entry, generation, session, active, 
       button.current?.focus();
     }
   }, [active]);
+  if (entry.credentialType === "password") return <p data-testid={`connection-edit-unavailable-${entry.reference}`}>
+    비밀번호 항목은 보관·목록 확인만 지원합니다. 이 데모의 연결 편집·API 키 교체는 API 키 항목만 지원하며, 비밀번호와 계정 식별자 원문은 표시하지 않습니다. 기존 기록은 변경하지 않습니다.
+  </p>;
   // Conservative local-display hint only. Rust checks all hidden semantics on save.
   const initial = seedSyntheticConnectionEdit(entry);
   if (initial === null) return <p data-testid={`connection-edit-unavailable-${entry.reference}`}>

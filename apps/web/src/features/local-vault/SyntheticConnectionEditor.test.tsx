@@ -47,6 +47,19 @@ function tagByTestId(html: string, tag: "input" | "button", testId: string): str
 /** SSR shape and render purity only; this does not execute clicks, effects,
  * focus restoration, submissions, cancellation, lock races, or persistence. */
 describe("synthetic connection editor initial rendering", () => {
+  it.each([false, true])("explains Password capability limits even when active=%s", (active) => {
+    const { html, editConnections, onOpen, onClose } = renderEditor(entry(31, [], {
+      credentialType: "password", providerName: "Example Password Service", issuerAccountIdentifier: null,
+    }), active);
+    expect(html).toContain('data-testid="connection-edit-unavailable-31"');
+    expect(html).toContain("비밀번호 항목은 보관·목록 확인만 지원");
+    expect(html).toContain("API 키 항목만 지원");
+    expect(html).toContain("계정 식별자 원문은 표시하지 않습니다");
+    expect(html).not.toMatch(/<(button|form|input)\b/);
+    expect(editConnections).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
   it("renders a closed opener with the snapshot reference and no editable inputs", () => {
     const { html, editConnections, onOpen, onClose } = renderEditor(entry(7, [0]), false);
     expect(tagByTestId(html, "button", "connection-edit-open-7")).toContain('type="button"');
@@ -164,6 +177,25 @@ describe("synthetic connection editor initial rendering", () => {
 });
 
 describe("synthetic editable catalog render boundary", () => {
+  it.each([false, true])("keeps Password rows in the catalog and counts with mixed=%s", (mixed) => {
+    const password = entry(17, [], {
+      credentialType: "password", providerName: "Example Password Service",
+      itemName: "Example Registered Password", issuerAccountIdentifier: null,
+      issuerProject: null, issuerEnvironment: null, secretFieldCount: 1,
+    });
+    const entries = mixed ? [password, entry(42, [0])] : [password];
+    const editConnections = vi.fn(async () => {});
+    const html = renderToStaticMarkup(<SyntheticEditableCatalog entries={entries} generation={31}
+      session={{ editConnections }} />);
+    expect(html).toContain(`전체 ${entries.length}개 중 ${entries.length}개`);
+    expect(html).toContain("Example Password Service");
+    expect(html).toContain("Example Registered Password");
+    expect(html).toContain("보관된 비밀 필드 1개");
+    expect(html).toContain('data-testid="connection-edit-unavailable-17"');
+    expect(html).not.toContain('data-testid="connection-edit-open-17"');
+    expect(html.includes('data-testid="connection-edit-open-42"')).toBe(mixed);
+    expect(editConnections).not.toHaveBeenCalled();
+  });
   it("keeps snapshot references through filtered LocalCatalogResults entry actions", () => {
     const source = Object.freeze([
       entry(9, [], { issuerProject: "DEMO other-project" }),

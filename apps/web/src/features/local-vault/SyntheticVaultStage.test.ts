@@ -1,6 +1,6 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
-import { CatalogAdapterError } from "../../bridge/catalogProtocol";
+import { CatalogAdapterError, type LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
 import type { LocalRotationStageV1 } from "../../bridge/rotationStageProtocol";
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
 import { SyntheticVaultSession, type SyntheticRotationStageWorker } from "./SyntheticVaultSession";
@@ -10,6 +10,15 @@ const staged = new Uint8Array([1, 2, 3]);
 const cutover = new Uint8Array([1, 2, 3, 4]);
 const racer = new Uint8Array([7, 8]);
 const selection = { reference: 0, mcp: "user_confirmed", cli: "pending", ci: "pending", supersededRevocation: "pending" } as const;
+
+function rows(): readonly LocalCatalogEntryV1[] {
+  return [0, 1].map((reference): LocalCatalogEntryV1 => ({
+    reference, credentialType: "api_key", itemName: "Example API key", providerName: "Example service",
+    issuerAccountIdentifier: null, issuerOrganizationOrWorkspace: null, issuerProject: null,
+    issuerEnvironment: null, status: "active", connectionCount: 0, secretFieldCount: 1,
+    mcpConnectionCount: 0, connections: [],
+  }));
+}
 
 function projection(ready = false): LocalRotationStageV1 {
   return { baseGeneration: "initial_0001", targetGeneration: "rotated_0002",
@@ -29,7 +38,7 @@ async function fixture(ready = false) {
   await store.createIfAbsent(original);
   const worker = {
     create: vi.fn<SyntheticRotationStageWorker["create"]>(async () => original.slice()),
-    open: vi.fn<SyntheticRotationStageWorker["open"]>(async () => []),
+    open: vi.fn<SyntheticRotationStageWorker["open"]>(async () => rows()),
     cancel: vi.fn(),
     inspectRotationStage: vi.fn<SyntheticRotationStageWorker["inspectRotationStage"]>(async () => projection(ready)),
     saveRotationStage: vi.fn<SyntheticRotationStageWorker["saveRotationStage"]>(async () => staged.slice()),

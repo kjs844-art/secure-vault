@@ -203,4 +203,51 @@ describe("synthetic registration session", () => {
     expect(saved()!.length).toBe(2);
     expect(store.compareAndSwapArchive).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    [2, 0, []], [0, 1, []], [1, 2, []],
+    [2, 1, [0]], [2, 2, [2]], [2, 3, []],
+  ])("rejects mismatched Password tuple (%i, %i, %j) before reading storage or calling append", async (profileId, credentialId, connectionIds) => {
+    const { session, store, worker, saved } = fixture();
+    await session.open();
+    store.read.mockClear();
+    worker.open.mockClear();
+    await session.register({ profileId, credentialId, connectionIds });
+    expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "INVALID_ARCHIVE" });
+    expect(store.read).not.toHaveBeenCalled();
+    expect(store.compareAndSwapArchive).not.toHaveBeenCalled();
+    expect(worker.append).not.toHaveBeenCalled();
+    expect(worker.open).not.toHaveBeenCalled();
+    expect(saved()).toEqual(oldBytes);
+  });
+
+  it.each([1, 2])("owns Password form %i selection before awaiting storage", async (credentialId) => {
+    const { session, store, worker } = fixture();
+    await session.open();
+    const gate = deferred<Uint8Array | null>();
+    store.read.mockReturnValueOnce(gate.promise);
+    const input = { profileId: 2, credentialId, connectionIds: [] as number[] };
+    const pending = session.register(input);
+    input.profileId = 0;
+    input.credentialId = 0;
+    input.connectionIds.push(0);
+    gate.resolve(oldBytes);
+    await pending;
+    expect(worker.append).toHaveBeenCalledWith(oldBytes, { profileId: 2, credentialId, connectionIds: [] });
+    expect(session.state.phase).toBe("open");
+  });
+
+  it.each([1, 2])("keeps stored bytes and clears candidate views when Password form %i loses CAS", async (credentialId) => {
+    const { session, store, worker, saved } = fixture();
+    await session.open();
+    store.compareAndSwapArchive.mockResolvedValueOnce("conflict");
+    await session.register({ profileId: 2, credentialId, connectionIds: [] });
+    expect(worker.append).toHaveBeenCalledOnce();
+    expect(store.compareAndSwapArchive).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledOnce();
+    expect(saved()).toEqual(oldBytes);
+    expect(session.state).toEqual({ phase: "error", entries: [], errorCode: "STORAGE_CONFLICT" });
+    expect(worker.create).not.toHaveBeenCalled();
+    expect(store.createIfAbsent).not.toHaveBeenCalled();
+  });
 });

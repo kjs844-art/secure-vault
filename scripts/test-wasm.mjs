@@ -7,6 +7,7 @@ let checks = 0;
 let archiveRejections = 0;
 let catalogsVerified = 0;
 let registrationsVerified = 0;
+let passwordRegistrationsVerified = 0;
 let connectionEditsVerified = 0;
 let rotationChecklistsVerified = 0;
 let rotationCutoversVerified = 0;
@@ -526,6 +527,89 @@ async function run() {
     registrationsVerified++;
   }
 
+  // Isolated candidates preserve the fixed API-only registration/history flow
+  // below. Neither Password form accepts plaintext from JavaScript or reveals
+  // the build-included password/identifier through the catalog projection.
+  let passwordArchive = archive;
+  for (const credential of [1, 2]) {
+    const before = passwordArchive.slice();
+    const previousEnvelopes = splitFrame(passwordArchive);
+    const next = api.appendSyntheticRegistration(passwordArchive, 2, credential, new Float64Array());
+    check(next instanceof Uint8Array && next.length <= 512 * 1_024);
+    check(new DataView(next.buffer, next.byteOffset).getUint32(8, true) === 2);
+    check(Buffer.from(passwordArchive).equals(Buffer.from(before)));
+    const nextEnvelopes = splitFrame(next);
+    check(nextEnvelopes.length === previousEnvelopes.length + 1);
+    previousEnvelopes.forEach((envelope, index) => {
+      check(Buffer.from(envelope).equals(Buffer.from(nextEnvelopes[index])));
+    });
+    for (const plaintext of ['DEMO_VALUE_ONLY_PASSWORD_FIXTURE_0001',
+      'DEMO_VALUE_ONLY_PASSWORD_IDENTIFIER_0001', 'Example Password Service',
+      'Example Password Only', 'Example Password With Identifier',
+      'synthetic-password-v1', 'https://password.example.invalid/account',
+      'synthetic-password', 'Build-included synthetic Password fixture only.',
+      '2026-09-18T00:00:00Z']) {
+      check(!Buffer.from(next).includes(Buffer.from(plaintext)));
+    }
+    verifyNoSyntheticPlaintext(next);
+    const beforeReopen = next.slice();
+    const catalog = api.openSyntheticArchive(next);
+    try {
+      check(catalog.length() === 3 + credential);
+      for (let ref = 0; ref < 3; ref++) {
+        const row = rowGetters.map((name) => catalog[name](ref));
+        for (let index = 0; index < catalog.connectionCount(ref); index++) {
+          row.push(catalog.connectionLabel(ref, index), catalog.connectionType(ref, index));
+        }
+        check(row.length === rows[ref].length);
+        check(row.every((value, index) => value === rows[ref][index]));
+      }
+      for (let form = 1; form <= credential; form++) {
+        const ref = 2 + form;
+        check(catalog.itemName(ref) === ['Example Password Only', 'Example Password With Identifier'][form - 1]);
+        check(catalog.providerName(ref) === 'Example Password Service');
+        check(catalog.credentialType(ref) === 'password' && catalog.status(ref) === 'active');
+        check(catalog.secretFieldCount(ref) === form);
+        check(catalog.connectionCount(ref) === 0 && catalog.mcpConnectionCount(ref) === 0);
+        // Raw wasm-bindgen Option<String> is undefined; the worker normalizes
+        // it to null. An encrypted USERNAME is not issuer-account metadata.
+        check(catalog.issuerAccountIdentifier(ref) === undefined);
+        check((catalog.issuerAccountIdentifier(ref) ?? null) === null);
+        for (const name of issuerGetters) check(catalog[name](ref) === undefined);
+        for (const name of connectionGetters) {
+          expectCode(() => catalog[name](ref, 0), 'INVALID_REFERENCE');
+        }
+      }
+      catalog.lock();
+      for (const name of rowGetters) expectCode(() => catalog[name](3), 'LOCKED');
+      catalogsVerified++;
+    } finally {
+      catalog.lock();
+      catalog.free();
+    }
+    check(Buffer.from(next).equals(Buffer.from(beforeReopen)));
+    passwordArchive = next;
+    passwordRegistrationsVerified++;
+  }
+  function rejectPasswordSelection(profile, credential, connections, code = 'INVALID_ARCHIVE') {
+    const before = passwordArchive.slice();
+    expectCode(() => api.appendSyntheticRegistration(passwordArchive, profile, credential,
+      new Float64Array(connections)), code);
+    check(Buffer.from(passwordArchive).equals(Buffer.from(before)));
+    archiveRejections++;
+  }
+  for (const [profile, credential] of [[2, 0], [2, 3], [0, 1], [0, 2],
+    [1, 1], [1, 2], [3, 1], [3, 2]]) {
+    rejectPasswordSelection(profile, credential, []);
+  }
+  for (const credential of [1, 2]) {
+    for (const connections of [[0], [1], [2], [0, 1, 2], [0, 0], [2 ** 32 - 1]]) {
+      rejectPasswordSelection(2, credential, connections);
+    }
+    rejectPasswordSelection(2, credential, [0, 1, 2, 0], 'LIMITS_EXCEEDED');
+  }
+  check(Buffer.from(archive).equals(Buffer.from(original)));
+
   function rejectSelection(profile, credential, connections, code = 'INVALID_ARCHIVE') {
     const before = current.slice();
     expectCode(() => api.appendSyntheticRegistration(current, profile, credential, new Float64Array(connections)), code);
@@ -618,14 +702,14 @@ try {
   await run();
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: true,
-    checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
+    checks, catalogsVerified, archiveRejections, registrationsVerified, passwordRegistrationsVerified, connectionEditsVerified,
     rotationChecklistsVerified, rotationCutoversVerified, rotationRejections,
   }));
 } catch {
   // Do not print thrown values, assertion operands, rows, archive bytes or keys.
   console.log(JSON.stringify({
     check: 'actual-wasm-runtime', mode: folder, passed: false,
-    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified, connectionEditsVerified,
+    code: 'WASM_RUNTIME_CHECK_FAILED', checks, catalogsVerified, archiveRejections, registrationsVerified, passwordRegistrationsVerified, connectionEditsVerified,
     rotationChecklistsVerified, rotationCutoversVerified, rotationRejections,
   }));
   process.exitCode = 1;

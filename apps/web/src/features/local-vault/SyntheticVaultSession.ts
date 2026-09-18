@@ -570,6 +570,7 @@ export class SyntheticVaultSession {
       if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       const selection = parseSyntheticRotationSelection(input);
       if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
+      if (!this.#isApiKeyReference(selection.reference)) throw new CatalogAdapterError("INVALID_ARCHIVE");
       const inspect = this.#worker.inspectRotation;
       if (!this.#isRotationReviewCurrent(vaultGeneration, reviewVersion)) return null;
       if (typeof inspect !== "function") {
@@ -628,6 +629,7 @@ export class SyntheticVaultSession {
 
     const before = new Uint8Array(reviewed.expectedBytes);
     const selection = parseSyntheticRotationSelection(reviewed.selection);
+    if (!this.#isApiKeyReference(selection.reference)) { before.fill(0); return; }
     await this.#commitRotationCandidate(before, { kind: "cutover", selection });
   }
 
@@ -638,7 +640,8 @@ export class SyntheticVaultSession {
     try { selection = parseSyntheticRotationStageSelection(input); }
     catch { return; }
     // A hostile selection Proxy can reenter even descriptor-only parsers.
-    if (!this.#canSaveRotationStage(expectedVaultGeneration) || !this.#displayedArchive) return;
+    if (!this.#canSaveRotationStage(expectedVaultGeneration) || !this.#displayedArchive
+        || !this.#isApiKeyReference(selection.reference)) return;
     const before = new Uint8Array(this.#displayedArchive);
     await this.#commitRotationCandidate(before, { kind: "stage", selection });
   }
@@ -647,7 +650,8 @@ export class SyntheticVaultSession {
   async inspectRotationStage(expectedVaultGeneration: number, reference: number): Promise<SyntheticRotationStageReceipt | null> {
     if (this.#state.phase !== "open" || expectedVaultGeneration !== this.#generation
         || !this.#displayedArchive || this.#conflictReviewState.phase === "discarding"
-        || !Number.isSafeInteger(reference) || Object.is(reference, -0) || reference < 0 || reference > 127) return null;
+        || !Number.isSafeInteger(reference) || Object.is(reference, -0) || reference < 0 || reference > 127
+        || !this.#isApiKeyReference(reference)) return null;
     const before = new Uint8Array(this.#displayedArchive);
     this.#invalidateAuxiliaryReviews();
     const reviewVersion = this.#stageReviewVersion;
@@ -688,7 +692,8 @@ export class SyntheticVaultSession {
         || expectedReviewVersion !== this.#stageReviewVersion || review.phase !== "ready"
         || review.reviewVersion !== expectedReviewVersion || !review.stage?.readyForCutover
         || !reviewed || !this.#displayedArchive
-        || !sameArchive(this.#displayedArchive, reviewed.expectedBytes)) return;
+        || !sameArchive(this.#displayedArchive, reviewed.expectedBytes)
+        || !this.#isApiKeyReference(reviewed.reference)) return;
     await this.#commitRotationCandidate(new Uint8Array(reviewed.expectedBytes), {
       kind: "saved-cutover", reference: reviewed.reference,
     });
@@ -881,6 +886,7 @@ export class SyntheticVaultSession {
    */
   async editConnections(expectedGeneration: number, input: unknown): Promise<void> {
     if (this.#state.phase !== "open" || expectedGeneration !== this.#generation || !this.#displayedArchive) return;
+    const displayedEntries = this.#state.entries;
     const before = new Uint8Array(this.#displayedArchive);
     const generation = ++this.#generation;
     this.#invalidateAuxiliaryReviews();
@@ -892,6 +898,9 @@ export class SyntheticVaultSession {
       if (!this.#isCurrent(generation)) return;
       const selection = parseSyntheticConnectionEdit(input);
       if (!this.#isCurrent(generation)) return;
+      if (!displayedEntries.some((entry) => entry.reference === selection.reference && entry.credentialType === "api_key")) {
+        throw new CatalogAdapterError("INVALID_ARCHIVE");
+      }
       if (!this.#worker.editConnections) {
         throw new RegistrationStateError("CONNECTION_EDIT_UNAVAILABLE");
       }
@@ -1100,6 +1109,13 @@ export class SyntheticVaultSession {
   #isStageReviewCurrent(generation: number, reviewVersion: number): boolean {
     return generation === this.#generation && reviewVersion === this.#stageReviewVersion
       && this.#state.phase === "open";
+  }
+
+  /** UX/session guard only; authenticated Rust admission remains authoritative. */
+  #isApiKeyReference(reference: number): boolean {
+    return this.#state.phase === "open" && this.#state.entries.some(
+      (entry) => entry.reference === reference && entry.credentialType === "api_key",
+    );
   }
 
   #canSaveRotationStage(generation: number): boolean {

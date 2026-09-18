@@ -160,6 +160,62 @@ describe("BrowserSyntheticVaultWorker", () => {
     expect(factory).not.toHaveBeenCalled();
   });
 
+  it.each([1, 2] as const)("dispatches owned Password form %i and keeps mutations out of the worker request", async (credentialId) => {
+    const { client, workers, factory } = setup();
+    const input = new Uint8Array([1, 2]);
+    const selection = { profileId: 2 as const, credentialId, connectionIds: [] as [] };
+    const pending = client.append(input, selection);
+    expect(factory).toHaveBeenCalledOnce();
+    const request = workers[0]!.postMessage.mock.calls[0]![0] as {
+      op: string; bytes: Uint8Array; selection: typeof selection;
+    };
+    expect(request.bytes).not.toBe(input);
+    expect(request.selection).not.toBe(selection);
+    expect(request.selection.connectionIds).not.toBe(selection.connectionIds);
+    expect(Object.isFrozen(request.selection)).toBe(true);
+    expect(Object.isFrozen(request.selection.connectionIds)).toBe(true);
+    input.fill(9);
+    Reflect.set(selection, "profileId", 0);
+    Reflect.set(selection, "credentialId", 0);
+    Reflect.set(selection.connectionIds, "0", 0);
+    expect(request).toEqual({ op: "append", bytes: new Uint8Array([1, 2]),
+      selection: { profileId: 2, credentialId, connectionIds: [] } });
+    const candidate = new Uint8Array([1, 2, 3]);
+    workers[0]!.reply({ ok: true, kind: "archive", bytes: candidate });
+    const output = await pending;
+    expect(output).toEqual(candidate);
+    expect(output).not.toBe(candidate);
+    candidate.fill(9);
+    expect(output).toEqual(new Uint8Array([1, 2, 3]));
+    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { profileId: 2, credentialId: 0, connectionIds: [] },
+    { profileId: 0, credentialId: 1, connectionIds: [] },
+    { profileId: 1, credentialId: 2, connectionIds: [] },
+    { profileId: 2, credentialId: 1, connectionIds: [0] },
+    { profileId: 2, credentialId: 2, connectionIds: [2] },
+    { profileId: 2, credentialId: 3, connectionIds: [] },
+  ])("rejects a non-closed Password tuple before invoking the Worker factory", async (selection) => {
+    const { client, factory } = setup();
+    await expect(client.append(new Uint8Array([1]), selection as never))
+      .rejects.toHaveProperty("code", "INVALID_ARCHIVE");
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it("rejects Password accessors without invoking them or starting a Worker", async () => {
+    const { client, factory } = setup();
+    const getter = vi.fn(() => 2);
+    const selection = Object.defineProperty({ credentialId: 1, connectionIds: [] }, "profileId", {
+      enumerable: true, get: getter,
+    });
+    await expect(client.append(new Uint8Array([1]), selection as never))
+      .rejects.toHaveProperty("code", "INVALID_ARCHIVE");
+    expect(getter).not.toHaveBeenCalled();
+    expect(factory).not.toHaveBeenCalled();
+  });
+
   it("cancelled append cannot return a late archive or catalog", async () => {
     const { client, workers } = setup();
     const pending = client.append(new Uint8Array([1]), { profileId: 0, credentialId: 0, connectionIds: [] });

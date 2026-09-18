@@ -39,8 +39,8 @@ function checklist(overrides: Partial<LocalRotationChecklistV1> = {}): LocalRota
 }
 
 function rows(name: string): readonly LocalCatalogEntryV1[] {
-  return [{
-    reference: 0,
+  return [0, 1].map((reference): LocalCatalogEntryV1 => ({
+    reference,
     itemName: name,
     providerName: "Example",
     issuerAccountIdentifier: "demo-account",
@@ -53,7 +53,7 @@ function rows(name: string): readonly LocalCatalogEntryV1[] {
     secretFieldCount: 1,
     mcpConnectionCount: 0,
     connections: [],
-  }];
+  }));
 }
 
 function same(left: Uint8Array, right: Uint8Array): boolean {
