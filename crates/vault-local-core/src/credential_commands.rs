@@ -23,7 +23,6 @@ pub(crate) enum CredentialDraftV1 {
         label: String,
         value: SecretValueV1,
     },
-    #[allow(dead_code, reason = "Password stays private and synthetic-test-only")]
     Password {
         identifier: Option<SecretValueV1>,
         password: SecretValueV1,

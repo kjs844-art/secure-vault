@@ -46,7 +46,8 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 - 완료된 합성 회전 event를 해당 immutable revision에 남기고, 실제 post-cutover 세대·세대별 timestamp·모든 non-removed 연결 상태까지 다시 확인한 successor에서만 새 payload의 event를 비우는 lifecycle. metadata만 조작한 `0001`, 비정상 optional 연결과 legacy incomplete event는 읽을 수 있지만 mutation과 RNG 전에 거부합니다. 닫힌 합성 값 `0001→0002→0003`의 반복 회전과 중간 일반·연결 편집을 지원합니다.
 - caller가 제공한 head와 ancestor를 최대 512 revisions/8 MiB로 제한하고 모두 인증·연결한 뒤, root와 각 revision의 `0001→0002→0003` 연속성까지 확인하여 회전 event의 opaque revision/parent, bounded counts, completion/revocation-source enum만 최신순으로 반환하는 합성 history projection. Secret·메모·임의 표시 문자열은 반환하지 않습니다.
 - Archive v4 안에서 합성 회전 진행을 canonical head와 분리해 암호화 저장·잠금·재개·최종 확정하고, 신규 저장 시 ready/final cutover에 필요한 revision·ciphertext 공간을 미리 예약합니다. 이는 금고 내부 512 revisions/512 KiB 예산이며 실제 디스크·IndexedDB quota나 과거 이미 가득 찬 금고를 보장하지 않습니다.
-- private command layer는 API Key와 Password 초기 item을 공통 builder로 만들고, item name/notes/tags/updated time만 바꾸는 metadata successor를 제공합니다. 기존 닫힌 합성 API Key 등록은 같은 builder를 재사용합니다. Password는 Rust 내부 합성 테스트 전용이고 웹·WASM·Worker·공개 API·free-text 입력에는 연결되지 않았습니다.
+- private command layer는 API Key와 Password 초기 item을 공통 builder로 만들고, item name/notes/tags/updated time만 바꾸는 metadata successor를 제공합니다. 기존 닫힌 합성 API Key 등록과 공개 Rust의 닫힌 Password 예제 팩토리가 같은 builder를 재사용합니다. Password 팩토리 입력은 빌드에 포함된 고정 enum 2개뿐이며 웹·Worker·JS/WASM 등록 API·free-text 입력에는 연결되지 않았습니다.
+- 일반 credential 이력 검사는 caller가 제공한 head와 모든 조상의 same-record/parent/constant credential type을 인증하고 최대 512 revisions/8 MiB를 제한합니다. 이는 Secret reveal, 회전 권한, 최신 이력 또는 합성 출처 증명이 아닙니다. archive는 별도로 Password의 정확한 내장 sensitive 값·필드 정책과 connection/rotation 부재를 모든 허용 revision에서 검사합니다. Password의 v1/v2 읽기는 genesis만, v3/v4는 full ancestry만 허용하며 API와 같은 금고에 함께 보관할 수 있습니다. v4 API의 완전한 회전 이력 검사는 유지되고 Password에는 connection edit/rotation/staging capability가 없습니다. 실제 비밀번호 지원 완료가 아니라 닫힌 합성 통합 기반입니다.
 - wrong password 무쓰기, future version 원문 보존, current 손상의 store-wide 읽기 전용 보존
 - DB/WAL 계열 합성 marker scan, process-crash transaction 원자성, secret-bearing API compile-fail 경계
 
@@ -62,9 +63,11 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 
 후속 [private credential command](verification/2026-09-18-private-credential-commands.md)는 등록 item의 민감 필드와 ID를 Rust 내부에서 구성하고, 인증된 predecessor의 Secret/type/provider/connections/lifecycle을 보존하는 metadata allowlist를 둡니다. 집중 회귀에 이어 코어 전체 106 tests, workspace compile-fail 11개, 웹 1,360 tests, 새 WASM smoke·Clippy·build·Secret scan과 독립 읽기 리뷰(Critical 0/Important 0)가 통과했습니다. 새 exact SHA 원격 CI는 별도 확인 대상이며 이 내부 경계는 임의 API Key/Password를 제품에 입력하거나 읽고 복사할 수 있다는 뜻이 아닙니다.
 
+현재 [혼합 credential archive](verification/2026-09-18-mixed-credential-archive.md)는 generic full-chain constant-type integrity와 Password exact closed-fixture admission을 archive 읽기 경계에 결합하고, API의 v4 전체 회전 ancestry를 그대로 유지하면서 Password의 connection edit/rotation/staging을 거부합니다. 코어 집중 10+7 tests, core 전체 release 123 tests(19.71초), core Clippy, native WASM archive 69 tests(44.52초)와 독립 소스 리뷰(Critical 0/Important 0)가 통과했습니다. WASM package Clippy와 현재 mixed 변경의 exact-SHA 원격 CI는 아직 미확정이며, 직전 `238f8b8`의 진행 중 CI는 이 변경의 증거가 아닙니다.
+
 [합성 등록 저장 경로 증거](verification/2026-09-15-synthetic-registration-storage.md)는 v1/v2 백업과 실제 WASM/Node 세션 재열기를 포함합니다. 후속 [등록 화면·issuer 검색 증거](verification/2026-09-15-synthetic-registration-ui.md)는 선택형 폼, 실제 Comet의 0/1/3 연결 등록과 순서 보존, 검색·잠금·재열기·새로고침·탭 전환 검사를 포함합니다. 임의 자격 증명 등록이나 실제 모바일 검증은 아닙니다.
 
-실제 자격 증명 입력·가져오기, 제품용 검색, optional 연결의 실제 provider 확인을 포함한 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS와 합성 history는 정상 API의 stale writer 및 caller가 제공한 체인을 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical latest head rollback·완전한 row 누락을 탐지하지 못합니다. Password 웹 입력 전에 generic archive type/field/lifecycle 무결성과 API-key 전용 회전 capability 분리를 별도로 검증해야 합니다.
+실제 자격 증명 입력·가져오기, Password 웹 등록, 제품용 검색, optional 연결의 실제 provider 확인을 포함한 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS와 합성 history는 정상 API의 stale writer 및 caller가 제공한 체인을 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical latest head rollback·완전한 row 누락을 탐지하지 못합니다. 닫힌 Password fixture가 archive에 함께 존재할 수 있다는 것은 사용자 비밀번호 입력·복사·회전 지원을 의미하지 않습니다.
 
 실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 

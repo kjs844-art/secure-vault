@@ -151,7 +151,8 @@ pub(super) fn validate(
     session: &vault_crypto::VaultSession,
     parsed: &ParsedArchive<'_>,
 ) -> Result<(), ArchiveError> {
-    rotation::validate_canonical_chains(session, parsed)?;
+    // project_archive validates the canonical set before stages. Do not skip
+    // any stage here: a Password base is not an API rotation capability.
     let authenticator = CredentialStorageAuthenticatorV1::new(session);
     let mut revisions = BTreeSet::new();
     for envelope in parsed

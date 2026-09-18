@@ -28,6 +28,7 @@ mod catalog;
 mod codec;
 mod connection_edit;
 mod credential_commands;
+mod credential_history;
 mod error;
 mod ids;
 mod model;
@@ -41,6 +42,7 @@ mod rotation_lifecycle;
 mod rotation_staging;
 mod secret;
 mod synthetic;
+mod synthetic_password;
 
 pub use catalog::{
     CatalogConnectionTypeV1, CatalogConnectionViewV1, CatalogCredentialStatusV1,
@@ -49,6 +51,7 @@ pub use catalog::{
 pub use connection_edit::{
     SyntheticConnectionSelectionV1, create_synthetic_connection_successor_v1,
 };
+pub use credential_history::{CredentialChainInspectionV1, inspect_credential_chain_v1};
 pub use error::{LocalVaultError, LocalVaultErrorCode};
 pub use ids::{RecordIdV1, RevisionIdV1};
 pub use persistence::{
@@ -88,6 +91,10 @@ pub use rotation_staging::{
     inspect_synthetic_rotation_stage_v1,
 };
 pub use synthetic::SyntheticCredentialFixtureId;
+pub use synthetic_password::{
+    SyntheticPasswordFixtureIdV1, inspect_synthetic_password_record_v1,
+    seal_synthetic_password_fixture_v1,
+};
 
 #[cfg(test)]
 pub(crate) use record::{SyntheticFutureVersion, open_synthetic_future_version_v1};

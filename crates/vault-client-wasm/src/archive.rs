@@ -38,6 +38,9 @@ const DEMO_PASSWORD: &str = "DEMO_VALUE_ONLY_wasm_catalog";
 #[path = "archive_history.rs"]
 mod history;
 
+#[path = "archive_canonical.rs"]
+mod canonical;
+
 #[path = "archive_capacity.rs"]
 mod capacity;
 
@@ -243,6 +246,9 @@ fn project_archive(
     if parsed.version >= HISTORY_ARCHIVE_VERSION {
         history::validate(session, parsed)?;
     }
+    // Credential admission also applies to legacy framing. Changing only the
+    // archive version must not bypass the closed Password fixture policy.
+    canonical::validate(session, parsed)?;
     if parsed.version == STAGING_ARCHIVE_VERSION {
         staging::validate(session, parsed)?;
     }

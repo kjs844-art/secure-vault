@@ -434,73 +434,15 @@ fn validate_record_chain(
     ))
 }
 
-/// v4 reserves its canonical set for completed histories. Authenticating IDs
-/// alone would let a valid encrypted stage be reframed as a canonical head or
-/// ancestor. Reuse the full rotation history checks for every canonical chain.
-/// Rehydrate the bounded canonical set once, not once per head.
-pub(super) fn validate_canonical_chains(
+/// API-only canonical admission after common topology and type validation.
+/// This preserves v4's complete-event requirement without treating Password
+/// records as API rotation candidates.
+pub(super) fn validate_api_canonical_chain(
     session: &vault_crypto::VaultSession,
-    parsed: &ParsedArchive<'_>,
+    head: &vault_local_core::SealedCredentialRecordV0Alpha1,
+    ancestors: &[&vault_local_core::SealedCredentialRecordV0Alpha1],
 ) -> Result<(), ArchiveError> {
-    let authenticator = CredentialStorageAuthenticatorV1::new(session);
-    let mut owned = Vec::with_capacity(parsed.records.len());
-    let mut receipts = Vec::with_capacity(parsed.records.len());
-    let mut by_revision = BTreeMap::new();
-    for (index, envelope) in parsed.records.iter().enumerate() {
-        let receipt = match authenticator
-            .authenticate_stored_credential_v1(envelope)
-            .map_err(|error| map_local_error(error.code()))?
-        {
-            StoredCredentialAuthenticationOutcomeV1::Current(receipt) => receipt,
-            StoredCredentialAuthenticationOutcomeV1::AuthenticatedFutureInner(_) => {
-                return Err(ArchiveError::UpgradeRequired);
-            }
-        };
-        if by_revision.insert(receipt.revision_id(), index).is_some() {
-            return Err(ArchiveError::InvalidArchive);
-        }
-        receipts.push(Receipt {
-            record_id: receipt.record_id(),
-            parent_revision_id: receipt.parent_revision_id(),
-        });
-        let record = match authenticator
-            .rehydrate_owned_stored_credential_v1(envelope.to_vec())
-            .map_err(|error| map_local_error(error.code()))?
-        {
-            OwnedRehydratedCredentialOutcomeV1::Current(record) => record,
-            OwnedRehydratedCredentialOutcomeV1::UpgradeRequired(_) => {
-                return Err(ArchiveError::UpgradeRequired);
-            }
-        };
-        owned.push(record);
-    }
-    for &head_index in &parsed.heads {
-        let head = owned
-            .get(head_index)
-            .ok_or(ArchiveError::InvalidArchive)?
-            .sealed_record();
-        let head_receipt = receipts
-            .get(head_index)
-            .ok_or(ArchiveError::InvalidArchive)?;
-        let mut ancestors = Vec::new();
-        let mut next = head_receipt.parent_revision_id;
-        while let Some(parent) = next {
-            let index = *by_revision
-                .get(&parent)
-                .ok_or(ArchiveError::InvalidArchive)?;
-            let record = owned[index].sealed_record();
-            let receipt = &receipts[index];
-            if receipt.record_id != head_receipt.record_id
-                || ancestors.len() >= parsed.records.len()
-            {
-                return Err(ArchiveError::InvalidArchive);
-            }
-            ancestors.push(record);
-            next = receipt.parent_revision_id;
-        }
-        validate_record_chain(session, head, &ancestors)?;
-    }
-    Ok(())
+    validate_record_chain(session, head, ancestors).map(|_| ())
 }
 
 fn cutover_selection(
