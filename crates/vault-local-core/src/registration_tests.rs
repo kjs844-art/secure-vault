@@ -6,6 +6,10 @@ use super::*;
 use crate::LocalVaultErrorCode;
 use crate::codec::preservation_tests::assert_item_preserved;
 use crate::codec::{DecodedItem, decode_item};
+use crate::model::{
+    CopyPolicyV1, CredentialStatusV1, CredentialTypeV1, ExternalRevocationAttestationV1,
+    ExternalRevocationStatusV1, FieldRoleV1, RevealPolicyV1, SensitivityV1,
+};
 use crate::record::record_context;
 
 fn error_code<T>(result: Result<T, LocalVaultError>) -> LocalVaultErrorCode {

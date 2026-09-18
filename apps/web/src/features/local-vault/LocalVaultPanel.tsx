@@ -49,6 +49,7 @@ export function LocalVaultPanel() {
           {state.phase === "open" && `열림 · 저장된 암호문에서 ${state.entries.length}개 합성 항목을 인증하고 복원했습니다.`}
           {state.phase === "error" && `작업을 확인하지 못했습니다 (${state.errorCode}). 오류 시 자동 초기화·재시도는 하지 않습니다. 저장이 이미 완료됐을 수 있으므로 먼저 금고를 다시 열어 확인하세요.`}
         </p>
+        <LocalVaultBridgeFailureGuidance state={state} />
         {state.phase === "error" && state.errorCode === "LIMITS_EXCEEDED" && <p data-testid="vault-capacity-error">
           저장 한도에는 이미 저장된 이력과 키 교체를 끝내기 위해 남겨둔 공간도 포함됩니다. 금고를 다시 열고 저장한 진행을 불러와 검토하세요. 준비됐으면 최종 확정하고, 미확인 조건이 남았다면 필요한 확인을 모아 한 번에 저장하세요. 이전 버전의 꽉 찬 저장본이나 기기 용량 부족에서는 완료 공간이 보장되지 않습니다. 데이터를 삭제하거나 초기화하지 말고 합성 백업을 먼저 보관하세요.
         </p>}
@@ -73,4 +74,14 @@ export function LocalVaultPanel() {
       </section>
     </main>
   );
+}
+
+/** Guidance only: never changes the session, retries work, or touches storage. */
+export function LocalVaultBridgeFailureGuidance({ state }: {
+  readonly state: Pick<SyntheticVaultSession["state"], "phase" | "errorCode">;
+}) {
+  if (state.phase !== "error" || state.errorCode !== "BRIDGE_FAILURE") return null;
+  return <p data-testid="vault-bridge-error">
+    원인은 아직 확인되지 않았습니다. 실행 파일 로딩이나 백그라운드 작업(Worker) 시작·통신 중 문제가 생겼을 수 있습니다. 인터넷 연결 상태와, 로컬로 실행 중이라면 미리보기 서버가 켜져 있는지 확인하세요. 연결이나 실행 환경을 복구한 뒤 ‘저장된 합성 금고 열기’를 직접 눌러 확인하세요. 문제 해결을 위해 브라우저 데이터를 삭제하거나 금고를 초기화하지 마세요. 자동 초기화·자동 재시도는 하지 않습니다.
+  </p>;
 }

@@ -1,17 +1,30 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-rotation-capacity`.
+기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-credential-commands`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
-## 최신 체크포인트: 키 교체 완료 공간 예약
+## 최신 작업: 공통 private credential command 경계
+
+이번 코어 체크포인트는 `credential_commands.rs`에 API Key/Password 등록 item builder와 metadata-only successor를 공통 private 명령으로 분리했다. 기존 닫힌 합성 API Key 등록은 같은 builder를 재사용하므로 기존 선택형 UI/API의 입력 범위를 넓히지 않는다. Password variant는 Rust 내부 합성 테스트에서만 생성하며 웹·WASM·Worker·공개 API·free-text 입력에 노출하지 않았다.
+
+- 등록 builder는 caller가 field ID나 lifecycle 상태를 정하지 못하게 하고, Rust RNG로 field ID를 만든다. Secret field는 재인증 뒤 reveal/copy 정책을 유지하며 새 item에는 parent·rotation·connection을 임의로 주입하지 않는다.
+- metadata successor의 allowlist는 item name, notes, tags, updated time뿐이다. 인증된 predecessor와 공통 successor 경로를 사용하여 Secret/credential type/provider identity/field·record ID/connection/lifecycle·verification을 변경하지 않는다. 회전 진행 중 상태는 승격하지 않고 거부한다.
+- 초기 집중 10 tests, 등록 7 tests와 보강 1 test에 이어 코어 전체 106 tests가 단일 스레드 exit 0으로 통과했다. 독립 읽기 리뷰 Critical 0/Important 0, 코어 Clippy, workspace compile-fail 11개도 통과했다.
+- 새 default/demo release WASM smoke 40/1,528 checks, 웹 42 files/1,360 tests, 타입 검사·production build·Secret scan을 통과했다. [검증 기록](verification/2026-09-18-private-credential-commands.md)에 명령과 실패 후 재검사 이력을 구분한다. 새 체크포인트의 exact SHA 원격 CI는 push 후 별도로 확인해야 한다.
+- 실제 브라우저에서 창 열기·잠금·부분 진행 저장/재열기와 bytes 보존을 확인했다. Offline Worker는 `ERR_ABORTED`/`BRIDGE_FAILURE`였고 완전한 오프라인 지원은 아니다. 실패 안내를 보완한 새 빌드에서도 안내·암호문 보존·온라인 복구 후 재열기를 확인했다. [브라우저 회귀 기록](verification/browser-2026-09-18/report.md)을 따른다.
+
+`REAL_SECRET_GATE=CLOSED`다. 실제 비밀번호/API 키, 사용자 데이터, 임의 free-text, provider 호출은 받지 않는다. 다음 제품 단계는 generic credential이 archive에서 type/field/lifecycle 무결성을 유지하는 경계를 먼저 검증하고, API-key 전용 회전 capability를 Password에서 명시적으로 분리한 뒤에야 Password 웹 입력을 별도 승인 대상으로 검토하는 것이다. 인증·복구 방식과 도메인·배포·디자인은 사용자 결정 및 별도 보안 검토 범위다.
+
+## 완료된 직전 체크포인트: 키 교체 완료 공간 예약
 
 반복 중간 저장이 마지막 교체 공간까지 소진하지 않도록, 새 후보의 현재 head별로 완료 공간을 예약한다. 미완료 진행은 ready 저장과 최종 확정 2개 revision, ready 진행은 최종 확정 1개를 남겨둔다. 암호문 실제 크기는 코어 변환·CBOR·padding과 crypto serializer를 재사용해 계산하고 모든 새 변경 경로에서 합산한다. 기존 암호문/과거 진행은 자동 삭제하지 않으며, 과거 예약 없는 v4도 읽기·검토·백업을 유지한다.
 
 - 현재 소스로 재생성한 default/demo WASM smoke **40/1,528 checks**, 웹 **41 files / 1,350 tests**, typecheck/production build, Secret scan/PS7 회귀 99개 통과.
 - crypto lib 18개와 codec/vector 23개, core rotation 58개, scoped crypto/core Clippy, workspace compile-fail doctest 7개 통과. capacity 집중 7개와 독립 리뷰 Critical/Important 0 확인. 전체 archive 실행은 34개 PASS 뒤 64MiB 메모리 할당 실패(exit 1); 남은 21개를 단일 스레드로 실행해 모두 통과(exit 0)했다. 55개 개별 PASS 증거와 단일 전체 실행 성공은 구분한다.
 - 금고 내부 512 revisions/512 KiB 예산의 보장이며 실제 디스크/IndexedDB quota/충돌 보관함 여유를 보장하지 않는다. 새 저장본의 완료 경로를 보호하는 것이지 과거 꽉 찬 저장본이나 무제한 저장까지 보장하는 것은 아니다.
-- 기존 staging 커밋 `c0dedd4`의 원격 CI를 취소하지 않도록 이번 보완은 별도 `codex/firstvibe-rotation-capacity` 브랜치로 분리한다. `main`은 변경하지 않는다.
+- 기존 staging 커밋 `c0dedd4`의 원격 CI를 취소하지 않도록 이 보완은 별도 `codex/firstvibe-rotation-capacity` 브랜치와 커밋 `0ec551a`로 분리했다. `main`은 변경하지 않았다.
 - 이후 기존 `c0dedd4`의 [원격 CI 35283835489](https://github.com/kjs844-art/secure-vault/actions/runs/35283835489)가 전체 SUCCESS로 완료됐다. 이 결과는 이번 capacity 변경의 CI 성공을 뜻하지 않는다. 추가 browser smoke는 도구 연결/메모리 문제로 미완료이며 다른 앱 종료나 OS 보안 정책 변경은 하지 않았다.
+- capacity 커밋 `0ec551a`의 [원격 CI 35287783960](https://github.com/kjs844-art/secure-vault/actions/runs/35287783960)은 `completed/success`로 완료됐고 head SHA도 일치했다. 이후 private command 변경의 CI 증거로 혼용하지 않는다.
 
 [이번 파일 역할·정확한 검사·한계](verification/2026-09-18-rotation-capacity-reservation.md)를 최신 기준으로 본다. 실제 Secret gate는 계속 닫혀 있고 전체 자율 목표는 active다.
 
@@ -56,6 +69,7 @@
 | 합성 백업/복원 | 기존 guard 후속으로 한 readonly transaction의 archive+conflicts snapshot 2회와 인증 bytes 비교, raw 원본 보존; Store 122/Backup 167/Session 47 tests 통과 | 해당 백업 checkpoint의 actual-WASM·전체 CI, 실제 브라우저 경합·다운로드·네이티브 파일 선택 왕복 미검증. 마지막 snapshot 이후 변경은 포함하지 않음. 실제 데이터용 기능 아님 |
 | 로컬 도구 경계 | 입력 64 tests + 세션 62 tests; 격리 Comet 검색/분류/잠금/재열기/숨김 검사, 중복 React key 수정 후 콘솔 경고 0 | 외부 AI/MCP 연결·개인 projection 승인 아님; 실제 모바일 검증 별도 |
 | 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 편집 UI 실제 저장/회전·rollback/누락 보장은 아직 없음 |
+| private credential command | 공통 API Key/Password item builder, Rust 생성 field ID, metadata-only successor allowlist. 기존 닫힌 합성 API Key 등록이 builder를 재사용. 코어 전체 106, compile-fail 11, 웹 1,360, 새 WASM smoke와 독립 리뷰 Critical/Important 0 | 새 exact SHA CI. Password는 Rust 합성 테스트 전용이며 archive generic integrity, API-key 회전 capability 분리, 웹/Worker/WASM/API/free-text 입력은 미구현 |
 | 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·후보 사전 인증·원자 CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 실제 브라우저 편집 Worker/IDB 미검증, 회전·signed rollback/누락 anchor 미구현 |
 | 합성 회전 lifecycle/history | 완료 event를 revision-local 기록으로 보존하고, 인증된 successor에서만 event를 비운 뒤 일반·연결 편집과 두 번째 합성 회전을 진행. 최대 512 revisions/8 MiB의 caller-supplied chain 전체와 `0001→0002→0003` 세대 연속성을 인증하고 회전 event의 opaque ID·bounded counts·enum만 최신순 projection. 기준 `8ef81d9`의 원격 run `35119009675` attempt 2 전체 성공 | 중간 checklist 저장, provider 실제 증명, latest-head/rollback anchor, 웹·Android 연결 미구현 |
 | 합성 회전 archive/WASM | 인증된 선택 head에서 고정 checklist를 투영하고 v1/v2 genesis를 v3 history로 옮기거나 `0001→0002→0003` 후보를 생성한다. 기존 envelope와 다른 head를 보존하고 선택 head만 전진시키며 assembled archive를 다시 인증한다. JS API는 `synthetic-demo` 전용, 직접 생성 거부/getter-only/lockable checklist와 엄격한 primitive 입력만 노출. 최종 native 40 tests, default release WASM 32 checks, demo release WASM 1520 checks(5 checklist, 2 cutover, 100 rejection), 웹 25 files/997 tests·typecheck·production build 통과 | 현재 branch exact SHA 원격 CI, 저장 CAS, Worker/session/UI, 실제 Secret/provider proof, latest-head/rollback anchor 미검증 |
@@ -73,10 +87,11 @@
 
 1. 합성 백업·복원의 디스크 다운로드/네이티브 선택 검증을 지원되는 환경에서 보완한다. 브라우저 File API로 전달한 검사는 실제 파일 다운로드 성공과 구분한다. [통합 검증 기록](verification/2026-09-15-backup-session-integration.md)을 따른다.
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
-3. 중간 회전 진행 저장·재개·최종 확정과 새 저장의 완료 공간 예약을 연결했다. 다음은 후속 branch exact SHA의 CI, 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증이다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
+3. 중간 회전 진행 저장·재개·최종 확정과 새 저장의 완료 공간 예약을 연결했고 capacity SHA CI도 통과했다. 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증을 이어간다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
 4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 중간 회전 저장과도 결합했다. 다음 실제 브라우저 다중 창 경합·폐기·백업 guard를 확인한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
-5. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
-6. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
+5. 공통 private credential 명령의 전체 회귀 뒤 generic archive integrity를 추가하고, API-key 전용 회전 capability가 Password record에 적용되지 않도록 타입/명령 경계를 분리한다. 그 전에는 Password 웹 입력을 열지 않는다.
+6. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
+7. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
 
 각 항목은 테스트·빌드·실제 동작 범위를 명시한 체크포인트로 남긴다. 모두 끝날 때까지 목표는 active이며 좁은 테스트 통과를 서비스 완성으로 대체하지 않는다.
 

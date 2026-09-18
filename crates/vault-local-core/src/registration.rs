@@ -5,13 +5,14 @@
 use vault_crypto::VaultSession;
 
 use crate::LocalVaultError;
-use crate::ids::EntityIdV1;
+use crate::credential_commands::{
+    CredentialDraftV1, RegistrationMetadataV1, build_registration_item_v1,
+};
+use crate::ids::{EntityIdV1, generate_entity_id};
 use crate::model::{
-    ConnectionStatusV1, ConnectionV1, ConsumerTypeV1, CopyPolicyV1, CredentialFieldBindingV1,
-    CredentialItemV1, CredentialStatusV1, CredentialTypeV1, ExternalRevocationAttestationV1,
-    ExternalRevocationStatusV1, FieldRoleV1, McpExecutionPolicyV1, McpIntegrationV1,
-    McpTransportV1, RevealPolicyV1, SecretFieldV1, SensitivityV1, TimestampProvenanceV1,
-    UtcTimestampV1, VerificationSourceV1,
+    ConnectionStatusV1, ConnectionV1, ConsumerTypeV1, CredentialFieldBindingV1, CredentialItemV1,
+    McpExecutionPolicyV1, McpIntegrationV1, McpTransportV1, TimestampProvenanceV1, UtcTimestampV1,
+    VerificationSourceV1,
 };
 use crate::record::{SealedCredentialRecordV0Alpha1, seal_item_v1};
 use crate::secret::SecretValueV1;
@@ -130,53 +131,36 @@ fn build_registration(
     selection: &SyntheticRegistrationSelectionV1,
 ) -> Result<CredentialItemV1, LocalVaultError> {
     let profile = selection.profile;
-    let field_id = generate_entity_id()?;
+    let mut item = build_registration_item_v1(
+        RegistrationMetadataV1 {
+            item_name: profile.item_name.to_owned(),
+            provider_template_id: Some(profile.template_id.to_owned()),
+            provider_name: profile.provider.to_owned(),
+            console_url: Some(profile.console_url.to_owned()),
+            issuer_account_identifier: Some(profile.account.to_owned()),
+            issuer_organization_or_workspace: Some(profile.workspace.to_owned()),
+            issuer_project: Some(profile.project.to_owned()),
+            issuer_environment: Some(profile.environment.to_owned()),
+            scopes_or_permissions: vec!["demo:read".to_owned()],
+            issued_at: Some(timestamp()?),
+            timestamp_provenance: TimestampProvenanceV1::ImportedFixture,
+            tags: vec!["synthetic-registration".to_owned()],
+            notes: Some("Build-included synthetic fixture only.".to_owned()),
+            created_at: timestamp()?,
+            updated_at: timestamp()?,
+        },
+        CredentialDraftV1::ApiKey {
+            label: FIELD_LABEL.to_owned(),
+            value: SecretValueV1::new(API_KEY_VALUE.to_vec())?,
+        },
+    )?;
+    let field_id = item.secret_fields[0].field_id;
     let mut connections = Vec::with_capacity(selection.connections.len());
     for &fixture in &selection.connections {
         connections.push(build_connection(profile, fixture, field_id)?);
     }
-    Ok(CredentialItemV1 {
-        item_schema_version: 1,
-        parent_revision_id: None,
-        item_name: profile.item_name.to_owned(),
-        provider_template_id: Some(profile.template_id.to_owned()),
-        provider_name: profile.provider.to_owned(),
-        console_url: Some(profile.console_url.to_owned()),
-        // Stable shared account/project entity ownership is a later feature.
-        // Do not infer identity or merge separate records from similar names.
-        issuer_account_ref: None,
-        issuer_project_ref: None,
-        issuer_account_identifier: Some(profile.account.to_owned()),
-        issuer_organization_or_workspace: Some(profile.workspace.to_owned()),
-        issuer_project: Some(profile.project.to_owned()),
-        issuer_environment: Some(profile.environment.to_owned()),
-        credential_type: CredentialTypeV1::ApiKey,
-        secret_fields: vec![SecretFieldV1 {
-            field_id,
-            label: FIELD_LABEL.to_owned(),
-            field_role: FieldRoleV1::Secret,
-            sensitivity: SensitivityV1::Secret,
-            value: SecretValueV1::new(API_KEY_VALUE.to_vec())?,
-            reveal_policy: RevealPolicyV1::RevealAfterReauth,
-            copy_policy: CopyPolicyV1::AllowedAfterReauth,
-        }],
-        display_hint: None,
-        scopes_or_permissions: vec!["demo:read".to_owned()],
-        issued_at: Some(timestamp()?),
-        expires_at: None,
-        rotate_at: None,
-        timestamp_provenance: TimestampProvenanceV1::ImportedFixture,
-        status: CredentialStatusV1::Active,
-        external_revocation_status: ExternalRevocationStatusV1::NotRequested,
-        external_revocation_attestation: ExternalRevocationAttestationV1::None,
-        revoked_at: None,
-        rotation_state: None,
-        connections,
-        tags: vec!["synthetic-registration".to_owned()],
-        notes: Some("Build-included synthetic fixture only.".to_owned()),
-        created_at: timestamp()?,
-        updated_at: timestamp()?,
-    })
+    item.connections = connections;
+    Ok(item)
 }
 
 pub(crate) fn build_connection(
@@ -223,12 +207,6 @@ pub(crate) fn build_connection(
         notes: None,
         mcp_integration,
     })
-}
-
-fn generate_entity_id() -> Result<EntityIdV1, LocalVaultError> {
-    let mut bytes = [0_u8; 16];
-    getrandom::fill(&mut bytes).map_err(|_| LocalVaultError::RngUnavailable)?;
-    Ok(EntityIdV1::from_bytes(bytes))
 }
 
 fn timestamp() -> Result<UtcTimestampV1, LocalVaultError> {

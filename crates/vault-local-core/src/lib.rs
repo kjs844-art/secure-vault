@@ -1,12 +1,33 @@
 //! Synthetic-only credential relationship core for Secure Vault.
 //!
 //! This alpha crate is not approved for real passwords, API keys, or recovery data.
+//!
+//! Internal typed commands are not a public arbitrary-plaintext boundary:
+//!
+//! ```compile_fail,E0603
+//! use vault_local_core::credential_commands::CredentialDraftV1;
+//! ```
+//!
+//! ```compile_fail,E0603
+//! use vault_local_core::credential_commands::create_credential_metadata_successor_v1;
+//! ```
+//!
+//! Nor may a caller bypass that boundary through a crate-root re-export:
+//!
+//! ```compile_fail,E0432
+//! use vault_local_core::CredentialDraftV1;
+//! ```
+//!
+//! ```compile_fail,E0432
+//! use vault_local_core::create_credential_metadata_successor_v1;
+//! ```
 
 #![forbid(unsafe_code)]
 
 mod catalog;
 mod codec;
 mod connection_edit;
+mod credential_commands;
 mod error;
 mod ids;
 mod model;
