@@ -153,10 +153,10 @@ describe("snapshot-bound synthetic connection edit session", () => {
     const readback = Object.defineProperties(new Uint8Array([1, 2, 3, 9]), {
       length: { value: 3 }, byteLength: { value: 3 }, some: { value: shadow },
     });
-    store.read.mockResolvedValueOnce(original).mockResolvedValueOnce(readback);
+    store.read.mockResolvedValueOnce(original.slice()).mockResolvedValueOnce(readback);
     await session.register({ profileId: 0, credentialId: 0, connectionIds: [] });
     expect(session.state.errorCode).toBe("STORAGE_CONFLICT");
-    expect(worker.open).toHaveBeenCalledOnce();
+    expect(worker.open).toHaveBeenCalledTimes(2);
     expect(shadow).not.toHaveBeenCalled();
   });
   it("does nothing when locked or stale, without inspecting selection or resetting state", async () => {
@@ -228,9 +228,13 @@ describe("snapshot-bound synthetic connection edit session", () => {
     expect(worker.editConnections).toHaveBeenCalledOnce();
   });
   it.each(["create", "register"])("records only authenticated saved bytes after %s", async (operation) => {
-    const { session, worker, replace } = fixture();
+    const { session, store, worker, replace, saved } = fixture();
     if (operation === "create") { replace(null); await session.create(); }
-    else { await session.open(); await session.register({ profileId: 0, credentialId: 0, connectionIds: [] }); }
+    else {
+      await session.open();
+      store.read.mockImplementation(async () => saved()?.slice() ?? null);
+      await session.register({ profileId: 0, credentialId: 0, connectionIds: [] });
+    }
     expect(session.state.phase).toBe("open");
     await session.editConnections(session.viewGeneration, selected());
     expect(worker.editConnections).toHaveBeenCalledWith(operation === "create" ? original : candidate, selected());

@@ -130,4 +130,79 @@ describe("registration real-WASM/session/IndexedDB adapter integration", { concu
     restarted.lock();
     expect(restarted.state.entries).toEqual([]);
   }, 90_000);
+
+  it("keeps one canonical registration and preserves the other authenticated candidate when two sessions race from the same archive", async () => {
+    const database = new IDBFactory();
+    const firstStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x51));
+    const secondStore = createSyntheticCiphertextStore(database, (target) => target.fill(0x52));
+    const firstBaseWorker = actualWorker();
+    const secondBaseWorker = actualWorker();
+    let firstInput: Uint8Array | undefined;
+    let secondInput: Uint8Array | undefined;
+    let firstCandidate: Uint8Array | undefined;
+    let secondCandidate: Uint8Array | undefined;
+    const firstWorker: SyntheticRegistrationWorker = {
+      ...firstBaseWorker,
+      async append(bytes, selection) {
+        firstInput = bytes.slice();
+        const candidate = await firstBaseWorker.append(bytes, selection);
+        firstCandidate = candidate.slice();
+        return candidate;
+      },
+    };
+    const secondWorker: SyntheticRegistrationWorker = {
+      ...secondBaseWorker,
+      async append(bytes, selection) {
+        secondInput = bytes.slice();
+        const candidate = await secondBaseWorker.append(bytes, selection);
+        secondCandidate = candidate.slice();
+        return candidate;
+      },
+    };
+    const first = new SyntheticVaultSession(firstStore, firstWorker);
+    await first.create();
+    const original = (await firstStore.read())!;
+    const second = new SyntheticVaultSession(secondStore, secondWorker);
+    await second.open();
+    expect(first.state.phase).toBe("open");
+    expect(second.state).toEqual(first.state);
+
+    await Promise.all([
+      first.register({ profileId: 1, credentialId: 0, connectionIds: [0, 2] }),
+      second.register({ profileId: 2, credentialId: 1, connectionIds: [] }),
+    ]);
+    expect(firstInput).toEqual(original);
+    expect(secondInput).toEqual(original);
+    expect(firstCandidate).toBeDefined();
+    expect(secondCandidate).toBeDefined();
+    expect(firstCandidate).not.toEqual(secondCandidate!);
+    expect([first.state.phase, second.state.phase].sort()).toEqual(["error", "open"]);
+    expect([first.state.errorCode, second.state.errorCode])
+      .toContain("STORAGE_CONFLICT_PRESERVED");
+
+    const durableStore = createSyntheticCiphertextStore(database);
+    const current = await durableStore.read();
+    const conflicts = await durableStore.listConflictArchives();
+    const firstWon = first.state.phase === "open";
+    const winnerCandidate = firstWon ? firstCandidate : secondCandidate;
+    const loserCandidate = firstWon ? secondCandidate : firstCandidate;
+    expect(current).not.toBeNull();
+    expect(current).toEqual(winnerCandidate!);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]!.bytes).toEqual(loserCandidate!);
+    expect(conflicts[0]!.bytes).not.toEqual(current);
+
+    const verifier = actualWorker();
+    const currentRows = await verifier.open(current!);
+    const loserRows = await verifier.open(conflicts[0]!.bytes);
+    expect(firstWon ? first.state.entries : second.state.entries).toEqual(currentRows);
+    expect([currentRows.at(-1)!.itemName, loserRows.at(-1)!.itemName].sort()).toEqual([
+      "Example Cloud Lab Registered API Key",
+      "Example Password Only",
+    ]);
+    expect(await durableStore.read()).toEqual(current);
+    expect(await durableStore.listConflictArchives()).toEqual(conflicts);
+    first.lock();
+    second.lock();
+  }, 120_000);
 });

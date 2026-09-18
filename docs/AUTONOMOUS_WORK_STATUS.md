@@ -1,9 +1,21 @@
 # KeyAtlas 자율 작업 상태표
 
-기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-password-registration`.
+기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-registration-conflict-preservation`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
-## 최신 작업: 닫힌 합성 Password 등록 경로
+## 최신 작업: 합성 등록 후보 사전 인증·충돌 보존
+
+등록 의도를 현재 표시된 authenticated archive에 결합하고, 닫힌 API/Password 후보 전체를 storage write 전에 `open`으로 인증하도록 보강했다. production 저장소에서는 conflict-preserving CAS를 한 번만 수행하고 CAS loser와 CAS 직후 displacement 후보를 exact ciphertext로 bounded outbox에 보존한다. authoritative readback의 byte equality와 재인증이 끝나기 전에는 성공 목록을 게시하지 않으며 retry·rebase·merge·overwrite가 없다.
+
+- full outbox capability 경로는 stale해질 수 있는 pre-CAS storage read를 생략한다. 오래된 injected store만 plain CAS fallback과 기존 `STORAGE_CONFLICT` 의미를 유지한다.
+- 보존 성공은 `STORAGE_CONFLICT_PRESERVED`, missing과 `outbox-full` 등 보존 실패는 각각의 고정 오류로 구분한다. 이미 불일치 readback을 본 뒤 `already-current`가 반환돼도 성공으로 되돌리지 않는다.
+- 모든 session-owned ciphertext 복사본은 성공 archive의 소유권 이전을 제외하고 wipe한다. candidate 인증 또는 CAS 중 lock/cancel된 늦은 continuation은 readback·보존·UI 게시를 수행하지 않는다.
+- 집중 3 files/109 tests, 웹 전체 46 files/1,449 tests, typecheck/production build, 실제 저장소 Secret scan이 exit 0이다. 실제 WASM+fake IndexedDB 두-session 경합에서 winner 1개와 exact loser outbox 1개를 인증했다.
+- 독립 읽기 보안 리뷰는 Critical 0/Important 0이다. 실제 브라우저 멀티탭과 이 브랜치 exact-SHA 원격 CI는 아직 미검증이다. [등록 충돌 보존 검증 기록](verification/2026-09-18-registration-conflict-preservation.md)에 구현·명령·한계를 구분한다.
+
+`REAL_SECRET_GATE=CLOSED`다. 실제 Secret/free-text 입력, reveal/copy, 인증·복구·동기화·배포 결정은 열지 않았고 전체 목표는 계속 active다.
+
+## 직전 작업: 닫힌 합성 Password 등록 경로
 
 기존 닫힌 등록 계약을 API Key와 Password의 tagged tuple로 확장해 코어 → WASM → Worker → session → UI 저장 경로를 연결했다. 허용 조합은 API profile `0|1` + credential `0` + 연결 선택 0~3개, Password profile `2` + credential `1|2` + 빈 연결 목록뿐이다. 실제 문자열이나 Secret을 받는 등록 DTO가 아니다.
 
@@ -15,7 +27,7 @@
 - 전체 native WASM 73 tests, 새 default/demo generated-WASM 40/1,735 checks, workspace compile-fail doctest 11개, core Clippy와 format 검사가 exit 0이다. 실제 격리 브라우저 검증은 제어 도구 연결 실패로 완료하지 못했으며, 통합 테스트를 브라우저 증거로 확대하지 않는다. [Password 등록 검증 기록](verification/2026-09-18-password-registration.md)에 성공·미검증 범위를 구분한다.
 - 직전 mixed-archive 커밋 `21bca74`의 [원격 CI 35294607658](https://github.com/kjs844-art/secure-vault/actions/runs/35294607658)는 마지막 조회에서 Rust step 실행 중이었다. 현재 미커밋 Password 등록 변경은 그 실행에 포함되지 않으며 성공 증거로 재사용하지 않는다.
 
-등록 session의 기존 simple CAS는 original expected bytes로 덮어쓰기를 막지만, candidate 전체 사전 인증과 CAS loser의 conflict outbox 보존이 edit/stage 경로보다 약하다. 이 보강은 후속 필수 작업이며 현재 등록 성공만으로 동일한 충돌 보존 수준을 주장하지 않는다. `REAL_SECRET_GATE=CLOSED`이고 전체 목표는 아직 active다.
+이 체크포인트 당시 남아 있던 candidate 사전 인증과 conflict outbox 격차는 위 최신 후속에서 닫았다. 이 문단의 당시 테스트 수와 브라우저 한계는 과거 증거로 유지한다. `REAL_SECRET_GATE=CLOSED`이고 전체 목표는 아직 active다.
 
 ## 직전 작업: 혼합 credential archive 경계
 
@@ -98,7 +110,7 @@
 | 로컬 도구 경계 | 입력 64 tests + 세션 62 tests; 격리 Comet 검색/분류/잠금/재열기/숨김 검사, 중복 React key 수정 후 콘솔 경고 0 | 외부 AI/MCP 연결·개인 projection 승인 아님; 실제 모바일 검증 별도 |
 | 웹 등록 화면/저장 경로 | 닫힌 2프로필/0~3연결 폼 → archive v2 → Worker/세션 CAS → 저장본 전체 재인증; 실제 브라우저 이중 클릭 한 번 저장·계정 정보 보존·탭 전환 잠금 확인 | 합성 선택형만 지원. 편집 UI 실제 저장/회전·rollback/누락 보장은 아직 없음 |
 | mixed credential command/archive | 공통 API Key/Password builder와 metadata-only successor, 공개 Rust closed-enum Password factory, 모든 조상의 same-record/parent/constant-type 검사. v1/v2 Password genesis-only, v3/v4 full ancestry이며 API v4 회전 이력은 보존. 집중 10+7, core release 123, native WASM archive 69 tests, core Clippy, 독립 리뷰 Critical/Important 0 | WASM package Clippy는 OS macro DLL 정책 차단, mixed exact-SHA CI 미확정. Password connection edit/rotation/staging capability와 웹/Worker/JS/WASM 등록/free-text/실제 Secret 입력은 없음 |
-| 닫힌 Password 등록 | 허용된 API/Password tagged tuple만 core→WASM→Worker→session→UI로 전달. Password catalog/reference 유지, API action 제외, 저장·재열기·backup actual-WASM/fake-IDB와 API stage 공존 검사. 웹 46 files/1,438, core release 126, native WASM 73, generated WASM 40/1,735 checks, typecheck/build, 독립 리뷰 Critical/Important 0 | 실제 브라우저·exact-SHA CI 미확정. 등록 simple CAS의 candidate 전체 사전 인증과 loser outbox 보존을 edit/stage 수준으로 보강해야 함. raw free-text/실제 Secret은 닫힘 |
+| 닫힌 Password 등록 | 허용된 API/Password tagged tuple만 core→WASM→Worker→session→UI로 전달. Password catalog/reference 유지, API action 제외, 저장·재열기·backup actual-WASM/fake-IDB와 API stage 공존 검사. 후속으로 candidate 사전 인증, preserving CAS, loser/post-CAS outbox 보존, authoritative reread·재인증을 연결했다. 최종 웹 46 files/1,449, 집중 3 files/109, 독립 리뷰 Critical/Important 0 | 실제 브라우저 멀티탭·exact-SHA CI 미확정. raw free-text/실제 Secret은 닫힘 |
 | 웹 연결 편집 내부 경로 | 같은 record의 successor·immutable v3 이력/명시적 head·표시 bytes+generation 결합·후보 사전 인증·원자 CAS/재인증, Rust release 30 tests 및 실제 demo WASM 973 checks | 실제 브라우저 편집 Worker/IDB 미검증, 회전·signed rollback/누락 anchor 미구현 |
 | 합성 회전 lifecycle/history | 완료 event를 revision-local 기록으로 보존하고, 인증된 successor에서만 event를 비운 뒤 일반·연결 편집과 두 번째 합성 회전을 진행. 최대 512 revisions/8 MiB의 caller-supplied chain 전체와 `0001→0002→0003` 세대 연속성을 인증하고 회전 event의 opaque ID·bounded counts·enum만 최신순 projection. 기준 `8ef81d9`의 원격 run `35119009675` attempt 2 전체 성공 | 중간 checklist 저장, provider 실제 증명, latest-head/rollback anchor, 웹·Android 연결 미구현 |
 | 합성 회전 archive/WASM | 인증된 선택 head에서 고정 checklist를 투영하고 v1/v2 genesis를 v3 history로 옮기거나 `0001→0002→0003` 후보를 생성한다. 기존 envelope와 다른 head를 보존하고 선택 head만 전진시키며 assembled archive를 다시 인증한다. JS API는 `synthetic-demo` 전용, 직접 생성 거부/getter-only/lockable checklist와 엄격한 primitive 입력만 노출. 최종 native 40 tests, default release WASM 32 checks, demo release WASM 1520 checks(5 checklist, 2 cutover, 100 rejection), 웹 25 files/997 tests·typecheck·production build 통과 | 현재 branch exact SHA 원격 CI, 저장 CAS, Worker/session/UI, 실제 Secret/provider proof, latest-head/rollback anchor 미검증 |
@@ -118,7 +130,7 @@
 2. 연결된 합성 편집 UI의 [부분 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md)에 따라 실제 브라우저 저장/취소/포커스/잠금/변경/충돌을 검증한다. row reference와 generation은 같은 표시 snapshot에서 캡처하며 합성 선택형과 Claude Code 디자인 경계를 보존한다.
 3. 중간 회전 진행 저장·재개·최종 확정과 새 저장의 완료 공간 예약을 연결했고 capacity SHA CI도 통과했다. 실제 브라우저 다중 writer·오프라인·모바일 생명주기 검증을 이어간다. 자동 retry·merge·overwrite 없이 현재 snapshot과 conflict 보존 원칙을 유지한다.
 4. durable conflict outbox의 저장·인증 목록·명시적 exact-byte 폐기와 백업 차단 경계는 구현했다. 중간 회전 저장과도 결합했다. 다음 실제 브라우저 다중 창 경합·폐기·백업 guard를 확인한다. 자동 재시도·병합·승격·퇴거는 열지 않는다.
-5. generic full-chain archive integrity, API-key 전용 회전 capability 분리, 닫힌 합성 Password enum의 Worker/session/UI 저장·복원은 구현했다. 다음은 등록 candidate 전체 사전 인증, authoritative reread/re-authentication, CAS loser conflict outbox 보존을 edit/stage 수준으로 올린다. JS/WASM free-text 입력과 실제 Secret은 별도 사용자 승인·인증/복구 결정·보안 gate 전에는 열지 않는다.
+5. generic full-chain archive integrity, API-key 전용 회전 capability 분리, 닫힌 합성 Password 등록과 candidate 사전 인증·authoritative reread/re-authentication·CAS loser/post-CAS outbox 보존을 구현했다. 다음은 지원되는 실제 브라우저에서 두 탭 등록 경합 → conflict 검토 → backup guard를 검증한다. JS/WASM free-text 입력과 실제 Secret은 별도 사용자 승인·인증/복구 결정·보안 gate 전에는 열지 않는다.
 6. 외부 계정 없이 검증 가능한 API 계약·동기화 충돌 모델·로컬 테스트 환경을 명세에 맞춰 준비한다. 클라우드 연결을 했다고 주장하지 않는다.
 7. 보안 수명 주기·복구·기기 해제의 미결 설계와 구현 증거를 비교하고, 사용자 선택이 필요한 부분과 독립 리뷰가 필요한 부분을 분리한다.
 

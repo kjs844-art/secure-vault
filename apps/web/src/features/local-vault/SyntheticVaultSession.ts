@@ -829,46 +829,151 @@ export class SyntheticVaultSession {
 
   /** No implicit unlock, retry or create. Only the reread/authenticated saved result is shown. */
   async register(input: unknown): Promise<void> {
-    if (this.#state.phase !== "open") return;
+    if (this.#state.phase !== "open" || !this.#displayedArchive) return;
+    // Bind the registration intent to the exact authenticated snapshot that is
+    // currently displayed. A newer, unseen storage value must not silently
+    // become the base for this mutation.
+    const before = new Uint8Array(this.#displayedArchive);
     const generation = ++this.#generation;
     this.#invalidateAuxiliaryReviews();
     this.#forgetArchive();
     this.#state = emptyState("busy");
+    let current: unknown;
+    let rawCandidate: unknown;
+    let candidate: Uint8Array | undefined;
+    let saved: unknown;
+    let authenticatedArchive: Uint8Array | undefined;
     try {
       this.#worker.cancel();
       this.#notify();
       if (!this.#isCurrent(generation)) return;
       const selection = parseSyntheticRegistration(input);
       if (!this.#isCurrent(generation)) return;
-      if (!this.#store.compareAndSwapArchive || !this.#worker.append) {
+      const append = this.#worker.append;
+      const open = this.#worker.open;
+      const read = this.#store.read;
+      const plainCas = this.#store.compareAndSwapArchive;
+      const preservingCas = this.#store.compareAndSwapArchivePreservingConflict;
+      const preserveAfterReadback = this.#store.preserveConflictArchiveIfCurrentDiffers;
+      const hasConflictOutbox = typeof preservingCas === "function"
+        && typeof preserveAfterReadback === "function";
+      if (typeof append !== "function" || typeof open !== "function"
+          || typeof read !== "function"
+          || (!hasConflictOutbox && typeof plainCas !== "function")) {
         throw new RegistrationStateError("REGISTRATION_UNAVAILABLE");
       }
-      const before = await this.#store.read();
-      if (!this.#isCurrent(generation)) return;
-      if (before === null) throw new RegistrationStateError("STORAGE_MISSING");
-      // Rust authenticates every existing envelope before producing an append candidate.
-      const candidate = await this.#worker.append(before, selection);
-      if (!this.#isCurrent(generation)) return;
-      const committed = await this.#store.compareAndSwapArchive(before, candidate);
-      if (!this.#isCurrent(generation)) return;
-      if (committed !== "updated") {
-        throw new RegistrationStateError(committed === "missing" ? "STORAGE_MISSING" : "STORAGE_CONFLICT");
+
+      if (!hasConflictOutbox) {
+        // Compatibility path for injected/older stores. The production browser
+        // store takes the atomic conflict-preserving path and skips this stale-
+        // prone pre-CAS read.
+        current = await read.call(this.#store);
+        if (!this.#isCurrent(generation)) return;
+        if (current === null) throw new RegistrationStateError("STORAGE_MISSING");
+        if (!sameArchive(before, current as Uint8Array)) {
+          throw new RegistrationStateError("STORAGE_CONFLICT");
+        }
+        wipeArchive(current);
+        current = undefined;
       }
-      const saved = await this.#store.read();
+
+      // Rust authenticates every existing envelope before producing an append candidate.
+      rawCandidate = await withArchiveCopy(
+        before,
+        (appendInput) => append.call(this.#worker, appendInput, selection),
+      );
+      if (!this.#isCurrent(generation)) return;
+      candidate = copyArchive(rawCandidate as Uint8Array);
+      wipeArchive(rawCandidate);
+      rawCandidate = undefined;
+      if (sameArchive(before, candidate)) {
+        throw new CatalogAdapterError("INVALID_ARCHIVE");
+      }
+      if (!this.#isCurrent(generation)) return;
+
+      // Authenticate the complete candidate before any storage write. The
+      // projection is deliberately discarded and never reaches public state.
+      await withArchiveCopy(
+        candidate,
+        (authenticationInput) => open.call(this.#worker, authenticationInput),
+      );
+      if (!this.#isCurrent(generation)) return;
+
+      if (hasConflictOutbox) {
+        const rawCommitted = await withArchivePair(
+          before,
+          candidate,
+          (expectedInput, candidateInput) => preservingCas.call(
+            this.#store, expectedInput, candidateInput,
+          ),
+        );
+        if (!this.#isCurrent(generation)) return;
+        const committed = parseConflictPreservingResult(rawCommitted);
+        if (!this.#isCurrent(generation)) return;
+        if (committed.kind === "missing") {
+          throw new RegistrationStateError("STORAGE_MISSING");
+        }
+        if (committed.kind === "conflict-preserved") {
+          throw new RegistrationStateError("STORAGE_CONFLICT_PRESERVED");
+        }
+      } else {
+        const committed = await withArchivePair(
+          before,
+          candidate,
+          (expectedInput, candidateInput) => plainCas!.call(
+            this.#store, expectedInput, candidateInput,
+          ),
+        );
+        if (!this.#isCurrent(generation)) return;
+        if (committed !== "updated") {
+          throw new RegistrationStateError(
+            committed === "missing" ? "STORAGE_MISSING" : "STORAGE_CONFLICT",
+          );
+        }
+      }
+
+      saved = await read.call(this.#store);
       if (!this.#isCurrent(generation)) return;
       if (saved === null) throw new RegistrationStateError("STORAGE_MISSING");
       // A later writer may already have changed storage. Do not confirm our candidate
-      // based on a different archive or silently retry an ambiguous commit.
-      if (!sameArchive(candidate, saved)) {
+      // based on a different archive, silently retry, or discard our exact candidate.
+      if (!sameArchive(candidate, saved as Uint8Array)) {
+        wipeArchive(saved);
+        saved = undefined;
+        if (hasConflictOutbox) {
+          const rawPreserved = await withArchiveCopy(
+            candidate,
+            (candidateInput) => preserveAfterReadback.call(this.#store, candidateInput),
+          );
+          if (!this.#isCurrent(generation)) return;
+          const preserved = parseConflictPreservationResult(rawPreserved);
+          if (!this.#isCurrent(generation)) return;
+          if (preserved.kind === "missing") {
+            throw new RegistrationStateError("STORAGE_MISSING");
+          }
+          if (preserved.kind === "conflict-preserved") {
+            throw new RegistrationStateError("STORAGE_CONFLICT_PRESERVED");
+          }
+        }
         throw new RegistrationStateError("STORAGE_CONFLICT");
       }
-      const authenticatedArchive = copyArchive(saved);
+
+      authenticatedArchive = copyArchive(saved as Uint8Array);
+      wipeArchive(saved);
+      saved = undefined;
+      if (!sameArchive(candidate, authenticatedArchive)) {
+        throw new RegistrationStateError("STORAGE_CONFLICT");
+      }
       if (!this.#isCurrent(generation)) return;
-      const entries = await this.#worker.open(new Uint8Array(authenticatedArchive));
+      const entries = await withArchiveCopy(
+        authenticatedArchive,
+        (authenticationInput) => open.call(this.#worker, authenticationInput),
+      );
       if (!this.#isCurrent(generation)) return;
       const snapshot = snapshotEntries(entries);
       if (!this.#isCurrent(generation)) return;
       this.#displayedArchive = authenticatedArchive;
+      authenticatedArchive = undefined;
       this.#state = Object.freeze({ phase: "open", entries: snapshot, errorCode: null });
       this.#notify();
     } catch (error: unknown) {
@@ -877,6 +982,13 @@ export class SyntheticVaultSession {
       if (!this.#isCurrent(generation)) return;
       this.#state = emptyState("error", code);
       this.#notify();
+    } finally {
+      wipeArchive(before);
+      wipeArchive(current);
+      wipeArchive(rawCandidate);
+      wipeArchive(candidate);
+      wipeArchive(saved);
+      wipeArchive(authenticatedArchive);
     }
   }
 

@@ -78,6 +78,6 @@ flowchart LR
 
 ## 남은 보안 작업
 
-등록 session의 기존 simple CAS는 expected original bytes를 확인하므로 winner를 덮어쓰지는 않는다. 그러나 edit/stage 경로와 달리 후보 archive 전체를 저장 전에 별도 open/authenticate하지 않고, CAS loser 또는 저장 직후 displacement 후보를 conflict outbox에 보존하지 않는다. 이 격차를 닫기 전에는 등록이 다른 mutation과 같은 충돌 보존 수준이라고 주장하지 않는다.
+이 문서의 기준 체크포인트에는 등록 simple CAS의 candidate 사전 인증과 conflict outbox 보존 격차가 남아 있었다. 후속 [등록 충돌 보존 검증](2026-09-18-registration-conflict-preservation.md)에서 후보 전체 사전 인증, CAS loser와 저장 직후 displacement의 exact-ciphertext 보존, authoritative reread·재인증을 구현했다. 당시 증거와 후속 증거를 혼용하지 않는다.
 
 실제 사용자 입력, reveal/copy, recovery Key Slot, hardware-backed device key·생체 인증, rollback/누락 anchor, sync/checkpoint, Android, 실제 데이터용 backup/export, 독립 암호 검토와 침투 테스트는 여전히 미구현이다.
