@@ -71,9 +71,13 @@ All test data was synthetic.
 
 ## Remaining limits
 
-- Local evidence does not replace an exact-revision GitHub Actions run. The
-  branch must be pushed and its complete remote workflow must pass before this
-  checkpoint is treated as remotely verified.
+- The exact revision `82e5c493c7a2e1291a4ed63739460e6449c2f403` was
+  pushed and triggered GitHub Actions run `35431654596`. GitHub did not assign
+  a runner or start any workflow step. Its check annotation states that recent
+  account payments failed or the spending limit needs to be increased. This is
+  an external account/billing block, not a test result. The checkpoint therefore
+  remains locally verified and remotely unverified until the account owner
+  resolves that setting and reruns the complete workflow.
 - If a future detection expression introduces a new finding shape without one
   of the configured anchors, the anchor list and regression suite must be
   updated in the same change.
