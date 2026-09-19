@@ -62,6 +62,29 @@ All inputs were synthetic.
 - Repository Secret scan after the build: exit `0`, `SECRET_SCAN_PASSED`,
   `REAL_SECRET_GATE=CLOSED`.
 
+## Isolated browser smoke
+
+The synthetic worker page was served only on `127.0.0.1:4189` and opened in
+an isolated `agent-browser` session. The web source was commit `935a326`; the
+generated synthetic WASM came from ancestor `b05ff454`, with no intervening
+Rust source change.
+
+The first attempt deliberately does not count as a product result: a junction
+placed the generated WASM outside Vite's file-system allowlist, so the page
+returned fixed code `WASM_SMOKE_FAILED` and Vite reported the blocked path.
+After replacing only that temporary junction with a physical copy inside the
+worktree, the same page returned exactly:
+
+```json
+{"schemaVersion":1,"status":"pass","code":"WASM_SMOKE_PASSED"}
+```
+
+The browser error list was empty and its console contained only Vite connection
+debug messages. The browser session and local server were closed, port `4189`
+was no longer listening, and the copied generated files plus the temporary
+`node_modules` junction were removed. No real Secret, account, or external
+provider was used.
+
 ## Limits
 
 - These are Node, Vitest, `fake-indexeddb`, and synthetic WASM checks. They do
