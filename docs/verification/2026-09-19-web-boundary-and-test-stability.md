@@ -66,5 +66,8 @@ All inputs were synthetic.
 
 - These are Node, Vitest, `fake-indexeddb`, and synthetic WASM checks. They do
   not prove behavior in a real browser profile or with real Secret material.
-- The branch inherits the documented GitHub Actions account billing/spending
-  block, so a complete remote workflow has not run for this checkpoint.
+- GitHub Actions run `35432847546` for commit `ab1b07a8` created a job with
+  zero steps. GitHub annotated it as an account payment/spending-limit block,
+  so a complete remote workflow has not run for this checkpoint. This is not
+  evidence that the repository checks failed, and no billing setting was
+  changed.
