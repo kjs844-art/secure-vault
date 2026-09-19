@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { IDBDatabase as FakeDatabase, IDBFactory, IDBObjectStore as FakeObjectStore } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,6 +59,30 @@ async function rawRecords(version = 1) {
       resolve({ keys: keys.result, values: values.result });
     };
     transaction.onabort = () => { database.close(); reject(transaction.error); };
+  });
+}
+
+/** Preserve exact-byte assertions without enumerating 524,289 array properties. */
+function expectRawRecordsEqual(
+  actual: { keys: IDBValidKey[]; values: unknown[] },
+  expected: { keys: IDBValidKey[]; values: unknown[] },
+): void {
+  expect(actual.keys).toEqual(expected.keys);
+  expect(actual.values).toHaveLength(expected.values.length);
+  expected.values.forEach((expectedValue, index) => {
+    const actualValue = actual.values[index];
+    if (expectedValue instanceof Uint8Array) {
+      if (!(actualValue instanceof Uint8Array)) throw new Error("Expected stored Uint8Array bytes");
+      expect(Object.getPrototypeOf(actualValue)).toBe(Uint8Array.prototype);
+      expect(Object.getPrototypeOf(expectedValue)).toBe(Uint8Array.prototype);
+      expect(actualValue.byteLength).toBe(expectedValue.byteLength);
+      const actualBytes = Buffer.from(actualValue.buffer, actualValue.byteOffset, actualValue.byteLength);
+      const expectedBytes = Buffer.from(expectedValue.buffer, expectedValue.byteOffset, expectedValue.byteLength);
+      expect(actualBytes.equals(expectedBytes)).toBe(true);
+    }
+    else {
+      expect(actualValue).toEqual(expectedValue);
+    }
   });
 }
 
@@ -307,7 +332,7 @@ describe("synthetic ciphertext IndexedDB storage", () => {
     await expect(store.createIfAbsent(new Uint8Array([99]))).rejects.toMatchObject({ code: "corrupt" });
     await expect(store.compareAndSwapArchive(new Uint8Array([1]), new Uint8Array([99])))
       .rejects.toMatchObject({ code: "corrupt" });
-    expect(await rawRecords()).toEqual(before);
+    expectRawRecordsEqual(await rawRecords(), before);
   });
 
   it.each([false, true])("preserves unexpected keys (known key also present: %s)", async (withArchive) => {
@@ -750,7 +775,7 @@ describe("synthetic ciphertext IndexedDB storage", () => {
       const before = await rawRecords();
       await expect(createSyntheticCiphertextStore(factory).readBackupSnapshot())
         .rejects.toEqual(new SyntheticStorageError("corrupt"));
-      expect(await rawRecords()).toEqual(before);
+      expectRawRecordsEqual(await rawRecords(), before);
     });
 
     it("refuses a future database version without migrating or deleting it", async () => {

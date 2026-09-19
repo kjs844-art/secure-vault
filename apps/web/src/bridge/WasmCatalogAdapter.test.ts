@@ -263,6 +263,60 @@ describe("WasmCatalogAdapter", () => {
     expect(handle.free).toHaveBeenCalledTimes(1);
   });
 
+  const malformedLockedStates: [string, unknown][] = [
+    ["undefined", undefined], ["null", null], ["zero", 0], ["NaN", Number.NaN],
+    ["one", 1], ["empty text", ""], ["object", {}], ["array", []],
+  ];
+
+  it.each(malformedLockedStates)("rejects malformed %s lock state before projecting rows", async (_label, value) => {
+    const isLocked = vi.fn<() => boolean>(() => value as unknown as boolean);
+    const handle = catalog({ isLocked });
+    const adapter = new WasmCatalogAdapter(() => handle);
+    await expect(adapter.load()).rejects.toMatchObject({ code: "INVALID_CATALOG" });
+    expect(adapter.entries).toEqual([]);
+    expect(adapter.isLocked).toBe(true);
+    expect(isLocked).toHaveBeenCalledOnce();
+    expect(handle.itemName).not.toHaveBeenCalled();
+    expect(handle.lock).toHaveBeenCalledOnce();
+    expect(handle.free).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(malformedLockedStates)("rejects malformed %s lock state returned after row projection", async (_label, value) => {
+    const isLocked = vi.fn<() => boolean>()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(value as unknown as boolean);
+    const handle = catalog({ isLocked });
+    const adapter = new WasmCatalogAdapter(() => handle);
+    await expect(adapter.load()).rejects.toMatchObject({ code: "INVALID_CATALOG" });
+    expect(adapter.entries).toEqual([]);
+    expect(adapter.isLocked).toBe(true);
+    expect(isLocked).toHaveBeenCalledTimes(2);
+    expect(handle.itemName).toHaveBeenCalledOnce();
+    expect(handle.connectionType).toHaveBeenCalledTimes(2);
+    expect(handle.lock).toHaveBeenCalledOnce();
+    expect(handle.free).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["lock", "dispose"] as const)("does not publish when the final lock-state read reenters %s", async (action) => {
+    let adapter: WasmCatalogAdapter;
+    const isLocked = vi.fn<() => boolean>()
+      .mockReturnValueOnce(false)
+      .mockImplementationOnce(() => {
+        if (action === "lock") adapter.lock();
+        else adapter.dispose();
+        return false;
+      });
+    const handle = catalog({ isLocked });
+    adapter = new WasmCatalogAdapter(() => handle);
+    await expect(adapter.load()).rejects.toMatchObject({ code: "CANCELLED" });
+    expect(adapter.entries).toEqual([]);
+    expect(adapter.isLocked).toBe(true);
+    expect(isLocked).toHaveBeenCalledTimes(2);
+    expect(handle.connectionType).toHaveBeenCalledTimes(2);
+    expect(handle.lock).toHaveBeenCalledOnce();
+    expect(handle.free).toHaveBeenCalledOnce();
+  });
+
   it("supports an empty authenticated catalog", async () => {
     const handle = catalog({ length: () => 0 });
     const adapter = new WasmCatalogAdapter(() => handle);

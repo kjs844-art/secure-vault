@@ -37,14 +37,15 @@ export class WasmCatalogAdapter {
     try {
       candidate = await this.#factory();
       this.#assertCurrent(generation);
-      if (candidate.isLocked()) throw new CatalogAdapterError("LOCKED");
+      if (readLockedState(candidate)) throw new CatalogAdapterError("LOCKED");
       const length = count(candidate.length(), 5_000);
       const entries: LocalCatalogEntryV1[] = [];
       for (let reference = 0; reference < length; reference += 1) {
         entries.push(readEntry(candidate, reference));
       }
       this.#assertCurrent(generation);
-      if (candidate.isLocked()) throw new CatalogAdapterError("LOCKED");
+      if (readLockedState(candidate)) throw new CatalogAdapterError("LOCKED");
+      this.#assertCurrent(generation);
       this.#catalog = candidate;
       candidate = undefined;
       this.#entries = Object.freeze(entries);
@@ -126,6 +127,14 @@ function optionalIssuerText(value: string | undefined): string | null {
   // Only wasm-bindgen's Option::None representation is normalized here. The
   // structured Worker boundary requires explicit null instead of undefined.
   return value === undefined ? null : text(value, 256, false);
+}
+
+function readLockedState(catalog: WasmCatalogV1): boolean {
+  const locked = catalog.isLocked();
+  if (typeof locked !== "boolean") {
+    throw new CatalogAdapterError("INVALID_CATALOG");
+  }
+  return locked;
 }
 
 function count(value: number, maximum: number): number {
