@@ -218,6 +218,28 @@ try {
         Write-Output "PASS: $($case.Name) is detected without value disclosure"
     }
 
+    $unicodeCaseFoldPath = Join-Path $temporaryRoot 'unicode-casefold-token.py'
+    $unicodeCaseFoldValue = ('access_to' + [char]0x212A + 'en = ' + [char]34 + ('z' * 20) + [char]34)
+    Set-Content -LiteralPath $fixture -Value 'synthetic metadata without credentials' -NoNewline
+    Set-Content -LiteralPath $unicodeCaseFoldPath -Value $unicodeCaseFoldValue -NoNewline
+    $unicodeCaseFoldExpected = [regex]::IsMatch(
+        $unicodeCaseFoldValue,
+        '(?m:^[\x20\t]*)(?i:access[_-]?token)[\x20\t]*=[\x20\t]*[\x22\x27][^\x22\x27\r\n]{8,}[\x22\x27]',
+        [Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+    $result = Invoke-Scanner -Root $temporaryRoot
+    if ($unicodeCaseFoldExpected) {
+        Assert-Condition ($result.Code -eq 1) 'The prefilter must retain this engine''s invariant Unicode regex finding.'
+        Assert-Condition ($result.Text.Contains('SECRET_SCAN_FILE=unicode-casefold-token.py')) 'The Unicode case-fold finding needs the safe relative path.'
+    }
+    else {
+        Assert-Condition ($result.Code -eq 0) 'The prefilter must not expand this engine''s invariant Unicode regex language.'
+        Assert-Condition ($result.Text.Contains('SECRET_SCAN_PASSED')) 'A non-finding Unicode case-fold case needs a success marker.'
+    }
+    Remove-Item -LiteralPath $unicodeCaseFoldPath -Force
+    $passed++
+    Write-Output 'PASS: anchor prefilter preserves the current engine Unicode case-fold behavior'
+
     $ignoreFile = Join-Path $temporaryRoot '.gitignore'
     $ignoredValue = (('s' + 'k-') + ('E' * 24))
     Set-Content -LiteralPath $ignoreFile -Value 'candidate.txt' -NoNewline
@@ -399,6 +421,40 @@ try {
     $passed++
     Write-Output 'PASS: binary content is inspected and binary config content fails closed'
 
+    $wasmLikePath = Join-Path $temporaryRoot 'generated-wasm-like.bin'
+    $wasmLikeBytes = New-Object byte[] (512KB)
+    $benignBinaryText = [Text.Encoding]::ASCII.GetBytes('password metadata without an assignment')
+    [Array]::Copy($benignBinaryText, 0, $wasmLikeBytes, 4096, $benignBinaryText.Length)
+    [IO.File]::WriteAllBytes($wasmLikePath, $wasmLikeBytes)
+    $result = Invoke-Scanner -Root $temporaryRoot
+    Assert-Condition ($result.Code -eq 0) 'A large clean WASM-like binary projection must complete without a regex timeout.'
+    Assert-Condition ($result.Text.Contains('SECRET_SCAN_PASSED')) 'A large clean WASM-like scan needs a success marker.'
+
+    $wasmLikeValue = [Text.Encoding]::ASCII.GetBytes((('s' + 'k-') + ('q' * 24)))
+    [Array]::Copy($wasmLikeValue, 0, $wasmLikeBytes, 8192, $wasmLikeValue.Length)
+    [IO.File]::WriteAllBytes($wasmLikePath, $wasmLikeBytes)
+    $result = Invoke-Scanner -Root $temporaryRoot
+    Assert-Condition ($result.Code -eq 1) 'A provider token in a large WASM-like binary must still be detected.'
+    Assert-Condition ($result.Text.Contains('SECRET_SCAN_FILE=generated-wasm-like.bin')) 'A large binary finding must report only its safe path.'
+    Remove-Item -LiteralPath $wasmLikePath -Force
+    $passed++
+    Write-Output 'PASS: large WASM-like binary projections are deterministic and still scanned'
+
+    $anchorDenseRoot = Join-Path $temporaryRoot 'anchor-dense-root'
+    New-Item -ItemType Directory -Path $anchorDenseRoot -ErrorAction Stop | Out-Null
+    $anchorDensePath = Join-Path $anchorDenseRoot 'anchor-dense-wasm-like.bin'
+    $anchorDenseBytes = [Text.Encoding]::ASCII.GetBytes(('password metadata' + [char]0) * 7000)
+    [IO.File]::WriteAllBytes($anchorDensePath, $anchorDenseBytes)
+    $anchorDenseScanner = New-ScannerVariant -Name 'anchor-dense-budget' -Replacements @{
+        '$maximumCooperativeElapsedSeconds = 300' = '$maximumCooperativeElapsedSeconds = 15'
+    }
+    $result = Invoke-Scanner -Root $anchorDenseRoot -ScannerPath $anchorDenseScanner
+    Assert-Condition ($result.Code -eq 0) 'Anchor-dense binary input must remain within the bounded scan budget.'
+    Assert-Condition ($result.Text.Contains('SECRET_SCAN_PASSED')) 'Anchor-dense binary input needs a success marker.'
+    Remove-Item -LiteralPath $anchorDenseRoot -Recurse -Force
+    $passed++
+    Write-Output 'PASS: anchor-dense binary projections are scanned with bounded forward progress'
+
     foreach ($bomlessCase in @(
         [pscustomobject]@{ Name = 'bomless-utf16-le'; Encoding = (New-Object Text.UnicodeEncoding($false, $false, $true)) },
         [pscustomobject]@{ Name = 'bomless-utf16-be'; Encoding = (New-Object Text.UnicodeEncoding($true, $false, $true)) }
@@ -509,9 +565,9 @@ try {
 
     $regexTimeoutRoot = Join-Path $temporaryRoot 'resource-regex-timeout'
     New-Item -ItemType Directory -Path $regexTimeoutRoot -ErrorAction Stop | Out-Null
-    [IO.File]::WriteAllText((Join-Path $regexTimeoutRoot 'candidate.txt'), (('a' * 200000) + '!'), $resourceEncoding)
+    [IO.File]::WriteAllText((Join-Path $regexTimeoutRoot 'candidate.txt'), ('password' + ('a' * 200000) + '!'), $resourceEncoding)
     $regexTimeoutScanner = New-ScannerVariant -Name 'regex-timeout' -Replacements @{
-        '$allTextPattern = ''(?:'' + $environmentQuotedAssignment + ''|'' + $declaredQuotedAssignment + ''|'' + $bareQuotedAssignment + ''|'' + $bareQuotedProperty + ''|'' + $exportUnquotedAssignment + ''|'' + $powerShellEnvironmentQuotedAssignment + ''|'' + $cmdEnvironmentAssignment + ''|'' + $cmdWrappedEnvironmentAssignment + ''|'' + $providerShape + '')''' = '$allTextPattern = ''^(a+)+$'''
+        '$allTextPattern = ''(?:'' + $environmentQuotedAssignment + ''|'' + $declaredQuotedAssignment + ''|'' + $bareQuotedAssignment + ''|'' + $bareQuotedProperty + ''|'' + $exportUnquotedAssignment + ''|'' + $powerShellEnvironmentQuotedAssignment + ''|'' + $cmdEnvironmentAssignment + ''|'' + $cmdWrappedEnvironmentAssignment + ''|'' + $providerShape + '')''' = '$allTextPattern = ''^password(a+)+$'''
         '$regexTimeout = [TimeSpan]::FromSeconds(2)' = '$regexTimeout = [TimeSpan]::FromMilliseconds(1)'
     }
     $result = Invoke-Scanner -Root $regexTimeoutRoot -ScannerPath $regexTimeoutScanner

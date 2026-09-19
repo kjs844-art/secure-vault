@@ -315,6 +315,86 @@ $regexOptions = [Text.RegularExpressions.RegexOptions]::CultureInvariant
 $allTextRegex = New-Object Text.RegularExpressions.Regex($allTextPattern, $regexOptions, $regexTimeout)
 $configRegex = New-Object Text.RegularExpressions.Regex($configPattern, $regexOptions, $regexTimeout)
 
+# Every supported finding shape contains at least one of these broad, public
+# anchors. Locate candidate lines with invariant, case-insensitive string search
+# before invoking the more expensive regular expressions. Invariant comparison
+# is required because the detection expressions use CultureInvariant Unicode
+# case folding (for example, the Kelvin sign can fold to ASCII "k"). Each
+# input is divided only after newline boundaries, so no supported finding is
+# split. Each bounded chunk is searched once per anchor and then evaluated at
+# most once by each detection expression, keeping work proportional to the file
+# size even for anchor-dense input.
+$patternAnchors = @(
+    'api',
+    'secret',
+    'password',
+    'token',
+    'sk-',
+    'gh',
+    'akia',
+    'aiza',
+    'xox',
+    'private key',
+    'pgp private'
+)
+
+function Test-ContentForSecretPattern {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][bool]$ConfigFile,
+        [Parameter(Mandatory = $true)][bool]$BinaryProjection
+    )
+
+    # Keep candidate batches small enough that dense benign credential words do
+    # not consume the per-regex timeout, while still amortizing invocation cost
+    # across many short binary-projection lines.
+    $maximumRegexChunkCharacters = 8KB
+    $chunkStart = 0
+    while ($chunkStart -lt $Text.Length) {
+        Assert-WithinScanTimeBudget
+
+        $chunkTargetEnd = [Math]::Min(
+            $Text.Length,
+            $chunkStart + $maximumRegexChunkCharacters
+        )
+        $chunkEnd = $chunkTargetEnd
+        if ($chunkTargetEnd -lt $Text.Length) {
+            $nextNewline = $Text.IndexOf("`n", $chunkTargetEnd)
+            if ($nextNewline -lt 0) {
+                $chunkEnd = $Text.Length
+            }
+            else {
+                $chunkEnd = $nextNewline + 1
+            }
+        }
+
+        $chunkLength = $chunkEnd - $chunkStart
+        $containsAnchor = $false
+        foreach ($anchor in $patternAnchors) {
+            if ($Text.IndexOf(
+                    $anchor,
+                    $chunkStart,
+                    $chunkLength,
+                    [StringComparison]::InvariantCultureIgnoreCase
+                ) -ge 0) {
+                $containsAnchor = $true
+                break
+            }
+        }
+
+        if ($containsAnchor) {
+            $chunk = $Text.Substring($chunkStart, $chunkLength)
+            if ($allTextRegex.IsMatch($chunk)) { return $true }
+            if ($ConfigFile -and (-not $BinaryProjection) -and $configRegex.IsMatch($chunk)) {
+                return $true
+            }
+        }
+
+        $chunkStart = $chunkEnd
+    }
+    return $false
+}
+
 try {
     $scanStopwatch = [Diagnostics.Stopwatch]::StartNew()
     $resolvedRoot = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Root -ErrorAction Stop).ProviderPath)
@@ -429,10 +509,10 @@ try {
             $verifiedSyntheticBaselines[$relativePath] = $true
         }
 
-        $matched = $allTextRegex.IsMatch($content.Text)
-        if ((-not $matched) -and $isConfig -and (-not $content.IsBinaryProjection)) {
-            $matched = $configRegex.IsMatch($content.Text)
-        }
+        $matched = Test-ContentForSecretPattern `
+            -Text $content.Text `
+            -ConfigFile $isConfig `
+            -BinaryProjection $content.IsBinaryProjection
         if ($matched) { [void]$candidateSet.Add($relativePath) }
 
         # Release the largest per-file objects before reading the next file.
