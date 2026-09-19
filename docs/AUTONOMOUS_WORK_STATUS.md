@@ -1,5 +1,9 @@
 # KeyAtlas 자율 작업 상태표
 
+> **최신 상태는 [2026-09-19 현재 체크포인트](CURRENT_CHECKPOINT_2026-09-19.md)를
+> 먼저 확인합니다.** 이 문서의 아래 `최신` 표현과 테스트 수는 각 작업 당시의 누적
+> 이력이며 현재 Git tip 또는 출시 상태를 뜻하지 않습니다.
+
 기준: 2026-09-18, 현재 작업 브랜치 `codex/firstvibe-registration-conflict-preservation`.
 전체 목표는 사용자 결정(도메인, 배포, 디자인 등)을 제외한 구현·검증의 진행이다. 이 표는 범위를 줄인 완료 선언이 아니다. 제품 요구 기준은 [MVP](MVP.md)와 [보안 설계](SECURITY_ARCHITECTURE.md)를 유지한다.
 
