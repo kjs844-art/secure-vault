@@ -19,10 +19,13 @@
 |---|---|---|
 | Rust 암호화 코어 | 구현·합성 테스트 완료 | 합성 마스터 비밀번호, Root Key 래핑, 항목별 암호화와 변조 거부를 검증했습니다. |
 | 자격 증명 데이터 모델 | 구현·합성 테스트 완료 | 서비스·계정·프로젝트·환경·MCP 연결 관계를 엄격한 형식으로 표현합니다. |
-| SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. |
-| SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-07 전체 기본 workspace 테스트, 전체 Clippy와 문서 예제 검사가 exit 0이었다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토는 별도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
+| SQLite 암호문 저장소 Task 1~7 | 구현·합성 검증 완료 | immutable revision, canonical head/CAS, 충돌 보존, bounded preflight, 잠금 해제 후 재시작 복구와 커밋 전·후 프로세스 종료 원자성을 구현했습니다. 읽기 전용 preflight에도 query-only와 공통 DB hardening을 적용했습니다. |
+| SQLite 보안 문서·전체 검토(Task 8) | 진행 중; 일반 검증 통과, 보안 승인 미완료 | 2026-09-16 `5d439eb` 기능 묶음에서 저장소 Secret gate를 일반 검증의 첫 단계로 연결했고 전체 workspace 포맷·Clippy·테스트·문서 예제가 exit 0이었다. 후속 built-in scanner 트리는 집중 회귀를 통과했지만 전체 Workspace 재실행과 원격 재검증은 별도다. 기존 open→첫 쿼리 경계 및 Phase 0A 권위 검토도 미완료다. 일반 검사 통과를 출시·Ready 전환·main 병합 승인으로 간주하지 않는다. 과거 Draft PR #1의 현재 원격 상태는 이번 작업에서 갱신하지 않았다. |
 | Windows actual-handle Phase 0A | 격리 probe; 과거 Inconclusive 판정 유지 | 과거 단일 primitive 관찰과 4551 차단 기록은 보존한다. 2026-09-07 feature 일반 suite는 exit 0, 6 passed/1 ignored였으나 명시적 보안 gate는 재실행하지 않았다. 현재 후보의 별도 권위 판정, full Phase 0 및 VFS/store 통합 승인은 내리지 않았다. |
-| Web·Android 화면 | 미구현 | 현재 폴더는 자리표시자이며 사용자가 볼 수 있는 금고 화면은 아직 없습니다. |
+| Web 합성 금고 화면 | 로컬 구현·범위별 실제 브라우저 검증 | React에서 선택형 등록/목록/issuer 검색/자동 잠금/IndexedDB 재열기/백업 연습을 제공합니다. 최종 디자인은 별도이며 운영 서비스가 아닙니다. |
+| Web 합성 등록 저장 경로 | 폼·private issuer 표시/검색 연결 | 두 가상 계정 프로필과 MCP/CLI/CI 선택 → Rust 암호화 append → IndexedDB CAS → 저장본 재인증. 실제 Comet에서 0/1/3 연결 등록, 이중 클릭, 잠금/재열기, 새로고침/탭 전환, 360px 검사 완료. 임의 키 입력·회전은 아직 미구현입니다. |
+| Web 합성 연결 편집 | 암호문 충돌 보존·검토 UI·백업 차단 자동 검사 통과, 브라우저 검증 미완료 | 기존 record/비밀 필드 보존 successor → 후보 사전 인증 → 원자 CAS/재인증. 최대 8개 outbox를 전체 인증 뒤 위치 기반으로 표시하고 exact-byte 2단계 폐기만 허용합니다. 미해결 후보가 있으면 합성 export를 막습니다. 전체 웹 932 tests와 타입/빌드가 통과했습니다. 실제 브라우저 멀티탭, 자동 병합/승격, 원자적 outbox 포함 백업, rollback anchor는 미완료입니다. |
+| Android 화면 | 미구현 | 웹 구현이 Android 앱 구현을 의미하지 않습니다. 생체 인증·Keystore·앱 수명 주기 검증이 남아 있습니다. |
 | Spring Boot API·PostgreSQL·동기화 | 미구현 | 서버 인증, 암호문 동기화, 기기 roster와 checkpoint가 남아 있습니다. |
 | 로그인·복구·생체 인증 | 설계 단계 | Google/패스키 로그인과 금고 잠금 해제는 분리하며 Android Keystore 구현이 필요합니다. |
 | 결제·Free/Pro | 정책 설계만 완료 | 공개 베타와 보안 게이트 전에는 결제 SDK나 실제 상품을 연결하지 않습니다. |
@@ -30,15 +33,36 @@
 
 현재 코드는 **합성 데이터 전용 보안 기반 공사**입니다. 실제 비밀번호, API 키, 복구 키 또는 개인 금고를 입력하면 안 됩니다.
 
-### 현재 작업 경로와 다시 검사하는 방법 (2026-09-07)
+[연결 편집 구현·검증 기록](verification/2026-09-15-synthetic-connection-edit.md)과
+[암호문 conflict outbox 검증 기록](verification/2026-09-16-synthetic-conflict-outbox.md),
+[conflict 검토 UI 기록](verification/2026-09-16-synthetic-conflict-review-ui.md),
+[backup conflict guard 기록](verification/2026-09-16-synthetic-backup-conflict-guard.md),
+[SQLite 읽기 전용 preflight hardening 기록](verification/2026-09-16-sqlite-read-only-preflight-hardening.md),
+[Amazon Quick/Spark 협업 인계·프롬프트](handoff/AMAZON_QUICK_COLLABORATION.md)를 함께 확인하세요.
+Quick 연결이나 유료 구독은 실행하지 않았으며 핵심 보안은 기능 담당자가 계속 책임집니다.
 
-코드는 `C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`에 있으며 작업 브랜치는 `codex/firstvibe-sqlite-store`입니다. `secure-vault` 폴더의 `main` 체크아웃과 구분해 사용합니다. 바탕화면 설명 문서는 같은 KeyAtlas 아래 `자료\KeyAtlas_보안_설계_패키지_2026-08-29`에 있습니다.
+### 현재 작업 경로와 다시 검사하는 방법 (2026-09-15)
 
-작업 폴더에서 `powershell -NoProfile -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 전체 일반 검사를 다시 수행할 수 있습니다. 검증 스크립트 자체 테스트는 `powershell -NoProfile -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo를 사용하므로 실제 Rust 테스트 통과와 구분합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret과 ignored 보안 gate는 여전히 제외됩니다.
+현재 기능 작업은 `C:\Users\USER\Documents\ChatGPT\KeyAtlas\secure-vault-session-hardening`,
+브랜치는 `codex/firstvibe-local-session-hardening`입니다. 상위 KeyAtlas 폴더와 다른
+AI의 worktree를 구분해 사용합니다. 예전 SQLite 설계 작업 경로는
+`C:\Users\USER\Desktop\PersonalProJect\KeyAtlas\worktrees\secure-vault-sqlite-store-design`이며
+그 경로/브랜치를 현재 웹 구현 위치로 오인하지 않습니다.
 
-[상세 변경 파일·검사 결과·남은 경계](verification/2026-09-07-local-verification-maintenance.md)를 함께 확인하세요.
+웹은 저장소 루트에서 `.\scripts\build-wasm.ps1 -SyntheticDemo -Release` 후
+`npm.cmd run typecheck --prefix apps/web`, `npm.cmd test --prefix apps/web -- --maxWorkers=1`,
+`npm.cmd run build --prefix apps/web`로 확인합니다. 생성 WASM과 node_modules는
+Git 백업 대상이 아니므로 설치된/캐시된 도구와 의존성으로 다시 준비해야 합니다.
+
+작업 폴더에서 `pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1 -Scope Workspace`를 실행하면 저장소 Secret 패턴 검사를 먼저 수행한 뒤 전체 일반 검사를 진행합니다. Secret 검사기 자체 테스트는 `pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1`, 통합 검증기 테스트는 `pwsh -NoProfile -NonInteractive -File .\tests\verification\verify-local.Tests.ps1`입니다. 후자는 가짜 Cargo를 사용하므로 실제 Rust 테스트 통과와 구분합니다. Secret 검사는 외부 검색 실행기 없이 PowerShell/.NET만 사용하며 텍스트의 엄격한 디코딩과 일반 바이너리의 bounded ASCII 표면 검사를 수행합니다. 오프라인 의존성이 준비돼 있어야 하며 실제 Secret 처리, Git 전체 이력·압축/암호화 파일 내부 검사, 명시적으로 ignored인 보안 gate는 여전히 제외됩니다.
+
+[상세 변경 파일·검사 결과·남은 경계](verification/2026-09-16-repository-secret-gate-integration.md)를 함께 확인하세요.
 
 ## 3. 전체 아키텍처 그림
+
+아래는 목표 구조입니다. 현재 웹은 React → Worker → Rust/WASM → 브라우저 IndexedDB로
+동작하며 서버 동기화는 연결하지 않았습니다. 네이티브 SQLite 구현과 웹 IndexedDB는
+별도 저장 경로입니다.
 
 ```text
 [React 웹 / Android 앱]
@@ -120,6 +144,24 @@
 - 위 Phase 0A 조건을 충족하거나 별도로 승인된 새 권위 검증 계약과 그 gate를 통과하기 전에는 Draft PR을 Ready로 전환하거나 `main`에 병합하지 않음
 
 ## 9. 작업 로그
+
+- 2026-09-16 — conflict outbox의 모든 후보를 인증한 뒤에만 위치 기반 검토 목록을 게시하고, ID/암호문을 노출하지 않는 2단계 exact-byte 폐기를 연결했습니다. 미해결 또는 신뢰할 수 없는 conflict 목록이 있으면 합성 backup export를 fail-closed로 차단합니다. 전체 Web 932/932, typecheck와 build가 통과했고 conflict UI와 backup guard 독립 리뷰는 각각 Critical/Important 0이었습니다. 실제 Chromium 다중 창 검증과 backup 목록 확인 직후의 비원자 TOCTOU는 남아 있습니다. [검토 UI 기록](verification/2026-09-16-synthetic-conflict-review-ui.md), [backup guard 기록](verification/2026-09-16-synthetic-backup-conflict-guard.md).
+
+- 2026-09-16 — 저장소 Secret scan을 첫 단계로 강제하는 최소 권한 원격 CI workflow를 작성하고 당시 구조 정책 7/7, scanner 회귀 PowerShell 7·5.1 각 78/78을 확인했습니다. 웹 IndexedDB에는 최대 8개 암호문 conflict outbox와 CAS 직후 경합 보존을 추가했고, SharedArrayBuffer를 Store·Session·Worker·Backup 경계에서 작업 전에 거부했습니다. Backup readback의 SAB·위조 길이 문제와 SQLite hardening 순서를 독립 리뷰에서 찾아 수정한 뒤 두 재리뷰 모두 Critical/Important 0이었습니다. 최종 웹 891/891·typecheck·build, 최종 일반 Workspace 검증이 exit 0이었습니다. 이 최초 체크포인트 당시에는 원격 GitHub Actions를 실행하지 않았고, 실제 브라우저 멀티탭, outbox 사용자 UI, Phase 0A 권위 승인, 실제 Secret도 미완료/금지였습니다. [outbox 기록](verification/2026-09-16-synthetic-conflict-outbox.md), [SQLite 기록](verification/2026-09-16-sqlite-read-only-preflight-hardening.md), [CI 기록](verification/2026-09-16-remote-ci-security-gate.md).
+
+- 2026-09-16 — `5d439eb`의 첫 원격 run `35046207820`은 의존성 실행 전 Secret 단계에서 `SECRET_SCAN_FAILED setup_or_execution`과 `REAL_SECRET_GATE=CLOSED`를 남기고 exit 1로 종료했습니다. 오류 세부를 출력하지 않는 정책 때문에 내부 원인을 단정하지 않고, runner 제공 검색 도구 의존 자체를 제거해 PowerShell/.NET built-in scanner로 교체했습니다. BOM 없는 UTF-16/32 lane, 파일별 same-snapshot hash+scan, entry/time/resource bounds와 build 후 공개 산출물 재검사를 추가했습니다. 로컬 PS7·5.1 회귀 각 99/99, workflow 정책 9/9, 실제 저장소 scan이 통과했으며 이 기록 시점 후속판 원격 재실행은 아직입니다. 실제 Secret gate는 계속 닫혀 있습니다.
+
+- 2026-09-15 — 합성 연결 편집 UI를 연결하고 모델 58/SSR 19를 포함한 웹 839 tests 및 타입/빌드 exit 0을 확인했습니다. 독립 리뷰의 행 전환 포커스 문제를 수정했으나 실제 포커스 검사는 미완료입니다. 격리 Comet에서 금고 안 항목 3개와 편집 폼 초기 상태까지 관찰한 후 브라우저 도구의 CDP 연결 종료로 저장/취소/잠금 검증을 마치지 못했습니다. 사용자 현황 요청에 따라 새 구현과 개발 서버를 중단하고 부분 체크포인트로 기록합니다. [UI 검증 기록](verification/2026-09-15-synthetic-connection-editor-ui.md), [일정·AI 협업 공유 가이드](KEYATLAS_PROJECT_SHARED_GUIDE.md).
+
+- 2026-09-15 19시대 KST — 선택형 등록 폼과 계정/workspace/project/환경의 local-only projection·검색을 연결했습니다. 네이티브 core catalog 3/3·projection 1/1, bridge 8/8+doctests 4/4, WASM 19/19와 demo 771/default 20 checks가 통과했습니다. 웹 최종 635/635·타입 검사·빌드 통과, 실제 격리 Comet에서 3→6개 등록/검색/잠금·재열기/탭 전환/360px 및 콘솔 오류 없음 확인. 기존 대용량 테스트 2개의 timeout은 전체 byte 비교를 유지한 테스트 전용 비교 개선으로 해결했습니다. 디자인·배포·실제 Secret/Phase 0A 게이트는 유지합니다. [등록 화면·RED/BLUE 검증 기록](verification/2026-09-15-synthetic-registration-ui.md).
+
+- 2026-09-15 16:49 KST — 합성 등록 내부 경로를 구현했습니다. 닫힌 Rust 프로필 선택, 기존 암호문 보존 archive v2 append, Worker/세션 CAS 및 저장본 재인증, v1/v2 백업을 연결했습니다. 최종 웹 601/601, WASM native 18/18, 최종 core 집중 4/4, 실제 WASM demo 624 checks/default 11 checks, Clippy·포맷·타입 검사·빌드가 통과했습니다. 초기 debug 통합 테스트 timeout은 다중 KDF 작업에 맞춘 90초 제한과 debug 재검증 후 release 전체 검증으로 처리했습니다. 등록 UI·계정/프로젝트/환경 projection은 미연결이며 다음 작업으로 남깁니다. 디자인·운영 서비스·실제 Secret 게이트는 유지합니다. [등록 저장 경로 기록](verification/2026-09-15-synthetic-registration-storage.md).
+
+- 2026-09-15 16시대 KST — Comet 격리 탭에서 로컬 도구 검색·분류·잠금·재열기·탭 숨김을 확인했습니다. 콘솔에서 찾은 중복 React key를 수정하고 두 차례 재열기 회귀에서 경고/오류 0건을 확인했습니다. 등록의 전제인 IndexedDB 암호문 CAS와 저장소 83 tests를 추가했으며 최종 웹 523/523 tests·타입 검사·빌드가 통과했습니다. 사용자 요청에 따라 가입 계정/소셜 로그인 관리 목표, Claude Code 디자인 담당과 검증된 단위별 Git PUSH 방침을 문서화했습니다. 이번 변경을 기능 브랜치의 새 체크포인트로 업로드하며 main/배포/실제 Secret 게이트는 유지합니다. [CAS 기록](verification/2026-09-15-ciphertext-cas.md), [디자인 인계](handoff/CLAUDE_CODE_DESIGN_HANDOFF.md).
+
+- 2026-09-15 — `bc860a2` GitHub 백업 뒤 합성 로컬 검색·분류·잠금 dispatcher와 화면을 연결했습니다. 입력 검증 64개·세션 제어 62개를 포함한 웹 전체 475개 테스트, 타입 검사, 빌드가 통과했습니다. 검색 결과는 사용자 화면 전용으로 유지하고 호출 응답에는 고정 성공/오류만 남깁니다. 실제 브라우저 검사는 CDP 연결 실패로 미완료이며 외부 AI/MCP·실제 Secret 개방은 하지 않았습니다. 이 후속 변경은 아직 로컬 작업입니다. [검증 기록](verification/2026-09-15-local-tool-dispatcher.md).
+
+- 2026-09-15 15:29 KST — GitHub 백업 후 현재 검색·자동잠금 브랜치에 합성 백업·복원 WIP 원본을 통합하고, 백업 UI 세션의 사용 확인·파일·URL·늦은 결과 정리를 보강했습니다. 통합 웹 349/349 tests·타입 검사·빌드가 통과했습니다. 실제 브라우저 검색/잠금/재열기와 별도 브라우저 File API를 거친 합성 복원·기존 값 보존·암호문 해시 일치를 확인했습니다. 다만 테스트 Chrome의 실제 디스크 다운로드는 Download error였으며 네이티브 파일 선택/디스크 왕복은 미검증입니다. 이 후속 변경은 로컬 작업이고 앞서 푸시한 백업과 구분합니다. 도메인·디자인·배포·실제 Secret 사용은 열지 않았습니다. [상세 통합 기록](verification/2026-09-15-backup-session-integration.md).
 
 - 2026-08-20 01:32 KST — `codex/firstvibe-sqlite-store`와 GitHub 원격이 `cb6acb7`로 일치하는 것을 확인했습니다. 전체 workspace 기준선 테스트가 exit 0이었고, 아직 완료되지 않은 Task 6 구현 실행을 시작했습니다.
 - 2026-08-20 02:54 KST — Task 6의 암호화 SQLite 종료·재실행·잠금 해제, 잘못된 비밀번호 무쓰기, 미래 버전·손상 보존, live WAL 포함 합성 평문 부재 검증을 완료했습니다. 전체 Task 6 패키지 66개 테스트와 포맷·Clippy가 통과했고, 독립 재검토에서 Critical/Important 문제가 없음을 확인한 뒤 `418a55e`까지 GitHub에 비강제 푸시했습니다.

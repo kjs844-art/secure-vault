@@ -1,0 +1,263 @@
+# KeyAtlas 프로젝트 공유 가이드
+
+> 최초 작성: 2026-09-12 · 최신 갱신: 2026-09-15
+> 저장소: [kjs844-art/secure-vault](https://github.com/kjs844-art/secure-vault)
+> 제품명: KeyAtlas (working title)
+> 실제 Secret 입력: **금지 — REAL_SECRET_GATE=CLOSED**
+> 아래 일정은 검증 완료 약속이 아닌 조건부 계획용 추정이다.
+
+## 0. 먼저 이것만 읽기
+
+**현재는 “설계와 정적 화면만 있는 상태”를 넘어, Rust/WASM과 브라우저 저장소가 연결된 합성 금고가 있다. 그러나 실제 비밀번호·API 키를 맡길 수 있는 서비스는 아직 아니다.**
+
+- 완료된 기반: 합성 암호화/복호화, 자격 증명·연결 모델, 네이티브 SQLite 저장 slice, 웹 목록·검색·자동 잠금·선택형 등록·합성 백업 경로.
+- 최신 확정 체크포인트: `c6010ba` — 연결 수정용 successor, 모든 과거 암호문을 보존하는 v3 이력, 화면 snapshot에 묶인 CAS와 재인증.
+- 현재 추가 변경: 합성 연결 편집, 암호문 conflict outbox, 전체 인증 검토 UI, exact-byte 2단계 폐기와 미해결 conflict backup 차단을 구현했고 웹 자동 테스트 **932/932**, 타입 검사·빌드가 통과했다. 실제 브라우저 저장/취소/멀티탭 충돌 검사는 **미완료**다.
+- 다음 중심 과제: 실제 브라우저 다중 창 검증 → 회전 → 복구·기기 키·서명/checkpoint → 서버·Android 통합 → 독립 보안 검토.
+- Amazon Quick 설정은 사용자 요청으로 보류했다. 기기 연결·원격 제어·연산 오케스트레이션은 KeyAtlas 밖의 별도 비공개 운영 저장소에서 관리한다.
+- 테스트 개수로 제품 완료율 %를 계산하지 않는다. “혼자 실제 키를 쓰기”에도 보안 gate는 똑같이 적용된다.
+
+## 1. 무엇을 만드는가
+
+여러 서비스에 어떤 계정/로그인 방법으로 가입했고, 거기서 받은 비밀번호·API 키·Secret을 어디에 연결했는지 함께 보관하는 개인 보안 금고다.
+
+```text
+로그인 수단 / 내 계정
+  → 가입한 서비스 계정
+    → 조직 / 프로젝트 / 개발·운영 환경
+      → 비밀번호 · API 키 · Secret
+        → 앱 · MCP 서버 · CLI · CI 등 연결처
+```
+
+목표는 잠금 해제 후 원문 열람·복사, 로컬 검색, 복구, 오프라인 Android와 암호문 동기화다.
+현재 합성 데모의 “열기”는 공개된 테스트 비밀번호로 여는 것이며 실제 사용자 인증이 아니다.
+
+Google·카카오·네이버 로그인 한 번으로 모든 가입 사이트/비밀번호/키/사용처를 알아낼 수는 없다.
+수동 기록과 사용자가 별도로 동의한 공식 연동을 구분해야 한다. 마스킹된 키를 원래대로
+복원하는 기능도 아니다. 최초 발급 시 안전하게 저장하지 않은 키는 제공자가 허용하지 않으면
+다시 가져올 수 없다. 소셜 로그인 전용 서비스에는 별도 서비스 비밀번호가 없을 수 있다.
+
+## 2. 실제 작업 위치와 Git 상태 읽는 법
+
+| 구분 | 현재 기준 |
+|---|---|
+| 실제 기능 작업 폴더 | `C:\Users\USER\Documents\ChatGPT\KeyAtlas\secure-vault-session-hardening` |
+| 기능 브랜치 | `codex/firstvibe-local-session-hardening` |
+| 최근 내부 저장 기능 기준 | `c6010ba667a8f66921164a215a4df434b51084fa` |
+| 이전 등록 UI / 저장 체크포인트 | `c48d681` / `52fb776` |
+| 이번 편집 UI | 위 기준 이후 변경. 자동 검사 통과, 브라우저 검증 대기인 부분 체크포인트 |
+| main / 다른 AI 브랜치 | 이번 문서에서 최신 상태·병합 여부를 다시 검사하지 않음 |
+
+상위 KeyAtlas 폴더와 이 실제 저장소를 혼동하지 않는다. 과거 디자인/SQLite worktree를
+최신 통합 소스로 간주하지 않는다. 다른 기기에서 이 Windows 경로를 그대로 쓰지 말고
+그 기기의 별도 clone/worktree 경로를 기록한다.
+
+실제 현재 상태는 해당 작업 폴더에서 `git status --short --branch`, `git rev-parse HEAD`,
+필요한 원격 ref 확인으로 재검증한다. 브랜치가 존재하는 것, commit, push, PR, merge는 서로 다르다.
+GitHub는 소스/문서 백업이며 사용자 금고·.env·브라우저 프로필을 올리는 곳이 아니다.
+
+## 3. 현재 구현과 아직 없는 것
+
+| 영역 | 현재 증거 | 아직 필요한 것 |
+|---|---|---|
+| Rust 암호화·데이터 모델 | 합성 KDF/root wrap/AEAD/엄격한 codec, 필드 보존·변조 거부 테스트 | 제품용 키 수명 주기, 독립 암호 검토 |
+| 네이티브 SQLite | 불변 revision, head CAS, 충돌 보존, 재시작·프로세스 종료 테스트 기록 | 통합 회귀 공백, Windows 저장 경계 권위 판정, 실제 플랫폼 검증 |
+| React 웹 | 목록, issuer/서비스/연결 검색, 자동 잠금, 선택형 합성 등록 | 일반 사용자 흐름, 원문 접근의 강한 재인증, 최종 디자인·접근성 |
+| 브라우저 저장 | Worker → 실제 Rust/WASM → 암호문 IndexedDB | 제품용 복구/동기화와 통합, 브라우저 수명·다중 writer 검증 |
+| 연결 편집 내부 | 같은 record successor, v3 선형 이력/명시적 head, exact bytes + generation + 후보 사전 인증 + CAS, 최대 8개 암호문 conflict outbox | 회전·분기/자동 병합·승격 규칙 |
+| 연결 편집 UI | 고정 예시 편집, 전체 후보 인증, 위치 기반 검토, exact-byte 2단계 폐기; 통합 932 tests와 build | 실제 브라우저 저장·취소·포커스·잠금·멀티탭 충돌·모바일 검사 미완료 |
+| 합성 백업/복원 | 빈 저장소 복원, 재읽기 동일성, v1/v2/v3 인증, 미해결 conflict export 차단; Node+실제 WASM+fake IndexedDB | conflict 확인 직후 TOCTOU, outbox 포함 wire 정책, 실제 디스크/네이티브 파일 왕복·복구 훈련 |
+| 서비스 로그인 | Google OIDC/passkey와 금고 잠금 해제 분리 설계 | 서비스 세션·인증 구현, 제공자 설정, 계정 보안 |
+| 금고 복구·신뢰 기기 | 보호수단/기기 역할/epoch 설계 | recovery Key Slots, hardware-backed 기기 키, 실제 복구/분실 훈련 |
+| Android | Kotlin/Keystore/BiometricPrompt 목표 | 앱 프로젝트·Rust 바인딩·오프라인·수명 주기·실기기 검증 |
+| API·서버 DB·동기화 | Spring Boot/PostgreSQL/불투명 이벤트 설계 | 로컬 서버 모형, schema/migrations, 서명/checkpoint·동기화·배포 연결 |
+| 결제·공개 배포 | 정책/후속 단계 문서 | 상품·가격·계정·정책 결정, 운영 준비, 별도 배포 승인 |
+
+**SQLite 파일 전체를 SQLCipher로 암호화한 구현은 아니다.** 레코드 내용이 암호문으로 저장된다.
+웹의 IndexedDB와 네이티브 SQLite는 별도 경로다. 웹 v3 선형 이력과 암호문 conflict
+outbox는 SQLite 충돌 보존이나 제품 동기화 프로토콜을 대신하지 않는다. CAS loser 후보는
+웹 IndexedDB에 보존하지만 아직 사용자가 목록·삭제·해결할 수 없고 자동 병합하지 않는다.
+
+### 이번 편집 UI의 정확한 검증 상태
+
+- 순수 UI 모델 테스트: 58/58. 정확한 제공자/항목 및 연결 라벨+종류만 기본 선택 힌트로 쓴다.
+- SSR 렌더 테스트: 19/19. 화면 이벤트·포커스·실제 저장을 증명하는 검사가 아니다.
+- 웹 전체: 23개 파일 / 839 tests, exit 0. 첫 전체 검사 17.29초, PUSH 직전 재검사 18.86초.
+- 빌드: TypeScript + Vite, exit 0, 42 modules.
+- 독립 읽기 전용 리뷰 후, 다른 행으로 전환할 때 이전 버튼이 포커스를 가져가는 문제 수정.
+- 실제 격리 Comet에서 합성 금고를 생성·열고 항목 3개와 예시 3 편집 폼의 3개 체크/초기 저장 비활성화까지 관찰.
+- 그 뒤 브라우저 조작 도구가 버전 불일치/CDP 연결 종료를 보고했다. 자동 DOM 검증·저장 왕복은 통과로 처리하지 않았다.
+- 사용자 현황 요청으로 새 구현/브라우저 검증을 중단했다. 로컬 개발 서버는 종료했다.
+- 이 UI는 아직 완성 기능 또는 실제 Secret 지원으로 보고하지 않는다.
+
+## 4. 현재 연결된 구조와 목표 구조
+
+```text
+현재 합성 웹
+React 등록·검색·편집 화면
+          ↓
+세션 / 입력·출력 검증 / 자동 잠금
+          ↓
+전용 Worker → Rust/WASM → 합성 암호화 코어
+          ↓
+브라우저 IndexedDB (암호문)
+          └─ v3 과거 이력 + 최신 head / CAS
+
+별도 구현 기반
+네이티브 Rust → SQLite 암호문 저장 / revision·충돌 보존
+
+아직 필요한 제품 통합
+웹 ──────────┐
+Android ─────┼─ 사용자 기기 내부 암호화·복구·기기 키
+             └─ 서명 이벤트 / checkpoint
+                  ↓
+              Spring Boot API
+                  ↓
+              PostgreSQL (암호문 + 제한된 운영 메타데이터)
+```
+
+서버는 금고의 의미 있는 평문을 받지 않는 설계다. 로그인 정보/IP/시각/암호문 크기 같은
+운영 메타데이터까지 전부 숨겨진다고 약속하지 않는다. 클라이언트 JS 공급망 위험도 남는다.
+
+## 5. 남은 작업과 기간 — 계획용 초안
+
+가정: 핵심 담당 1명과 보조 작업자/AI 1~2개가 지속적으로 일하고, 하루 4~6시간 수준의
+집중 구현·검증 시간이 확보되며, 파일 충돌을 통제한다. 아래 “주”는 이런 작업 리듬에서의
+대략적인 달력 주다. 새 모델 호출량이나 기기 수만으로 시간을 보장하지 않는다.
+실측 견적이 아니며 다음 1~2주 작업 결과로 다시 산정해야 한다.
+
+| 작업 묶음 | 잠정 범위 | 선행 조건 / 완료 증거 |
+|---|---|---|
+| A. 현재 편집 UI 마무리 | 1~3 작업일 | 브라우저 도구 정상화, 실제 저장·취소·잠금·필터 참조·충돌 검사 |
+| B. 로컬 제품 흐름 | 2~4주 | 수동 계정/자격증명 흐름, 안전한 조회/복사 계약, 충돌 outbox·회전·백업 검사. 실제 키 개방과 분리 |
+| C. 복구·기기 보호 | 4~8주 이상 | Key Slot/기기 키/epoch/철회, 합성 실패 훈련 및 실제 하드웨어 검증 |
+| D. API/DB·동기화 | 4~8주 | 계약/로컬 emulator는 병렬 가능. 서명/checkpoint·rollback·누락/충돌 검증이 선행 |
+| E. Android 최소 기능 | 3~6주 이상 | 안정된 코어/binding·복구 계약 이후 실기기 Keystore·생체 승인·오프라인 검사 |
+| F. 통합·독립 보안 검토 | 3~6주 이상 + 검토 대기 | 복구/분실/다중 기기·백업 훈련, 독립 암호·공급망·보안 검토와 수정 |
+| G. 공개 운영·스토어·결제 | 계정/정책 결정 후 재산정 | 도메인/배포/운영 DB/IAM/법률/가격/스토어 등 사용자 결정 포함 |
+
+위 기간을 단순 합산하거나 모든 작업을 동시에 시작하면 안 된다.
+C의 키/복구 계약과 D의 무결성 계약은 안전성의 선행 조건이고 F는 완전히 생략할 수 없다.
+
+| 도달 단계 | 목표 범위(조건부) | 의미 |
+|---|---|---|
+| 더 완성된 합성 시연판 | 약 2~4주 | UX 확인용, 실제 Secret 금지 유지 |
+| 실제 Secret 제한 베타 후보 | 약 10~18주 이상 + 독립 검토/승인 대기 | 웹·Android와 복구/동기화 통합, gate 통과가 전제. 날짜만 됐다고 허용하지 않음 |
+| 공개 웹·Android 서비스 | 약 14~24주 이상 | 위 단계 + 운영/계정/지원/정책/스토어 준비. 사용자 결정 지연은 별도 |
+
+이는 “6개월을 반드시 몇 주로 줄인다”는 약속이 아니다. 지금으로서는 **합성 UX는 빠르게,
+실제 비밀 보관 출시 후보는 수개월 단위**로 보는 것이 정직하다. 복구 설계 변경, OS 정책 차단,
+보안 검토 반려, 공급자/스토어 대기 때문에 상한을 넘을 수 있다.
+
+## 6. 여러 AI로 시간을 줄이는 배치
+
+```text
+통합 담당 ───── 핵심 코어·보안 계약·통합
+       │
+독립 작업자 ─── QA·빌드·별도 AI 작업
+       │
+각자 별도 clone/worktree + 작업 브랜치 + 담당 파일
+       └─ GitHub diff/PR/정확한 SHA/검사 결과 → 통합 검토
+```
+
+### 외부 기기 운영 경계
+
+기기 연결·원격 제어·연산 오케스트레이션은 이 저장소 밖의 비공개 운영 저장소에서 관리한다. KeyAtlas는 별도 clone/worktree, 담당 파일, base/head SHA, 재현 가능한 검사 명령과 종료 코드만 협업 증거로 받는다. 호스트·주소·계정·키·지문·접근 경로·서비스 및 방화벽 설정은 KeyAtlas 문서·Issue·PR에 기록하지 않는다.
+
+### 병렬 담당안 — 아래 브랜치는 제안 이름이며 새로 생성하지 않았다
+
+| 담당 | 브랜치 예시 | 맡길 파일/결과 | 금지/조율 경계 |
+|---|---|---|---|
+| 메인 보안 담당 | 현재 기능 브랜치 | `crates/`, 세션·Worker·storage·wire contract·통합 | 다른 AI 동시 수정 금지 |
+| 독립 QA 담당 | `codex/firstvibe-independent-qa` | `docs/verification/independent-*.md`, 승인된 별도 테스트 파일 | 보안 정책 우회·키 입력·핵심 코드 수정 금지 |
+| Claude Code 디자인 | `codex/firstvibe-claude-ui` | 합의한 화면/스타일/접근성 파일 | 현재 편집 UI 파일과 소유권 조율, 잠금/확인/세대 계약 유지 |
+| 보조 AI 문서 | `codex/firstvibe-spark-doc-index` | `docs/README.md` 같은 지정 문서 한 개 | 실제 검증을 안 했으면 통과 선언 금지 |
+| 보조 AI 서버 골격 | `codex/firstvibe-api-scaffold` | 승인된 계약 아래 `services/api/`의 로컬 모형/테스트 | 실제 OAuth/운영 DB/IAM/과금 연결 금지 |
+| 보조 AI Android | `codex/firstvibe-android-shell` | `apps/android/` UI 골격·합성 테스트 | keystore/Root Key/복구 구현은 보안 담당과 공동 검토 |
+
+한 기능은 한 브랜치·한 파일 소유자로 나눈다. 같은 공유 checkout에서 서로 checkout하지 않는다.
+AI 수를 무작정 늘리기보다 **핵심 구현 1 / UI·서버 골격 1 / QA·문서 1** 정도로 시작하고
+계약이 안정되면 늘린다. 외부 작업자는 로컬 테스트·빌드·브라우저 검증과 별도 작업 대기열을 분담하는 데 유용하다. 장치 자원 결합은 별도 운영 과제이며 이 MVP의 필수 조건이 아니다.
+
+## 7. 다른 AI에 줄 공통 인계 템플릿
+
+```text
+프로젝트: KeyAtlas / kjs844-art/secure-vault.
+먼저 checkout 경로, 브랜치, HEAD, dirty 상태를 확인하고 보고한다.
+기준은 codex/firstvibe-local-session-hardening의 합의된 정확한 커밋이다.
+담당 파일: [여기에 한정된 파일/폴더]. 다른 담당자의 파일은 수정하지 않는다.
+목표: [한 가지 산출물과 완료 조건].
+합성 데이터만 사용. 실제 비밀번호/API 키/복구 키/개인 금고를 읽거나 넣지 않는다.
+로그인·배포·결제·IAM·방화벽·보안 정책을 활성화하지 않는다.
+보안 코어/세션/Worker/storage/복구/checkpoint 계약 변경은 먼저 제안한다.
+변경 파일, 정확한 검사 명령/exit code, 미검증 범위를 보고한다.
+브라우저/모바일에서 실행하지 않았다면 해당 동작은 미검증이라고 쓴다.
+명시적으로 허용받은 파일만 커밋·비강제 push. main merge는 별도 승인.
+```
+
+독립 작업자의 첫 과제는 새 기능 작성이 아니라 **동일 SHA 재현 검사**다.
+다른 기기에서 같은 합성 테스트/빌드가 재현되는지 먼저 확인해야 환경 차이를 빨리 찾을 수 있다.
+설치/다운로드가 필요하면 기존 캐시·도구 상태와 변경 범위를 먼저 제시한다.
+
+## 8. 핵심 보안과 사용자가 결정해야 할 것
+
+서비스 로그인과 금고 잠금 해제는 분리한다. 로그인 토큰으로 Root Key를 만들지 않는다.
+기본 마스터 비밀번호 + 오프라인 복구 키, 추가 고보증 보호수단과 복구 연습이라는 기존
+보안 설계를 따른다. 정확한 구현·활성화는 독립 검토가 필요하다.
+
+- 생체정보를 서버에 저장하지 않는다. 기기의 키 사용을 승인하는 흐름이다.
+- 모든 활성 복구 경로까지 잃으면 운영자도 금고를 복구하지 못할 수 있음을 고지한다.
+- 일반 계정 로그인 passkey가 자동으로 금고 복구 키가 되는 것은 아니다.
+- 동시 수정한 Secret은 자동 덮어쓰기/문자열 병합하지 않는다.
+- 분실 기기에서 이미 본 평문을 원격으로 회수할 수 없다. 기기 철회·epoch 전환·외부 키 회전이 필요하다.
+- 실제 Secret gate에는 rollback/누락 방어, 복구/기기 키·Android·동기화, 독립 검토·복구 훈련 등이 포함된다.
+- GitHub·Issue·PR·AI 채팅에 실제 키/쿠키/개인 금고/HAR/.env를 넣지 않는다.
+- 금고 화면에 광고·분석·임의 제3자 JavaScript를 자동 추가하지 않는다.
+
+사용자 결정이 필요한 항목: 최종 서비스명/도메인, 최종 디자인, 클라우드/DB/IAM 계정,
+OAuth 제공자 설정, 실제 Secret 개방 승인과 독립 검토, 가격/결제, 운영·법률/개인정보,
+앱스토어 계정/심사. 지금 한꺼번에 가입하거나 결제할 필요는 없다.
+
+## 9. 코드 구조와 검증·참고 문서
+
+```text
+secure-vault-session-hardening/
+├─ apps/web/src/features/local-vault/  등록·검색·편집 UI, 세션, Worker, 백업
+├─ apps/web/src/bridge/                WASM 출력/로컬 표시 경계
+├─ apps/web/src/storage/               암호문 IndexedDB와 CAS
+├─ crates/vault-crypto/                암호화·envelope·codec
+├─ crates/vault-local-core/            자격 증명·필드 보존·후속 revision
+├─ crates/vault-client-bridge/         인증된 로컬 catalog projection
+├─ crates/vault-client-wasm/           웹 binding·합성 archive v1/v2/v3
+├─ crates/vault-local-store-sqlite/    네이티브 암호문 저장 경로
+├─ apps/android/                      구현 필요
+├─ services/api/                      구현 필요
+└─ docs/                              설계·현황·검증·인계
+```
+
+프로젝트 루트에서, 필요한 도구와 의존성이 이미 준비된 환경의 웹 검증 명령:
+
+```powershell
+.\scripts\build-wasm.ps1 -SyntheticDemo -Release
+npm.cmd run typecheck --prefix apps/web
+npm.cmd test --prefix apps/web -- --maxWorkers=1
+npm.cmd run build --prefix apps/web
+git diff --check
+```
+
+각 명령의 종료 코드를 따로 확인한다. 생성 WASM/node_modules/dist는 Git에 없으므로 새
+clone에는 다시 준비해야 한다. 자동으로 의존성을 설치하거나 OS 제한을 우회하지 않는다.
+최상위 전체 Rust 보안 승인은 위 웹 명령으로 대체하지 않는다.
+
+읽을 순서:
+1. `docs/MVP.md` — 제품 목표와 실제 Secret gate.
+2. `docs/AUTONOMOUS_WORK_STATUS.md` — 최신 체크포인트와 남은 일.
+3. `docs/PRODUCT_BUILD_AND_DEPLOY_GUIDE.md` — 기술·배포 준비 설명.
+4. `docs/SECURITY_ARCHITECTURE.md`, 관련 ADR — 복구/기기/동기화 규칙.
+5. `docs/verification/2026-09-15-synthetic-connection-edit.md` — c6010ba 내부 경로 증거.
+6. `docs/verification/2026-09-15-synthetic-connection-editor-ui.md` — 이번 UI의 부분 검증·중단 상태.
+7. `docs/handoff/CLAUDE_CODE_DESIGN_HANDOFF.md` — 디자인 협업 경계.
+
+이 문서의 이전 2026-09-12 본문은 저장소의 `docs/archive/2026-09-12-keyatlas-shared-guide.md`에
+과거 기록으로 보존한다. 이전 “웹 미구현” 설명은 당시 디자인 체크아웃 기준이며 현재 기능
+브랜치 상태에 적용하지 않는다.
