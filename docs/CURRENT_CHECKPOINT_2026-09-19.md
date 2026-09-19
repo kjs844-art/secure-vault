@@ -128,6 +128,31 @@ push, PR, merge는 서로 다른 상태다. 위 네 기능 브랜치는 GitHub�
 8. 제한된 실제 Secret 베타 → Free/Pro 결제 → 공개 출시·스토어 심사
 ```
 
+### 2026-09-19 읽기 전용 통합 시뮬레이션
+
+실제 branch 생성·merge·cherry-pick은 하지 않고 read-only Git ref·ancestry·blob,
+`patch-id`와 `merge-tree`를 검사했다.
+
+1. `origin/main@ceca9f4`에 `c1718f9`를 먼저 통합하면 content conflict는 정확히
+   다음 두 파일이다.
+   - `crates/vault-local-core/README.md`
+   - `crates/vault-local-core/src/record_tests.rs`
+2. main의 실질적인 unique test/docs 변경은 feature 계열의 `fe98ce5`와 `246ed33`에
+   patch-equivalent하게 존재한다. 충돌을 해결할 때 반복 잠금 해제 보존 회귀를 없애지
+   않으면서 `c1718f9` 쪽의 더 최신 등록·connection-edit writer 계약을 보존한다.
+3. `c1718f9`와 recovery ADR `7b16aa27`은 pair-base `935a326` 이후 변경 파일의
+   overlap이 0개다. 첫 통합과 검증이 끝난 뒤 recovery ADR을 합치는 순서가 가장
+   단순하며 추가 content conflict는 현재 시뮬레이션에서 발견되지 않았다.
+4. 이 문서 commit `f3b2c7d`가 바꾼 기존 네 문서의 preimage는 두 기능 tip과 같고
+   새 체크포인트 파일도 양쪽에 없다. 기능 통합 뒤 문서 commit을 옮기는 것은 clean할
+   가능성이 높지만, 실제 cherry-pick 결과와 문서 링크를 다시 검사해야 한다.
+
+통합 후 최소 검증은 repository Secret scan, PowerShell 7·5.1 scanner 회귀,
+workspace format·Clippy·test·doctest, SQLite all-features 1-thread suite, 웹 locked
+dependency install 이후 unit test·typecheck·production build, Markdown local-link와
+`git diff --check`다. GitHub Actions account 차단이 해소되면 같은 exact SHA의 원격
+workflow도 별도로 통과해야 한다.
+
 ### 사용자가 현재 작업 범위를 승인한 뒤 로컬에서 진행 가능한 일
 
 - 사용자가 승인한 현재 작업 범위 안에서 별도 통합 브랜치 생성, 충돌 분석, 테스트와
