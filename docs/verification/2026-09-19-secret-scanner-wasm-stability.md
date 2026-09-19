@@ -81,6 +81,13 @@ All test data was synthetic.
 - If a future detection expression introduces a new finding shape without one
   of the configured anchors, the anchor list and regression suite must be
   updated in the same change.
+- A candidate batch extends to the next newline to preserve the exact regex
+  language. An adversarial newline-free binary line can therefore exceed the
+  8 KiB target. Independent stress testing found that a clean 1.5 MiB line
+  completed, while an 8 MiB line containing benign `password` metadata reached
+  the regex timeout and failed closed on both PowerShell engines. This does not
+  permit a Secret bypass, but it remains a CI availability limit until a
+  bounded streaming matcher replaces the line-oriented regex path.
 - This scanner reduces accidental repository exposure. It is not authorization
   to store real Secret material, and it is not a substitute for production key
   management, independent security review, or incident response.
