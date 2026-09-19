@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -854,21 +855,25 @@ fn open_ownership_file(
 }
 
 fn sidecar_paths(database_path: &Path) -> [PathBuf; 3] {
-    let base = database_path.as_os_str().to_string_lossy();
     [
-        PathBuf::from(format!("{base}-wal")),
-        PathBuf::from(format!("{base}-shm")),
-        PathBuf::from(format!("{base}-journal")),
+        sidecar_path(database_path, "-wal"),
+        sidecar_path(database_path, "-shm"),
+        sidecar_path(database_path, "-journal"),
     ]
+}
+
+fn sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
+    let mut path = OsString::from(database_path.as_os_str());
+    path.push(suffix);
+    PathBuf::from(path)
 }
 
 fn ensure_initialization_sidecars_absent(database_path: &Path) -> Result<(), StorageError> {
     for path in sidecar_paths(database_path) {
-        if path
-            .try_exists()
-            .map_err(|_| StorageError::new(StorageErrorCode::Io))?
-        {
-            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        match fs::symlink_metadata(path) {
+            Ok(_) => return Err(StorageError::new(StorageErrorCode::CorruptStorage)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(StorageError::new(StorageErrorCode::Io)),
         }
     }
     Ok(())
@@ -1443,7 +1448,7 @@ mod tests {
     }
 
     fn inject_lingering_wal(database_path: &Path) {
-        let wal_path = PathBuf::from(format!("{}-wal", database_path.to_string_lossy()));
+        let wal_path = sidecar_path(database_path, "-wal");
         fs::write(wal_path, b"lingering-sidecar-must-survive").unwrap();
     }
 
@@ -1474,13 +1479,84 @@ mod tests {
             assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
         });
 
-        let wal_path = PathBuf::from(format!(
-            "{}-wal",
-            location.database_path().to_string_lossy()
-        ));
+        let wal_path = sidecar_path(location.database_path(), "-wal");
         assert_eq!(
             fs::read(wal_path).unwrap(),
             b"lingering-sidecar-must-survive"
         );
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn dangling_sidecar_namespace_entry_is_preserved_and_rejected() {
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("vault.sqlite3");
+        let missing_target = directory.path().join("missing-external-target");
+        let wal_path = sidecar_path(&database_path, "-wal");
+        fs::write(&database_path, []).unwrap();
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            use std::process::{Command, Stdio};
+
+            let status = Command::new("cmd")
+                .args(["/D", "/C", "mklink", "/J"])
+                .arg(&wal_path)
+                .arg(&missing_target)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success(), "Windows junction fixture was unavailable");
+            let metadata = fs::symlink_metadata(&wal_path).unwrap();
+            assert_ne!(metadata.file_attributes() & 0x0000_0400, 0);
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&missing_target, &wal_path).unwrap();
+
+        let error = ensure_initialization_sidecars_absent(&database_path).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+        assert_eq!(fs::read(&database_path).unwrap(), b"");
+        assert!(fs::symlink_metadata(&wal_path).is_ok());
+        assert!(!missing_target.exists());
+
+        #[cfg(windows)]
+        fs::remove_dir(&wal_path).unwrap();
+        #[cfg(unix)]
+        fs::remove_file(&wal_path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sidecar_suffixes_preserve_the_exact_windows_os_string() {
+        use std::os::windows::ffi::OsStringExt;
+
+        let database_name = OsString::from_wide(&[
+            u16::from(b'v'),
+            u16::from(b'a'),
+            u16::from(b'u'),
+            u16::from(b'l'),
+            u16::from(b't'),
+            0xD800,
+        ]);
+        let database_path = PathBuf::from(&database_name);
+        let mut expected = database_name;
+        expected.push("-wal");
+
+        assert_eq!(sidecar_paths(&database_path)[0], PathBuf::from(expected));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sidecar_suffixes_preserve_the_exact_unix_os_string() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let database_name = OsString::from_vec(vec![b'v', b'a', b'u', b'l', b't', 0xFF]);
+        let database_path = PathBuf::from(&database_name);
+        let mut expected = database_name;
+        expected.push("-wal");
+
+        assert_eq!(sidecar_paths(&database_path)[0], PathBuf::from(expected));
     }
 }
