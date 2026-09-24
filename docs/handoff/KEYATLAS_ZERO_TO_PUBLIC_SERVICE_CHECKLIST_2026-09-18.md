@@ -1,14 +1,217 @@
 # KeyAtlas: 0부터 공개 웹·Android 서비스까지 전체 체크리스트
 
-> 작성일: **2026-09-18 KST** <br>
+> 최초 작성: **2026-09-18 KST** · 최신 갱신: **2026-09-24 KST** <br>
 > 제품명: **KeyAtlas (working title)** — 최종 이름·상표·도메인은 아직 확정하지 않음 <br>
 > GitHub: [kjs844-art/secure-vault](https://github.com/kjs844-art/secure-vault) <br>
-> 현재 로컬 작업 경로: `C:\Users\USER\Documents\ChatGPT\KeyAtlas\secure-vault-rotation-staging` <br>
-> 현재 브랜치: `codex/firstvibe-registration-conflict-preservation` <br>
-> 현재 확인 SHA: `b05ff454029676947d8f6c515acf488b3b787d29` <br>
+> 이 문서를 갱신하는 worktree: `C:\Users\USER\Documents\ChatGPT\KeyAtlas\agent-staging\keyatlas-luna-release-support` <br>
+> 문서 브랜치·기준 SHA: `codex/firstvibe-luna-release-support` · `0b1c7bf2a5cf4681adbf845d30c7695251d3fb94` + 이번 미커밋 문서 변경 <br>
+> 최신 통합·협업 기준: `41eeed0492e5325816e0797bbefa727408574e3c` → `d9c66661db7d7b66f6453e94e467c424107cba66` <br>
 > 가장 중요한 현재 제한: **`REAL_SECRET_GATE=CLOSED` — 실제 비밀번호·API 키·Secret·복구 코드를 아직 입력하면 안 됨**
 
 이 문서는 아이디어 단계부터 실제 사용자가 가입하고 결제하며 웹과 Android 앱을 사용하는 공개 서비스까지 필요한 일을 **의존 순서대로 한 장에 모은 실행 지도**다. 구현 사실, 설계만 있는 부분, 아직 시작하지 않은 부분을 구분하며 “코드가 있음”과 “운영 가능한 서비스임”을 같은 뜻으로 쓰지 않는다.
+
+---
+
+## 0. 2026-09-24 최신 상태와 Master TODO
+
+### 0.1 이 문서를 읽는 법과 진실의 우선순위
+
+파일을 이동하거나 중복본을 삭제하지 않고 조사했다. 같은 이름의 문서가 여러 worktree에
+복사돼 있으므로, 아래 순서로 사실을 판단한다.
+
+1. **이 파일**: 제품 전체 설계·세부 TODO·예상 시간의 단일 종합 지도
+2. `docs/CURRENT_CHECKPOINT_2026-09-19.md`: 2026-09-19 통합 상태와 검증 경계
+3. `docs/handoff/KEYATLAS_COLLAB_TASKS_001_100.md`: 2026-09-22 협업 작업 배치표
+4. `docs/verification/`: exact SHA에서 실제로 실행한 검사와 제한 사항
+5. `docs/SECURITY_ARCHITECTURE.md`, ADR: 보안 설계와 아직 승인되지 않은 제안
+
+상위 폴더 `C:\Users\USER\Documents\ChatGPT\KeyAtlas` 자체는 commit이 없는 별도 빈 Git
+저장소처럼 보인다. 실제 제품 Git 이력은 하위 worktree와 원본 저장소에 있으므로 상위
+폴더의 파일 존재만으로 GitHub 백업·push·PR·merge를 판단하지 않는다.
+
+### 0.2 제품 정의 — 이제 네 축으로 본다
+
+KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라이버시 운영센터**다.
+
+```text
+1. Secure Vault
+   비밀번호 · API Key · Secret · 복구 코드 · 보안 메모를 클라이언트에서 암호화
+            │
+2. Identity & Connection Map
+   어떤 로그인 수단으로 어느 서비스에 가입했고 어떤 키를 어디에 연결했는지 기록
+            │
+3. Consent Center
+   마케팅 수신 · 제3자 제공 · OAuth 권한 · 구독 · 약관 버전과 철회 상태를 기록
+            │
+4. Privacy Cleanup Center
+   수신 거부 · 연결 해제 · 키 폐기/교체 · 회원 탈퇴 · 개인정보/게시물 삭제 요청을 추적
+```
+
+디지털 장의사·세탁소형 기능은 “인터넷의 모든 계정을 몰래 찾아 자동 삭제”하는 기능이
+아니다. 사용자가 소유·통제하는 자료와 공식 제공자 화면/API에서 증거를 모으고, 삭제·탈퇴·
+동의 철회 요청을 준비하며, 사용자가 최종 승인한 사건의 진행 상태와 결과를 보존하는 기능이다.
+
+### 0.3 2026-09-24 Git·구현 증거 스냅샷
+
+| 항목 | 현재 판정 | 정확한 의미 |
+|---|---|---|
+| 2026-09-19 통합 tip | ○ 원격 기록 있음 | `codex/firstvibe-integration-20260919`의 `41eeed0`; 웹·SQLite hardening과 proposed recovery/Android ADR을 모은 통합 기록 |
+| 2026-09-22 협업 baseline | ○ 원격 기록 있음 | `d9c6666`; 1~100 작업표·branch manifest·공통 프롬프트가 추가됨 |
+| 1~100 협업 branch | ○ 예약됨 / ✕ 작업 완료 아님 | 원격 branch가 baseline을 가리키는 것은 작업 공간 예약일 뿐 구현·테스트·PR·merge 증거가 아님 |
+| #30 provider metadata | ⚠ 로컬 보완 후보 | `534b37c`; malformed 입력·UTC 날짜·숨김 own-key 경계를 보완했고 focused 87/87·독립 P1/P2 0이나, generated WASM 부재로 전체 회귀가 차단됐고 UI·원격·통합은 미완료 |
+| #58 evidence labels | ⚠ 로컬 후보 | `6803eb5`; 상태 증거 용어 문서 1개, 아직 baseline 통합·push·PR 미확인 |
+| #93 release manifest | ⚠ 로컬 후보 | `f1a98b5`; 로컬 SHA-256 manifest 스크립트·테스트가 있으나 CI 연결·통합·원격 검증 미확인 |
+| main | ✕ 최신 통합 아님 | 기능·협업 tip을 main에 병합했다는 증거가 없음 |
+| 실제 Secret 사용 | ✕ 금지 | 외부 감사·복구·동기화·플랫폼·운영 gate가 닫혀 있음 |
+| Privacy Cleanup | ✕ 구현 전 | 이번 갱신에서 제품 요구와 TODO를 추가했으며 코드·화면·외부 연결은 아직 없음 |
+
+`commit 존재 → push → PR → 검증 → review → merge → 배포`는 각각 별도 상태다.
+위 세 로컬 후보는 유용한 결과지만 **통합 완료나 GitHub 백업 완료로 표기하지 않는다.**
+
+### 0.4 한눈에 보는 완료·부분완료·남은 일
+
+#### 완료된 범위 — exact 범위 밖으로 확대 해석하지 않기
+
+- [x] [합성/로컬] Rust 암호화·엄격한 codec·불변 revision 기반
+- [x] [합성/로컬] 암호문 SQLite 재시작·CAS·충돌·원자성·평문 marker 검사 기반
+- [x] [합성/로컬] React → Worker → Rust/WASM → IndexedDB 등록·목록·검색·잠금·백업·회전 기반
+- [x] [문서/원격] 2026-09-19 통합 체크포인트 `41eeed0` 기록
+- [x] [문서/원격] 2026-09-22 협업 1~100 baseline `d9c6666` 기록
+- [x] [설계] 서비스 로그인과 금고 잠금 해제를 분리하고 운영자 평문 복구 백도어를 두지 않는 원칙
+
+#### 부분완료 — 다음 검증이나 통합이 있어야 닫힘
+
+- [ ] [부분] 최신 기능과 `origin/main`의 충돌을 보존적으로 해소하고 exact SHA 전체 회귀 실행
+- [ ] [부분] 실제 브라우저 다중 탭·저장공간·업그레이드·파일 backup/restore 검증
+- [ ] [부분] Windows actual-handle/VFS 또는 승인된 broker 저장 경계 결정
+- [ ] [부분] recovery slot·device roster·key epoch·Android 정책 ADR을 Accepted 상태로 전환
+- [ ] [부분] #30은 exact generated WASM으로 전체 회귀를 마치고, #58·#93은 수정·재검증한 뒤 작은 PR 단위로 통합
+- [ ] [부분] GitHub Actions의 계정/과금 외부 차단을 사용자 확인 후 exact SHA에서 재실행
+
+#### 아직 구현하지 않은 핵심 제품 기능
+
+- [ ] [AI] Privacy PRD와 사용자 여정·수용 기준 확정
+- [ ] [AI] `IdentityProfile → ServiceAccount → Credential → Connection` 관계를 제품 화면에 연결
+- [ ] [AI] `ConsentGrant`, `Subscription`, `EvidenceSource`, `CleanupCase`, `CleanupAction` 데이터 계약
+- [ ] [AI] 디지털 정리센터 합성 목록·상세·상태 이력·증거 보관 UI
+- [ ] [AI] 삭제·탈퇴·키 폐기 전 재인증·미리보기·명시적 최종 승인 상태기계
+- [ ] [AI] 수신 거부·동의 철회·OAuth 연결 해제·계정 삭제 요청 템플릿과 공식 링크 카탈로그
+- [ ] [AI] 복구·신뢰 기기·분실 기기 철회·키 세대 전환 구현
+- [ ] [AI] signed checkpoint·rollback/omission/fork 탐지와 opaque sync 계약
+- [ ] [AI] Spring Boot API·PostgreSQL schema/migration·로컬 합성 동기화
+- [ ] [AI] Google OIDC·Passkey와 선택형 Kakao/Naver 연결
+- [ ] [AI] Android Kotlin/Compose·Rust binding·SQLite·Keystore·BiometricPrompt
+- [ ] [AI] Free/Pro entitlement·결제 sandbox·구독 lifecycle
+- [ ] [AI] 모니터링·비밀값 없는 로그·백업/DR·지원 도구·CI/CD·SBOM
+- [ ] [외부] 독립 암호 리뷰·침투 테스트·법률/개인정보 검토
+
+#### 사용자가 결정하거나 직접 준비해야 하는 것
+
+- [ ] [사용자] 최종 제품명·상표 조사·도메인
+- [ ] [사용자] 기본 3개/선택 최대 5개 복구 수단과 영구 손실 고지 정책
+- [ ] [사용자] Google/Kakao/Naver·클라우드·DB·이메일·결제·Play Console 계정과 MFA
+- [ ] [사용자] Free/Pro 가격·무료 한도·환불·지원 범위
+- [ ] [사용자] 서비스 국가·사업 주체·법률/개인정보·디지털 정리 업무의 위임 범위
+- [ ] [사용자] 각 commit·push·PR·main merge·공개 배포·실제 Secret beta의 별도 승인
+
+### 0.5 Privacy Cleanup Center 상세 설계
+
+#### 데이터 관계
+
+```text
+IdentityProfile
+  └─ ServiceAccount
+       ├─ LoginMethod          Google / Kakao / Naver / Email / Passkey / Manual
+       ├─ Credential           Password / API key / Secret / recovery code
+       │    └─ Connection      MCP / CLI / CI / 앱 / 서버 / 플러그인 / 환경
+       ├─ ConsentGrant         마케팅 / 제3자 제공 / OAuth scope / 알림 / 약관 버전
+       ├─ Subscription         free / paid / trial / renewal / cancellation
+       └─ EvidenceSource       manual / 가입 메일 / 공식 연결 화면 / import
+             └─ CleanupCase
+                  └─ CleanupAction + 상태 이력 + 접수 증거 + 다음 확인일
+```
+
+금고 원문과 민감한 사건 증거는 클라이언트 측 암호화 대상이다. 서버에는 동기화에 필요한
+불투명 암호문과 최소 운영 메타데이터만 둔다는 기존 원칙을 유지한다. 이메일 전체 본문,
+신분증, API 키 원문을 운영자 검색용 평문 DB에 복제하지 않는다.
+
+#### 사용자가 실제로 하게 될 일과 수용 기준
+
+1. **가입·연결 기록**
+   사용자는 서비스, 로그인 방법, 계정 별칭, 발급받은 credential과 연결처를 기록한다.
+   완료 기준: 잠금 해제 후 “어느 계정으로 가입했고 이 키가 어디에 쓰이는가”를 3단계 안에 찾는다.
+
+2. **동의·구독 기록**
+   사용자는 마케팅·제3자 제공·OAuth 권한·구독 상태와 확인 날짜를 저장한다.
+   완료 기준: 원문 동의 문서 또는 공식 화면 링크, 출처, 마지막 확인일이 서로 구분된다.
+
+3. **정리 대상 발견**
+   수동 입력, 사용자가 선택한 import, 가입 메일, 공식 제공자의 연결 목록 등에서 후보를 만든다.
+   완료 기준: `사용자 입력 / 공식 연동 / 추정 후보` 라벨을 숨기지 않고 100% 자동 발견이라고 표현하지 않는다.
+
+4. **정리 사건 생성**
+   수신 거부, 동의 철회, OAuth unlink, API 키 교체·폐기, 회원 탈퇴, 개인정보·게시물 삭제,
+   검색 제외 중 하나를 선택한다.
+   완료 기준: 원본 삭제·계정 탈퇴·검색 제외·검색 노출 억제를 서로 다른 결과로 기록한다.
+
+5. **안전한 실행**
+   KeyAtlas가 공식 링크·절차·요청서 초안을 제시하고 사용자가 재인증 후 최종 승인한다.
+   완료 기준: 잠금 해제만으로 파괴적 작업이 자동 실행되지 않으며 대상·영향·복구 가능성을 다시 보여 준다.
+
+6. **처리 추적과 재확인**
+   `발견 → 확인 필요 → 요청 준비 → 승인 대기 → 접수 → 추가 인증 → 완료/거절 → 재확인`을 기록한다.
+   완료 기준: 완료 영수증·날짜·남아 있는 데이터 범위·재노출 확인일을 사용자만 열람할 수 있다.
+
+#### 자동화 경계
+
+| 등급 | KeyAtlas가 할 수 있는 일 | 반드시 남겨 둘 사용자 단계 |
+|---|---|---|
+| 자동 보조 | 공식 링크 탐색, 양식 초안, 만료·재확인 알림, 상태 분류 | 결과 확인과 잘못된 후보 수정 |
+| 반자동 | 표준 수신 거부 준비, OAuth 설정 화면 deep link, 키 회전 checklist, 삭제 요청 초안 | 재인증·대상 확인·최종 전송/클릭 |
+| 사람 확인 필수 | 타인 게시물, 명예훼손, 불법 콘텐츠, 사망자 계정, 법적 분쟁, 신분 증명 | 사용자 또는 적법한 대리인·전문가가 판단·제출 |
+
+다음 동작은 백그라운드에서 무단 실행하지 않는다: 회원 탈퇴, 계정 병합, API 키 폐기,
+연결 해제, 유료 구독 취소, 법적 삭제 요청 전송. 성공을 확인하지 못했으면 `완료`가 아니라
+`접수`, `추가 확인 필요`, `실패`, `증거 없음`으로 표시한다.
+
+### 0.6 Privacy 기능 전용 P01~P12 TODO
+
+기존 1~100 협업 branch는 2026-09-22 baseline으로 보존한다. 아래 작업은 아직 branch를
+만들지 않은 **Privacy addendum**이며, 구현을 시작할 때 exact base SHA와 파일 소유권을
+다시 지정한다.
+
+| ID | 상태 | 작업 | 담당 | 예상 집중 시간 | 완료 증거 |
+|---|---|---|---|---:|---|
+| P01 | [ ] | Privacy PRD·용어·과장 금지 문구 | [공동] | 2~4일 | 사용자 여정·수용 기준 승인 |
+| P02 | [ ] | Consent/Cleanup domain contract | [AI] | 4~8일 | validation·future-version·roundtrip tests |
+| P03 | [ ] | 암호화 로컬 저장·검색 projection | [AI] | 1~2주 | 평문 marker 0, 잠금 시 조회 불가 |
+| P04 | [ ] | 합성 디지털 정리센터 UI | [AI] | 1~2주 | empty/error/locked/100건 접근성 테스트 |
+| P05 | [ ] | 파괴적 작업 승인 상태기계 | [AI]+[공동] | 1~2주 | 재인증·재확인·중복 실행·취소 회귀 |
+| P06 | [ ] | 공식 링크·요청서·증거 source catalog | [AI] | 1~2주 | 출처·확인일·UNKNOWN 상태 보존 |
+| P07 | [ ] | 수신 거부·동의 철회 보조 | [AI] | 1~3주 | 사용자 승인 없이는 전송 0 |
+| P08 | [ ] | OAuth 연결 조회·해제 deep link | [AI]+[사용자] | 2~5주 | provider별 최소 scope·unlink 후 검증 |
+| P09 | [ ] | 가입 메일/import 후보 탐색 | [AI]+[공동] | 3~6주 | 최소 권한·local-first·오탐 수정·삭제 |
+| P10 | [ ] | 회원 탈퇴·개인정보/게시물 삭제 사건 추적 | [AI]+[외부] | 3~6주 | 제출·거절·완료·재확인 증거 분리 |
+| P11 | [ ] | 재노출·미처리 알림과 운영 SLA | [AI]+[사용자] | 2~4주 | secret-free 알림·quiet hours·audit |
+| P12 | [ ] | Privacy Care 유료 사람 지원 | [사용자]+[외부] | 6~12주 이상 | 적법한 위임·최소 접근·교육·보험·법률 검토 |
+
+P01~P06은 실제 외부 계정 없이 합성 데이터로 진행할 수 있다. P07 이후는 제공자 정책,
+사용자 OAuth 동의, 개인정보 처리, 법률 검토가 필요하다. 모든 제공자에 통하는 범용 API는
+없으므로 서비스별 adapter를 작은 범위로 추가한다.
+
+### 0.7 갱신된 조건부 시간 범위
+
+| 목표 | Privacy 기능 제외 기존 범위 | Privacy 핵심을 포함한 갱신 범위 |
+|---|---:|---:|
+| 합성 Web 데모 안정화 | 1~3주 | P01~P06 병렬 포함 약 3~6주 |
+| 로컬 Privacy Cleanup alpha | 해당 없음 | 추가 4~8주 |
+| 제한 실제-Secret/Privacy 비공개 beta 후보 | 약 20~32주 | 약 24~40주 + 독립 검토 대기 |
+| 공개 Web+Android 서비스 | 약 24~40주 | 약 30~52주 이상 + 심사·법률·감사 대기 |
+| 사람 지원형 Privacy Care | 해당 없음 | 공개 셀프서비스 이후 추가 3~6개월 이상 |
+
+병렬 AI는 문서·UI·테스트·공개 metadata를 단축할 수 있지만 암호 설계, 복구, 파괴적 작업,
+법률 위임, 독립 감사와 실제 장애 훈련의 승인 시간을 없애지는 못한다. 가장 빠른 안전 경로는
+**P01~P06 합성 self-service → 제한된 공식 연동 → 사람 지원형 서비스** 순서다.
 
 ---
 
@@ -35,7 +238,8 @@
 
 ### 우리가 만들고 있는 것
 
-KeyAtlas는 단순 메모장이 아니라 다음 관계를 보존하는 **암호화 자격 증명 지도 + 비밀번호/API 키 금고**다.
+KeyAtlas는 단순 메모장이 아니라 다음 관계를 보존하고 정리하는 **암호화 금고 + 디지털
+신원·연결 지도 + 동의 관리 + 프라이버시 정리센터**다.
 
 ```text
 내 로그인 수단
@@ -43,30 +247,40 @@ KeyAtlas는 단순 메모장이 아니라 다음 관계를 보존하는 **암호
        └─ 가입한 서비스 계정
             └─ 조직 / 워크스페이스 / 프로젝트 / 환경
                  └─ 비밀번호 / API Key / Secret / 복구 코드 / 기타 자격 증명
-                      └─ 웹앱 / 모바일앱 / MCP / CLI / CI / 서버 / 플러그인
+                      ├─ 웹앱 / 모바일앱 / MCP / CLI / CI / 서버 / 플러그인
+                      ├─ 마케팅 / 제3자 제공 / OAuth 권한 / 구독 / 약관
+                      └─ 연결 해제 / 키 교체·폐기 / 탈퇴 / 삭제 요청 / 재확인
 ```
 
 예를 들어 “OpenAI에서 발급받은 API 키가 로컬 MCP, GitHub Actions, 테스트 앱 어디에 연결됐는가?”를 한눈에 보고, 나중에 키를 교체할 때 모든 연결처를 빠뜨리지 않게 하는 제품이다.
 
 Anthropic/OpenAI 같은 제공자가 생성 직후에만 API 키 원문을 보여 주고 나중에는 마스킹만 보여 주는 문제도 해결 대상이다. 단, **KeyAtlas가 원문을 다시 보여 주려면 최초 발급 때 사용자가 그 원문을 KeyAtlas에 안전하게 저장했어야 한다.** 과거에 저장하지 않았고 제공자도 마스킹한 키를 KeyAtlas가 복원해 내는 것은 불가능하다.
 
+Google·Naver·Kakao 로그인이나 개인정보 하나로 모든 가입 사이트를 조회하는 범용 API는
+없다. 계정 발견은 사용자가 소유한 기록, 가입 메일, 비밀번호 관리자·브라우저 export,
+공식 연결 화면/API, 직접 확인을 출처별로 합치는 방식이어야 한다. 연결 해제, 서비스 탈퇴,
+개인정보 삭제, 게시물 원본 삭제, 검색 제외는 서로 다른 결과로 기록한다.
+
 ### 현재 사실 요약
 
 | 항목 | 상태 | 현재 증거 |
 |---|---|---|
-| GitHub 기능 브랜치 백업 | ○ 완료 | 로컬 HEAD와 원격 upstream이 `b05ff45…`로 일치 |
-| 작업트리 | ○ 완료 | 2026-09-18 재확인 당시 clean |
+| GitHub 통합·협업 기준 | ○ 범위 제한 완료 | `41eeed0` 통합 기록과 그 위 `d9c6666` 협업 baseline이 원격에 있음 |
+| canonical 협업 worktree | ○ 확인 | 2026-09-24 조사 당시 `d9c6666`, tracked 변경 없음 |
 | Rust 합성 암호·로컬 저장 코어 | ◐ (일부만 됨) | 합성 테스트와 계약은 강하지만 production crypto 승인·외부 감사 전 |
 | React/Worker/Rust-WASM/IndexedDB 합성 금고 | ◐ (일부만 됨) | 검색·등록·편집·백업·충돌·회전 흐름 구현, 실제 Secret 입력은 닫힘 |
-| 웹 테스트 | ○ 완료 | 로컬 46개 파일, 1,449개 테스트 통과 |
-| TypeScript 검사·웹 빌드 | ○ 완료 | typecheck 통과, Vite 48 modules 빌드 통과 |
-| 로컬 Secret scan | ○ 완료 | 합성 baseline 4개, gate closed 상태로 통과 |
-| 최신 원격 CI | ✕ 미완료 | [run 35313800938](https://github.com/kjs844-art/secure-vault/actions/runs/35313800938): Rust/WASM/Web은 통과했지만 마지막 post-build Secret 재검사가 setup/execution 오류로 실패 |
-| `main` 통합 | ✕ 미완료 | 현재 브랜치와 `origin/main`의 관계가 31 commits ahead / 4 behind이며 충돌 정리 필요 |
-| 현재 기능 브랜치 PR | ✕ 미완료 | 이 브랜치 자체를 대상으로 한 열린 PR 없음 |
+| 마지막 저장소 기록의 Web 검증 | ○ 당시 범위 완료 | 46 files / 1,467 tests, typecheck·production build exit 0 기록; 이번 문서 갱신에서 재실행하지 않음 |
+| 마지막 저장소 기록의 scanner | ○ 당시 범위 완료 | PowerShell 7·5.1 각각 102/102 기록; 이번 문서 갱신에서 재실행하지 않음 |
+| 최신 원격 CI | ? BLOCKED/UNKNOWN | 저장소 기록상 payment/spending-limit로 step 0개 종료; 2026-09-24 `gh` 조회도 404여서 PASS/FAIL로 판정하지 않음 |
+| `main` 통합 | ✕ 미완료 | `d9c6666` 및 9월 24일 로컬 후보가 main에 병합됐다는 증거 없음 |
+| 1~100 협업 작업 | ◐ 예약만 됨 | 원격 branch 생성은 완료가 아니며 초기 상태는 모두 baseline `d9c6666` |
+| #30/#58/#93 로컬 후보 | ◐ 통합 전 | #30은 `534b37c` focused 87/87·독립 P1/P2 0이지만 전체 회귀 차단; 셋 모두 push·PR·remote CI·baseline 통합·main merge는 미확인 |
 | Spring Boot API | ✕ 미완료 | `services/api`는 placeholder 수준 |
 | PostgreSQL 운영 DB | ✕ 미완료 | schema·migration·운영 인스턴스 없음 |
 | Google/passkey 로그인 | ✕ 미완료 | 설계만 있고 실제 OAuth client·서버 흐름 없음 |
+| Identity & Connection Map 제품 화면 | ◐ (일부만 됨) | 관계 코어·합성 목록은 있으나 실제 계정 발견·시각 지도·공식 연동 없음 |
+| Consent Center | ✕ 미완료 | 요구와 TODO만 추가, 데이터 모델·화면·외부 연동 없음 |
+| Privacy Cleanup Center | ✕ 미완료 | 요구와 P01~P12만 추가, 탈퇴·삭제·동의 철회 실행 코드 없음 |
 | Android 앱 | ✕ 미완료 | `apps/android`는 README 수준, 실제 앱/Keystore/생체 인증 없음 |
 | 결제·구독 | ✕ 미완료 | 가격 가설만 있고 Stripe/Play Billing 미연결 |
 | 도메인·공개 배포 | ✕ 미완료 | 이름·도메인·클라우드 계정·DNS·TLS 미확정 |
@@ -92,6 +306,11 @@ flowchart TD
     U[사용자] --> MKT[www: 마케팅·가격·문서]
     U --> WEB[vault: React Web]
     U --> AND[Android: Kotlin/Compose]
+
+    WEB --> PRIV[Identity Map / Consent Center / Privacy Cleanup]
+    AND --> PRIV
+    PRIV --> APPROVE[재인증 / 대상·영향 미리보기 / 최종 승인]
+    APPROVE -.사용자 승인 뒤 공식 경로.-> EXT[외부 서비스 설정·API·요청 양식]
 
     WEB --> WW[전용 Web Worker]
     WW --> WASM[공유 Rust/WASM 보안 코어]
@@ -163,6 +382,12 @@ Google / Passkey 로그인
   ↓
 06 계정·서비스·Credential 관계 모델
   ↓
+06A Identity 발견 증거·신뢰도·출처
+  ↓
+06B Consent·Subscription 상태 모델
+  ↓
+06C Privacy Cleanup 사건·승인·결과 상태기계
+  ↓
 07 합성 Web 금고 완성
   ↓
 08 실제 Secret 입력·보기·복사 UX
@@ -233,18 +458,21 @@ Google / Passkey 로그인
 | 상태 | 순서대로 할 일 | 담당 | 어디서 / 어떻게 | 완료 증거 |
 |---|---|---|---|---|
 | ○ 완료 | 저장소와 원격 연결 | [AI] | 로컬 저장소의 `origin`을 GitHub private repo에 연결 | `git remote -v`가 `kjs844-art/secure-vault`를 표시 |
-| ○ 완료 | 현재 기능 브랜치 원격 백업 | [AI] | `codex/firstvibe-registration-conflict-preservation` 비강제 push | 로컬 HEAD·upstream이 `b05ff45…`로 일치 |
-| ○ 완료 | 현재 작업트리 정리 상태 확인 | [AI] | `git status --short --branch` | 미커밋 파일 없음 |
-| ◐ (일부만 됨) | CI workflow 구성 | [AI] | `.github/workflows/security-gates.yml` | Rust/WASM/Web 단계는 존재하나 최신 run 전체는 red |
-| ✕ 미완료 | post-build Secret 재검사 오류 원인 수정 | [AI] | GitHub Actions log·scanner exit contract·artifact 경로를 재현 | exact SHA의 workflow 전체가 green |
+| ○ 완료 | 통합·협업 기준 원격 기록 | [AI] | `41eeed0` 통합 후 `d9c6666` 협업 baseline 비강제 push | local/upstream exact SHA 일치 기록 |
+| ○ 완료 | canonical 협업 worktree 정리 상태 확인 | [AI] | 2026-09-24 `keyatlas-collab-001-100` 확인 | `d9c6666`, tracked dirty 0 |
+| ◐ (일부만 됨) | CI workflow 구성 | [AI] | `.github/workflows/security-gates.yml` | 단계 정의는 있으나 최신 remote 결과는 BLOCKED/UNKNOWN |
+| ✕ 외부 차단 | exact-SHA 원격 CI 재검증 | [사용자]+[AI] | GitHub 계정/과금·접근 상태 확인 후 같은 SHA 재실행 | step이 실제 실행된 workflow 전체 결과 |
 | ✕ 미완료 | 최신 기능 브랜치와 `main` 통합 계획 | [공동] | merge-base와 충돌 파일을 좁게 비교하고 별도 integration branch 사용 | 충돌 이유·선택·테스트 증거가 PR에 기록됨 |
 | ✕ 미완료 | `main` 보호 규칙 | [사용자] | GitHub → Settings → Branches/Rulesets | force push 금지, required checks, 승인자 수 적용 |
 | ✕ 미완료 | CODEOWNERS와 보안 코어 승인 정책 | [AI] | `.github/CODEOWNERS`에 crypto/storage/sync 소유자 지정 | 중요 파일은 보안 리뷰 없이 병합 불가 |
-| ✕ 미완료 | 실제 Secret Git 차단 | [AI] | pre-commit + CI secret scan + fixture allowlist | 합성 fixture만 허용, 실제 패턴 fixture가 CI에서 의도대로 차단됨 |
-| ✕ 미완료 | 릴리스 태그·CHANGELOG·SBOM 규칙 | [AI] | 태그 규칙, changelog, artifact provenance 문서화 | 동일 tag의 source/SBOM/build provenance 추적 가능 |
-| ✕ 미완료 | AI별 worktree·브랜치·파일 소유권 표 | [AI] | 한 에이전트 한 worktree, 겹치는 파일 사전 예약 | 작업 충돌 없이 PR 단위로 검토 가능 |
+| ◐ (일부만 됨) | 실제 Secret Git 차단 | [AI] | local/CI scanner·fixture allowlist 기반 존재 | exact 통합 SHA local+remote 재검증과 pre-commit 정책 잔여 |
+| ◐ (로컬 후보) | 릴리스 artifact manifest | [AI] | #93 `f1a98b5` 로컬 SHA-256 manifest 도구 | 자체 테스트 재실행·CI 연결·push/PR·통합 잔여 |
+| ✕ 미완료 | 릴리스 태그·CHANGELOG·SBOM·서명 규칙 | [AI] | tag, changelog, SBOM, provenance, signing 문서화 | 동일 tag의 source/SBOM/build provenance 추적 가능 |
+| ◐ (일부만 됨) | AI별 worktree·브랜치·파일 소유권 표 | [AI] | 1~100 manifest·assignment contract 존재 | 실제 배정·검증·PR 상태가 manifest와 일치 |
 
-예상 시간: **병렬 3~7일 / 한 명 순차 1~2주**. 첫 번째 우선순위는 최신 CI 전체 green이다.
+예상 시간: 로컬 기준선·후보 통합 **병렬 3~7일 / 한 명 순차 1~2주**. 원격 CI는
+GitHub 계정 차단 해소 뒤 별도이며, 현재 첫 우선순위는 `green`을 가정하는 것이 아니라
+exact SHA·로컬 증거·미실행 원격 상태를 일치시키는 것이다.
 
 ## 01. 제품 정의·이름·사업 원칙 — ◐ (일부만 됨)
 
@@ -347,7 +575,7 @@ Google / Passkey 로그인
 | ○ 완료 | Password와 API Key 타입별 정책 기반 | [AI] | 공통 private builder + type policy | Password에 API 전용 회전 action이 노출되지 않음 |
 | ◐ (일부만 됨) | connection 편집·키 교체 체크리스트 | [AI] | 합성 Web UX | 고정 fixture에서 동작, 실제 provider 없음 |
 | ✕ 미완료 | credential 유형 전체 표 | [공동] | password, API key, OAuth client, token, webhook secret, recovery code, SSH metadata | 각 타입의 secret/meta/expiry/rotation 정책 승인 |
-| ✕ 미완료 | provider catalog schema | [AI] | 이름, console URL, key prefix는 탐지 참고만, rotation docs URL | provider 변경과 사용자 custom provider 모두 지원 |
+| ◐ (로컬 보완 후보) | provider catalog schema | [AI] | `534b37c`에 7개 제공자 public-only metadata와 malformed 입력 fail-closed 보완; focused 87/87·독립 P1/P2 0, UI·전체 회귀·baseline 미통합 | exact generated WASM 회귀→push/PR→통합 후에만 완료 전환 |
 | ✕ 미완료 | 로그인 출처 기록 | [AI] | Google/Kakao/Naver/email/passkey/manual을 서비스 계정에 연결 | “어느 아이디로 가입했나” 조회 가능 |
 | ✕ 미완료 | 발급 출처·사용처 provenance | [AI] | created at/by, last verified, connection, environment, owner | 키를 어디서 받아 어디에 넣었는지 추적 가능 |
 | ✕ 미완료 | 상태·만료·마지막 사용·비용 메타데이터 | [AI] | 사용자가 기록하거나 provider 공식 API가 허용하는 범위만 동기화 | active/revoked/expired와 사용·비용 출처가 구분됨 |
@@ -355,6 +583,29 @@ Google / Passkey 로그인
 | ✕ 미완료 | rotation 상태기계 | [AI] | planned→issued→staged→cutover→verified→revoked→archived | 연결처 하나라도 미갱신이면 완료 처리 안 됨 |
 
 예상 시간: 기본 v1 **2~4주**, provider별 자동 연동은 출시 후 별도다.
+
+---
+
+## 06A. Identity 발견·Consent·Privacy Cleanup — ✕ 미완료
+
+이 단계는 2026-09-24 제품 범위에 새로 확정했다. 기존 credential 관계 모델을 재사용하지만
+외부 서비스의 계정·동의·삭제 상태를 자동으로 안다고 가정하지 않는다.
+
+| 상태 | 순서대로 할 일 | 담당 | 어디서 / 어떻게 | 완료 증거 |
+|---|---|---|---|---|
+| ✕ 미완료 | 발견 증거 모델 | [AI] | manual/import/email/공식 연결 화면을 출처·확인일·신뢰도와 함께 저장 | 추정 후보를 확인된 계정으로 표시하지 않음 |
+| ✕ 미완료 | Identity Map | [AI] | 로그인 수단→서비스 계정→credential→connection 시각화 | 사용자 검증으로 3단계 안에 발급처·사용처 탐색 |
+| ✕ 미완료 | ConsentGrant 모델 | [AI]+[공동] | 마케팅·제3자 제공·OAuth scope·알림·약관 버전 | 필수/선택·활성/철회·출처·확인일 구분 |
+| ✕ 미완료 | Subscription 모델 | [AI] | plan·비용·trial·갱신·해지 상태 | KeyAtlas 자체 결제와 외부 서비스 구독을 혼동하지 않음 |
+| ✕ 미완료 | CleanupCase 상태기계 | [AI] | 발견→확인→준비→재인증→승인→접수→결과→재확인 | 거절·일부 처리·확인 불가·재노출 상태 보존 |
+| ✕ 미완료 | 결과 유형 분리 | [AI] | 탈퇴/unlink/수신거부/동의철회/원본삭제/검색제외/노출억제 | 하나의 모호한 `삭제 완료` 상태를 사용하지 않음 |
+| ✕ 미완료 | 파괴적 작업 step-up | [AI]+[공동] | 금고 unlock과 별도의 재인증·대상·영향·취소 가능성 확인 | 승인 없는 외부 변경 0, 중복 제출 0 |
+| ✕ 미완료 | 공식 경로 catalog | [AI] | provider 설정·탈퇴·privacy·revoke 공식 URL과 확인일 | 깨진 링크·UNKNOWN·정책 변경을 fail-closed로 표시 |
+| ✕ 미완료 | 합성 Cleanup UI | [AI] | 목록·상세·timeline·evidence·next check | 잠김/빈 상태/오류/100건/키보드 접근성 회귀 |
+| ✕ 미완료 | 사람·전문가 인계 | [사용자]+[외부 전문가] | 불법 콘텐츠·사망자 계정·명예훼손·분쟁의 위임·최소 접근 | 법률 검토·역할·SLA·감사 로그 승인 |
+
+예상 시간: P01~P06 합성 self-service **3~6주**, 제한된 공식 연동까지 **추가 6~12주**,
+사람 지원형 Privacy Care는 법률·운영 준비를 포함해 **추가 3~6개월 이상**.
 
 ---
 
@@ -738,7 +989,12 @@ Cloudflare를 선택할 경우 공식 안내: [Registrar](https://www.cloudflare
 | ✕ 미완료 | cookie/analytics consent | [공동] | vault origin은 비필수 추적 금지 권장 | consent 없이 비필수 cookie 0 |
 | ✕ 미완료 | subprocessor·DPA | [사용자]+[외부 전문가] | cloud, DB, email, monitoring, payment 목록 | 계약과 공개 목록 |
 | ✕ 미완료 | data export | [AI] | account metadata와 암호화 vault export 구분 | 기한 내 요청 처리 drill |
-| ✕ 미완료 | account/data deletion | [AI] | app 내 삭제, 공개 안내 URL, delay/cancel, backup expiry | end-to-end 삭제 증거 |
+| ✕ 미완료 | KeyAtlas 자체 account/data deletion | [AI] | app 내 삭제, 공개 안내 URL, delay/cancel, backup expiry | end-to-end 삭제 증거 |
+| ✕ 미완료 | 외부 서비스 정리 요청의 위임·권한 | [사용자]+[외부 전문가] | KeyAtlas 자체 삭제와 사용자가 제3자에게 보내는 요청을 분리 | 적법한 위임·철회·범위·책임 문서 |
+| ✕ 미완료 | cleanup evidence 최소화 | [AI]+[공동] | URL·접수번호·필요 최소 증거만 암호화, 신분증 장기 보관 기본 금지 | 보존·폐기·export·access drill |
+| ✕ 미완료 | consent withdrawal 증거 | [AI] | 무엇을 언제 어떤 공식 경로로 철회했는지 기록 | 실제 처리와 요청 접수를 구분 |
+| ✕ 미완료 | provider 정책·자동화 준수 | [AI]+[외부 전문가] | robots/API ToS/이용약관/요청 rate·신원 확인 절차 검토 | 허용되지 않은 scraping·자동 제출 0 |
+| ✕ 미완료 | 게시물·검색 제외 법률 경계 | [외부 전문가] | 권리자·본인 작성·타인 작성·불법 콘텐츠·사망자 계정 분류 | 관할별 escalation과 이의제기 절차 |
 | ✕ 미완료 | retention schedule | [공동] | logs, billing, abuse, support, deletion tombstone | 자동 purge job·감사 |
 | ✕ 미완료 | 미성년자 정책 | [사용자]+[외부 전문가] | 최소 연령·보호자 동의 여부 | store/terms 일치 |
 | ✕ 미완료 | 국제 이전·data residency | [외부 전문가] | region·processor·SCC 등 필요성 | 계약·privacy 문구 |
@@ -795,6 +1051,8 @@ Cloudflare를 선택할 경우 공식 안내: [Registrar](https://www.cloudflare
 | ✕ 미완료 | admin step-up·audit | [AI] | passkey/MFA, just-in-time access, action reason | 관리자 행동 추적 |
 | ✕ 미완료 | abuse·fraud·chargeback flow | [사용자]+[AI] | 자동 잠금 기준과 appeal | runbook |
 | ✕ 미완료 | legal request flow | [외부 전문가]+[사용자] | 보유 데이터 한계, 검증, 기록 | policy·template |
+| ✕ 미완료 | Privacy Cleanup 지원 flow | [AI]+[사용자]+[외부 전문가] | self-service→지원 티켓→전문가 인계, 최소 권한·증거 격리 | 상담자가 금고 원문 없이 사건을 지원 |
+| ✕ 미완료 | 삭제·탈퇴 결과 용어 | [AI] | 요청 접수/일부 처리/원본 삭제/검색 제외/확인 불가를 분리 | 과장된 `완전 삭제` 안내 0 |
 | ✕ 미완료 | incident communication | [AI]+[사용자] | status/email/in-app template | tabletop에서 사용 가능 |
 | ✕ 미완료 | support SLA | [사용자] | Free/Pro 응답 목표 | 공개 도움말과 운영 가능 인력 일치 |
 
@@ -1053,7 +1311,24 @@ AI만으로 완료라고 말할 수 없는 것:
 
 ## 부록 C. 여러 AI에게 나눌 작업 번호와 브랜치 지도
 
-`(1A)~(21)`은 보안 핵심을 포함한 **상위 업무 라벨**이며 아직 모두 실제 branch로 생성된 것은 아니다. `(22)~(35)`는 무료·외부 AI에 맡겨도 되는 합성 UI·문서·공개 metadata 작업으로 더 작게 분해했고, 2026-09-18에 모두 같은 기준 SHA `b05ff454029676947d8f6c515acf488b3b787d29`에서 GitHub 원격 branch로 생성했다. 생성됐다는 것은 작업이 완료됐다는 뜻이 아니다.
+2026-09-22부터 최신 협업 지도는 `docs/handoff/KEYATLAS_COLLAB_TASKS_001_100.md`와
+`KEYATLAS_COLLAB_BRANCH_MANIFEST_001_100.csv`다. 1~100 원격 branch는 모두
+`d9c6666`에서 출발하도록 예약됐으며, **RESERVED는 구현 완료가 아니다.** 아래 `(1A)~(35)`
+표는 2026-09-18의 앞선 분해 이력으로 보존하고, 새 작업 배정에는 1~100 manifest를 쓴다.
+
+| 2026-09-24 확인 작업 | 로컬 tip | 원격 상태 | 판정 |
+|---|---|---|---|
+| #30 provider public metadata | `534b37c` | 원격 ref는 `d9c6666` | 로컬 보완·focused 87/87·독립 P1/P2 0; generated WASM 부재로 전체 회귀 차단, UI·통합 필요 |
+| #58 evidence state labels | `6803eb5` | 원격 ref는 `d9c6666` | 문서 후보·제품 기능 아님 |
+| #93 release artifact manifest | `f1a98b5` | 원격 ref는 `d9c6666` | 로컬 도구 후보·CI 미연결·실행 증거 재확인 필요 |
+
+Privacy addendum P01~P12는 기존 1~100 범위를 조용히 변경하지 않고, 통합 기준 SHA가
+확정된 뒤 별도 manifest로 생성한다. 현재는 계획만 있으며 branch를 만들지 않았다.
+
+### 2026-09-18 역사 작업 분해
+
+`(1A)~(21)`은 보안 핵심 상위 업무 라벨이고 `(22)~(35)`는 당시 무료·외부 AI용으로
+분해한 작업이다. 당시 기준 SHA는 `b05ff454029676947d8f6c515acf488b3b787d29`였다.
 
 | 번호 | 작업 | 난이도/중요도 | 권장 브랜치 | 선행 조건 |
 |---|---|---|---|---|
@@ -1098,7 +1373,9 @@ AI만으로 완료라고 말할 수 없는 것:
 | (34) | ○ 완료 | ✕ 미완료 | 공개 status·장애 안내 mock | `codex/firstvibe-collab-34-public-status` | (22)(23) |
 | (35) | ○ 완료 | ✕ 미완료 | UI 접근성 검토·보고서 | `codex/firstvibe-collab-35-accessibility-review` | 앞선 UI 통합 후 |
 
-이 14개 branch는 현재 동일한 commit을 가리키는 **빈 작업 출발선**이다. 최신 CI가 red인 상태이므로 곧바로 완료/병합 대상으로 취급하지 않는다. 외부 AI가 실제로 배정될 때 허용 파일과 금지 파일을 프롬프트에 고정한다.
+이 표는 역사 스냅샷이다. 현재는 1~100 manifest와 exact ref를 다시 확인한다. 원격 CI는
+`red`로 단정하지 않고 계정/과금 차단과 조회 404 때문에 `BLOCKED/UNKNOWN`으로 기록한다.
+외부 AI가 실제로 배정될 때 허용 파일과 금지 파일을 프롬프트에 고정한다.
 
 ### 병렬 작업 규칙
 
@@ -1110,11 +1387,12 @@ AI만으로 완료라고 말할 수 없는 것:
 6. PR은 자동 merge하지 않고 security owner가 diff와 test evidence를 검토한다.
 7. 실제 Secret, `.env`, signing key, recovery code는 어떤 branch에도 넣지 않는다.
 
-### 현재 열려 있는 PR 판단
+### 2026-09-18 당시 PR 판단 — 2026-09-24에 재검증하지 않음
 
 - **PR #4**: 구형 기능 branch이며 최신 branch에 동등 변경이 들어온 것으로 보이는 superseded 후보다. 그대로 merge하지 않고 patch-equivalence를 확인한 뒤 닫는 방향을 검토한다.
 - **PR #3**: landing/design Draft다. clean/mergeable 표시는 보안·회귀 검증 완료를 뜻하지 않는다. 별도 검증 후에만 통합한다.
-- 최신 `b05ff45…` 전체를 main으로 보내는 PR은 아직 없다.
+- 최신 통합·협업 baseline과 9월 24일 로컬 후보의 현재 PR 상태는 이 문서 갱신에서 원격
+  재검증하지 않았다. PR 번호·상태를 최신 사실로 사용할 때는 `gh pr list/view`로 다시 확인한다.
 
 ---
 
@@ -1149,55 +1427,74 @@ AI만으로 완료라고 말할 수 없는 것:
 | 목표 | 여러 AI가 파일 소유권을 지켜 병렬 작업 | 한 명이 순차 작업 | 현재 상태 |
 |---|---:|---:|---|
 | CI/main 기준선 안정화 | 3~7일 | 1~2주 | ◐ (일부만 됨) |
-| 보여줄 수 있는 합성 Web demo | 1~3주 | 2~5주 | ◐ (일부만 됨) |
+| 보여줄 수 있는 합성 Vault Web demo | 1~3주 | 2~5주 | ◐ (일부만 됨) |
+| 합성 Identity·Consent·Cleanup demo | 추가 3~6주 | 추가 6~10주 | ✕ 미완료 |
 | signed checkpoint·recovery·sync contract | 5~10주 | 10~18주 | ✕ 미완료 |
 | Spring API·Postgres·auth 기반 | 6~12주 | 12~22주 | ✕ 미완료 |
 | Android 합성 앱·Keystore·생체 | 7~12주 | 14~24주 | ✕ 미완료 |
-| 통합 reviewable MVP | 15~25주 | 28~45주 | ✕ 미완료 |
-| 제한 실제-Secret beta | 20~32주 | 34~54주 | ✕ 미완료 |
-| 공개 Web+Android 서비스 | 24~40주 | 40~64주 | ✕ 미완료 |
+| Privacy self-service 포함 reviewable MVP | 18~30주 | 34~52주 | ✕ 미완료 |
+| 제한 실제-Secret·Privacy beta | 24~40주 | 42~64주 | ✕ 미완료 |
+| 공개 Web+Android self-service | 30~52주 | 50~78주 | ✕ 미완료 |
+| 사람 지원형 Privacy Care | 공개 self-service 후 추가 3~6개월 이상 | 운영 인력·법률 체계 없이는 산정 불가 | ✕ 미완료 |
 
-따라서 “지금까지 한 것을 버리고 다시 6개월”이 아니다. 현재 암호·로컬 저장·합성 Web 기반은 일정에 포함된 선행 작업이다. 그러나 backend, Android, 복구, sync, 운영, 법률, 독립 감사가 아직 커서 **병렬로도 대략 6~10개월 범위**가 현실적이다. OAuth·법률·감사·스토어 심사 대기와 심각한 보안 발견은 더 늘릴 수 있다.
+따라서 “지금까지 한 것을 버리고 다시 시작”하는 것은 아니다. 현재 암호·로컬 저장·합성
+Web 기반은 일정에 포함된 선행 작업이다. 다만 Privacy Cleanup을 핵심 범위에 넣으면서
+provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추가됐다. **병렬 self-service 공개
+후보는 약 7~12개월 이상**, 사람 지원형 서비스는 그 이후로 보는 것이 정직하다. OAuth·법률·
+감사·스토어 심사·삭제 거절과 심각한 보안 발견은 더 늘릴 수 있다.
 
 ### 가장 빠른 안전 경로
 
 ```text
-1주차: (1A) CI green + 작업 기준선
-2~4주차: 합성 Web demo·실브라우저·backup drill
-동시에: signed checkpoint/recovery/sync contract
+1주차: 로컬 후보 3개 분리 리뷰 완료 + canonical exact SHA 회귀와 #30/#58/#93 후속 수정
+2~6주차: 합성 Vault demo + P01~P06 Privacy self-service demo
+동시에: 실브라우저·backup drill + signed checkpoint/recovery/sync contract
 다음: API+Postgres+Google/passkey와 Android shell 병렬
-통합 후: 합성 multi-device beta
-그 다음: 외부 crypto audit+pentest+법률+DR
-마지막: Android local-first 제한 Secret beta → Web 별도 gate → 공개 출시
+통합 후: 합성 multi-device + Cleanup case beta
+그 다음: provider 하나씩 제한 연동 + 외부 crypto audit+pentest+Privacy 법률+DR
+마지막: 제한 Secret/Privacy beta → Web·Android 별도 gate → self-service 공개 출시
 ```
 
 ---
 
 ## 부록 F. 지금 바로 이어갈 정확한 순서
 
-### 현재 단 하나의 최우선 작업
+### 현재 최우선 두 트랙
 
-**(1A) 최신 exact SHA에서 post-build Secret scanner가 왜 `setup_or_execution`으로 실패했는지 재현하고 CI 전체를 green으로 만든다.**
+**트랙 A — 저장소 진실과 검증 기준선을 먼저 하나로 만든다.**
 
-완료 조건:
+- [ ] `d9c6666`에서 tracked dirty 0과 exact SHA를 다시 기록한다.
+- [ ] 전체 Secret/Rust/WASM/Web 검증을 exact SHA에서 실행하고 각 exit code를 남긴다.
+- [x] #30 `2390b55`, #58 `6803eb5`, #93 `f1a98b5`의 읽기 전용 독립 검토를 완료한다.
+- [ ] #30 보완 tip `534b37c`를 exact generated WASM 환경에서 typecheck·전체 test·build로 재검증한다.
+- [ ] 필요한 결과만 작은 통합 branch에서 적용하고 전체 회귀를 다시 실행한다.
+- [ ] commit·push·Draft PR·remote CI·main merge를 각각 별도 승인·상태로 기록한다.
+- [ ] GitHub Actions 계정/과금 차단은 사용자가 설정을 확인하기 전 `BLOCKED`로 유지한다.
 
-- 같은 scanner가 local과 GitHub runner에서 같은 exit contract를 사용한다.
-- scanner 설치/실행 실패와 actual finding을 다른 오류 코드·메시지로 구분한다.
-- synthetic baseline 4개는 정확한 allowlist로만 허용한다.
-- build 전·후 scan이 모두 성공한다.
-- Rust/WASM/Web test/typecheck/build도 같은 SHA에서 계속 성공한다.
-- GitHub required check로 지정할 수 있는 안정된 workflow 이름을 갖는다.
+완료 조건: canonical exact SHA 1개, 로컬 검증 결과, 미실행 원격 검사, 통합하지 않은 후보가
+한 표에 일치하며 실제 Secret gate가 계속 닫혀 있다.
+
+**트랙 B — 외부 계정 없이 P01~P03 Privacy 설계를 합성 데이터로 시작한다.**
+
+- [ ] P01 사용자 여정·비목표·과장 금지·파괴적 작업 경계를 PRD로 고정한다.
+- [ ] P02 Identity/Consent/Subscription/Cleanup domain contract를 작성한다.
+- [ ] P03 암호화 저장·검색 projection·future-version 보존 테스트 계획을 작성한다.
+
+완료 조건: 모든 상태·오류·사용자 승인·증거 출처가 테스트 가능한 수용 기준으로 표현되고,
+외부 사이트 호출·OAuth scope·실제 개인정보·실제 Secret을 사용하지 않는다.
 
 ### 그 다음 순서
 
-1. (2A) main integration branch에서 `origin/main` 전용 4개 commit과 최신 feature 전용 31개 commit을 보존하며 충돌 해결
-2. (4) 실제 브라우저 두 탭 등록·편집·회전 경합 E2E
-3. (6A) 실제 파일 backup download→새 profile restore roundtrip
-4. (7A) signed checkpoint/rollback/row omission/fork 계약
-5. (8A) recovery slot/device roster/key epoch
-6. (9A) opaque sync wire와 Spring/Postgres skeleton
-7. (10) Android shell/Rust binding/Keystore synthetic flow
-8. 28단계 보안 gate까지 actual-secret flag는 계속 닫기
+1. 최신 통합 기준선 회귀와 #30 전체 회귀, #58·#93 수정 검증을 마친 뒤 선별 통합
+2. P01~P06 합성 Identity Map·Consent·Cleanup 상태기계와 UI
+3. 실제 브라우저 두 탭 등록·편집·회전 경합 E2E
+4. 실제 파일 backup download→새 profile restore roundtrip
+5. signed checkpoint/rollback/row omission/fork 계약
+6. recovery slot/device roster/key epoch
+7. opaque sync wire와 Spring/Postgres skeleton
+8. Android shell/Rust binding/Keystore synthetic flow
+9. P07~P10 제한된 공식 연동을 provider 하나씩 추가
+10. 28단계 보안 gate와 Privacy 법률 gate까지 actual-secret flag는 계속 닫기
 
 ---
 
@@ -1251,6 +1548,10 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 - [Stripe pricing](https://stripe.com/pricing)
 - [Google OAuth production readiness](https://developers.google.com/identity/protocols/oauth2/production-readiness/policy-compliance)
 - [Google passkey developer guide](https://developers.google.com/identity/passkeys/developer-guides)
+- [Google 계정의 제3자 연결 관리](https://support.google.com/accounts/answer/13533235)
+- [개인정보보호위원회·KISA 본인확인 내역 및 웹사이트 회원탈퇴 지원](https://pipc.go.kr/np/default/page.do?mCode=D030010000)
+- [개인정보 포털 지우개 서비스 안내](https://m.privacy.go.kr/front/contents/cntntsView.do?contsNo=260)
+- [RFC 8058 one-click unsubscribe](https://www.rfc-editor.org/info/rfc8058/)
 - [Android Keystore](https://developer.android.com/privacy-and-security/keystore)
 - [Android biometric authentication](https://developer.android.com/identity/sign-in/biometric-auth)
 - [Google Play Data Safety](https://support.google.com/googleplay/android-developer/answer/10787469)
@@ -1267,10 +1568,14 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 
 ```text
 현재 제품 단계: 합성 alpha / security-core prototype
-GitHub 기능 브랜치 백업: 완료
-최신 전체 CI: 미완료(red)
+원격 최신 협업 baseline: d9c6666 기록됨
+9월 24일 로컬 후보: #30 `534b37c` 보완·독립 리뷰 완료/전체 회귀 차단, #58·#93 수정 필요; 모두 push·PR·통합 미확인
+최신 전체 CI: BLOCKED/UNKNOWN (코드 PASS/FAIL 판정 금지)
 main 통합: 미완료
 실제 Secret 입력: 금지
+Identity & Connection Map: 관계 코어 일부 / 제품 UX·발견 미완료
+Consent Center: 설계 TODO / 미구현
+Privacy Cleanup Center: 설계 TODO / 미구현
 공개 Web 배포: 미완료
 Android 앱: 미완료
 Backend/API/DB: 미완료
