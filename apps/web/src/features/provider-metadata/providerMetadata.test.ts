@@ -3,6 +3,7 @@ import {
   findProviderMetadataV1,
   PROVIDER_METADATA_V1,
   validateProviderMetadataCatalogV1,
+  type ProviderMetadataIssueReportV1,
   type ProviderMetadataIssueV1,
   type ProviderMetadataV1,
 } from "./providerMetadata";
@@ -133,5 +134,134 @@ describe("validateProviderMetadataCatalogV1", () => {
     expect(validateProviderMetadataCatalogV1([a, b])).toEqual([]);
     expect(validateProviderMetadataCatalogV1([b, a])).toEqual([{ index: 1, issue: "UNSORTED_IDS" }]);
     expect(validateProviderMetadataCatalogV1([a, a]).map((r) => r.issue)).toEqual(["DUPLICATE_ID", "UNSORTED_IDS"]);
+  });
+});
+
+// malformed 입력은 예외 없이 끝나야 하고, 정확한 index·issue 목록을 돌려줘야 한다.
+function expectReports(catalog: unknown, expected: readonly ProviderMetadataIssueReportV1[]): void {
+  let reports: readonly ProviderMetadataIssueReportV1[] = [];
+  expect(() => {
+    reports = validateProviderMetadataCatalogV1(catalog);
+  }).not.toThrow();
+  expect(reports).toEqual(expected);
+}
+
+function atZero(...issues: ProviderMetadataIssueV1[]): ProviderMetadataIssueReportV1[] {
+  return issues.map((issue) => ({ index: 0, issue }));
+}
+
+describe("validateProviderMetadataCatalogV1 with untrusted runtime input", () => {
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["true", true],
+    ["a number", 42],
+    ["a string", "[]"],
+    ["a plain object", { 0: VALID, length: 1 }],
+  ])("reports INVALID_CATALOG with a null index for %s", (_name, catalog) => {
+    expectReports(catalog, [{ index: null, issue: "INVALID_CATALOG" }]);
+  });
+
+  it.each([
+    ["null", null],
+    ["a boolean", false],
+    ["a number", 0],
+    ["a string", "example"],
+    ["an array", [VALID]],
+    ["a Date object", new Date(0)],
+  ])("reports INVALID_ENTRY at the exact index for %s", (_name, element) => {
+    const first = { ...VALID, id: "a" };
+    expectReports([first, element], [{ index: 1, issue: "INVALID_ENTRY" }]);
+  });
+
+  it("reports INVALID_ENTRY for holes in a sparse catalog", () => {
+    const sparse: unknown[] = [];
+    sparse[1] = { ...VALID };
+    expectReports(sparse, [{ index: 0, issue: "INVALID_ENTRY" }]);
+  });
+
+  it("keeps UNEXPECTED_FIELD for plain records with missing or extra fields", () => {
+    const { linkCheck: _omitted, ...missing } = VALID;
+    expectReports([missing], atZero("UNEXPECTED_FIELD"));
+    expectReports([{ ...VALID, apiKeyExample: "placeholder" }], atZero("UNEXPECTED_FIELD"));
+    expectReports([{}], atZero("UNEXPECTED_FIELD"));
+  });
+
+  const fieldCases: readonly [string, Record<string, unknown>, ProviderMetadataIssueV1[]][] = [
+    ["null id", { id: null }, ["INVALID_ID"]],
+    ["number id", { id: 7 }, ["INVALID_ID"]],
+    ["null displayName", { displayName: null }, ["INVALID_DISPLAY_NAME"]],
+    ["number displayName", { displayName: 7 }, ["INVALID_DISPLAY_NAME"]],
+    ["null category", { category: null }, ["INVALID_CATEGORY"]],
+    ["number category", { category: 7 }, ["INVALID_CATEGORY"]],
+    ["null officialHosts", { officialHosts: null }, ["INVALID_HOSTS"]],
+    ["string officialHosts", { officialHosts: "example.com" }, ["INVALID_HOSTS"]],
+    ["officialHosts [null]", { officialHosts: [null] }, ["INVALID_HOSTS"]],
+    ["null credentialTypes", { credentialTypes: null }, ["INVALID_CREDENTIAL_TYPES"]],
+    ["string credentialTypes", { credentialTypes: "api_key" }, ["INVALID_CREDENTIAL_TYPES"]],
+    ["credentialTypes [null]", { credentialTypes: [null] }, ["INVALID_CREDENTIAL_TYPES"]],
+    // docLinks가 배열이 아니면 확인된 링크가 없으므로 PASS 증거도 함께 거부된다.
+    ["null docLinks", { docLinks: null }, ["INVALID_DOC_LINK", "INVALID_LINK_CHECK"]],
+    ["string docLinks", { docLinks: "https://docs.example.com/keys" }, ["INVALID_DOC_LINK", "INVALID_LINK_CHECK"]],
+    ["docLinks [null]", { docLinks: [null] }, ["INVALID_DOC_LINK"]],
+    ["docLinks [array]", { docLinks: [["credentials", "https://docs.example.com/keys"]] }, ["INVALID_DOC_LINK"]],
+    ["doc link with null url", { docLinks: [{ kind: "credentials", url: null }] }, ["INVALID_DOC_LINK"]],
+    ["doc link with null kind", { docLinks: [{ kind: null, url: "https://docs.example.com/keys" }] }, ["INVALID_DOC_LINK"]],
+    ["doc link missing url", { docLinks: [{ kind: "credentials" }] }, ["INVALID_DOC_LINK"]],
+    ["doc link with extra field",
+      { docLinks: [{ kind: "credentials", url: "https://docs.example.com/keys", note: "x" }] }, ["INVALID_DOC_LINK"]],
+    ["null linkCheck", { linkCheck: null }, ["INVALID_LINK_CHECK"]],
+    ["string linkCheck", { linkCheck: "PASS" }, ["INVALID_LINK_CHECK"]],
+    ["array linkCheck", { linkCheck: ["PASS", "http_reachability", "2026-09-24"] }, ["INVALID_LINK_CHECK"]],
+    ["number result", { linkCheck: { result: 1, scope: "http_reachability", checkedOn: "2026-09-24" } }, ["INVALID_LINK_CHECK"]],
+    ["null scope", { linkCheck: { result: "PASS", scope: null, checkedOn: "2026-09-24" } }, ["INVALID_LINK_CHECK"]],
+    ["number checkedOn", { linkCheck: { result: "PASS", scope: "http_reachability", checkedOn: 20260924 } }, ["INVALID_LINK_CHECK"]],
+    ["linkCheck missing checkedOn", { linkCheck: { result: "UNKNOWN", scope: "http_reachability" } }, ["INVALID_LINK_CHECK"]],
+  ];
+
+  it.each(fieldCases)("reports %s without throwing", (_name, patch, issues) => {
+    expectReports([{ ...VALID, ...patch }], atZero(...issues));
+  });
+
+  it("still detects id ordering and duplicates across malformed entries", () => {
+    const b = { ...VALID, id: "b" };
+    expectReports([b, { ...VALID, id: null }, null, { ...VALID, id: "a" }, { ...VALID, id: "b" }], [
+      { index: 1, issue: "INVALID_ID" },
+      { index: 2, issue: "INVALID_ENTRY" },
+      { index: 3, issue: "UNSORTED_IDS" },
+      { index: 4, issue: "DUPLICATE_ID" },
+    ]);
+  });
+});
+
+describe("validateProviderMetadataCatalogV1 link check dates", () => {
+  const linkCheck = (result: string, checkedOn: unknown) => ({
+    linkCheck: { result, scope: "http_reachability", checkedOn },
+  });
+  const noon = (day: string) => ({ now: new Date(`${day}T12:00:00Z`) });
+
+  it.each([
+    ["an impossible date", linkCheck("PASS", "2026-02-30")],
+    ["a far-future date", linkCheck("PASS", "9999-12-31")],
+    ["UNKNOWN with a date", linkCheck("UNKNOWN", "2026-09-24")],
+    ["PASS with a null date", linkCheck("PASS", null)],
+    ["a non-ISO date", linkCheck("PASS", "2026-9-24")],
+  ])("rejects %s with exactly INVALID_LINK_CHECK", (_name, patch) => {
+    expectReports([{ ...VALID, ...patch }], atZero("INVALID_LINK_CHECK"));
+  });
+
+  it("accepts today and rejects tomorrow using the UTC calendar day", () => {
+    const today = [{ ...VALID, ...linkCheck("PASS", "2026-09-24") }];
+    const tomorrow = [{ ...VALID, ...linkCheck("PASS", "2026-09-25") }];
+    expect(validateProviderMetadataCatalogV1(today, noon("2026-09-24"))).toEqual([]);
+    expect(validateProviderMetadataCatalogV1(tomorrow, noon("2026-09-24"))).toEqual(atZero("INVALID_LINK_CHECK"));
+    // KST 2026-09-24 08:00은 UTC로 아직 9월 23일이므로 24일 기록은 미래다.
+    expect(validateProviderMetadataCatalogV1(today, { now: new Date("2026-09-24T08:00:00+09:00") }))
+      .toEqual(atZero("INVALID_LINK_CHECK"));
+  });
+
+  it("fails closed when the reference clock is invalid", () => {
+    const entry = [{ ...VALID }];
+    expect(validateProviderMetadataCatalogV1(entry, { now: new Date(Number.NaN) })).toEqual(atZero("INVALID_LINK_CHECK"));
   });
 });
