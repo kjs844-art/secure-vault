@@ -1,0 +1,86 @@
+/* Shared display components. Every value comes from tokens.css. */
+
+.ka-surface {
+  padding: var(--ka-space-xl);
+  border: 1px solid var(--ka-color-border);
+  border-radius: var(--ka-radius-lg);
+  background: var(--ka-color-surface);
+  color: var(--ka-color-text);
+}
+
+.ka-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--ka-space-sm);
+  border: 1px solid currentColor;
+  border-radius: var(--ka-radius-pill);
+  font-size: var(--ka-font-size-sm);
+  font-weight: var(--ka-font-weight-strong);
+  line-height: var(--ka-font-line-height);
+  white-space: nowrap;
+}
+
+.ka-badge--neutral {
+  background: var(--ka-color-neutral-bg);
+  color: var(--ka-color-neutral-text);
+}
+
+.ka-badge--info {
+  background: var(--ka-color-info-bg);
+  color: var(--ka-color-info-text);
+}
+
+.ka-badge--success {
+  background: var(--ka-color-success-bg);
+  color: var(--ka-color-success-text);
+}
+
+.ka-badge--warning {
+  background: var(--ka-color-warning-bg);
+  color: var(--ka-color-warning-text);
+}
+
+.ka-badge--danger {
+  background: var(--ka-color-danger-bg);
+  color: var(--ka-color-danger-text);
+}
+
+.ka-notice {
+  display: grid;
+  gap: var(--ka-space-xs);
+  padding: var(--ka-space-md) var(--ka-space-lg);
+  border-left: 4px solid currentColor;
+  border-radius: var(--ka-radius-sm);
+}
+
+.ka-notice--warning {
+  background: var(--ka-color-warning-bg);
+  color: var(--ka-color-warning-text);
+}
+
+.ka-notice__body {
+  color: var(--ka-color-text);
+}
+
+.ka-kv {
+  display: grid;
+  gap: var(--ka-space-sm);
+  margin: 0;
+}
+
+.ka-kv__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ka-space-md);
+}
+
+.ka-kv__term {
+  color: var(--ka-color-text-muted);
+}
+
+.ka-kv__value {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--ka-font-weight-strong);
+}
