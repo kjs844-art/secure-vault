@@ -58,7 +58,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 | 2026-09-19 통합 tip | ○ 원격 기록 있음 | `codex/firstvibe-integration-20260919`의 `41eeed0`; 웹·SQLite hardening과 proposed recovery/Android ADR을 모은 통합 기록 |
 | 2026-09-22 협업 baseline | ○ 원격 기록 있음 | `d9c6666`; 1~100 작업표·branch manifest·공통 프롬프트가 추가됨 |
 | 1~100 협업 branch | ○ 예약됨 / ✕ 작업 완료 아님 | 원격 branch가 baseline을 가리키는 것은 작업 공간 예약일 뿐 구현·테스트·PR·merge 증거가 아님 |
-| #30 provider metadata | ⚠ 로컬 보완 후보 | `534b37c`; malformed 입력·UTC 날짜·숨김 own-key 경계를 보완했고 focused 87/87·독립 P1/P2 0이나, generated WASM 부재로 전체 회귀가 차단됐고 UI·원격·통합은 미완료 |
+| #30 provider metadata | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | ⚠ 로컬 후보 | `6803eb5`; 상태 증거 용어 문서 1개, 아직 baseline 통합·push·PR 미확인 |
 | #93 release manifest | ⚠ 로컬 후보 | `f1a98b5`; 로컬 SHA-256 manifest 스크립트·테스트가 있으나 CI 연결·통합·원격 검증 미확인 |
 | main | ✕ 최신 통합 아님 | 기능·협업 tip을 main에 병합했다는 증거가 없음 |
@@ -66,7 +66,8 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 | Privacy Cleanup | ✕ 구현 전 | 이번 갱신에서 제품 요구와 TODO를 추가했으며 코드·화면·외부 연결은 아직 없음 |
 
 `commit 존재 → push → PR → 검증 → review → merge → 배포`는 각각 별도 상태다.
-위 세 로컬 후보는 유용한 결과지만 **통합 완료나 GitHub 백업 완료로 표기하지 않는다.**
+#30 보완 tip은 전용 원격 branch에 백업됐지만 세 후보 모두 **통합 완료로 표기하지 않는다.**
+#58·#93 원본 후보는 아직 local ref에만 있다.
 
 ### 0.4 한눈에 보는 완료·부분완료·남은 일
 
@@ -85,7 +86,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 - [ ] [부분] 실제 브라우저 다중 탭·저장공간·업그레이드·파일 backup/restore 검증
 - [ ] [부분] Windows actual-handle/VFS 또는 승인된 broker 저장 경계 결정
 - [ ] [부분] recovery slot·device roster·key epoch·Android 정책 ADR을 Accepted 상태로 전환
-- [ ] [부분] #30은 exact generated WASM으로 전체 회귀를 마치고, #58·#93은 수정·재검증한 뒤 작은 PR 단위로 통합
+- [ ] [부분] #30은 exact Release WASM 전체 로컬 회귀를 마쳤고, #58·#93은 수정·재검증한 뒤 세 후보를 작은 PR 단위로 통합
 - [ ] [부분] GitHub Actions의 계정/과금 외부 차단을 사용자 확인 후 exact SHA에서 재실행
 
 #### 아직 구현하지 않은 핵심 제품 기능
@@ -274,7 +275,7 @@ Google·Naver·Kakao 로그인이나 개인정보 하나로 모든 가입 사이
 | 최신 원격 CI | ? BLOCKED/UNKNOWN | 저장소 기록상 payment/spending-limit로 step 0개 종료; 2026-09-24 `gh` 조회도 404여서 PASS/FAIL로 판정하지 않음 |
 | `main` 통합 | ✕ 미완료 | `d9c6666` 및 9월 24일 로컬 후보가 main에 병합됐다는 증거 없음 |
 | 1~100 협업 작업 | ◐ 예약만 됨 | 원격 branch 생성은 완료가 아니며 초기 상태는 모두 baseline `d9c6666` |
-| #30/#58/#93 로컬 후보 | ◐ 통합 전 | #30은 `534b37c` focused 87/87·독립 P1/P2 0이지만 전체 회귀 차단; 셋 모두 push·PR·remote CI·baseline 통합·main merge는 미확인 |
+| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c`는 전용 branch push·독립 P1/P2 0·Release WASM 전체 로컬 회귀 PASS; #58·#93은 local-only, 셋 모두 PR·remote CI·baseline 통합·main merge 미확인 |
 | Spring Boot API | ✕ 미완료 | `services/api`는 placeholder 수준 |
 | PostgreSQL 운영 DB | ✕ 미완료 | schema·migration·운영 인스턴스 없음 |
 | Google/passkey 로그인 | ✕ 미완료 | 설계만 있고 실제 OAuth client·서버 흐름 없음 |
@@ -575,7 +576,7 @@ exact SHA·로컬 증거·미실행 원격 상태를 일치시키는 것이다.
 | ○ 완료 | Password와 API Key 타입별 정책 기반 | [AI] | 공통 private builder + type policy | Password에 API 전용 회전 action이 노출되지 않음 |
 | ◐ (일부만 됨) | connection 편집·키 교체 체크리스트 | [AI] | 합성 Web UX | 고정 fixture에서 동작, 실제 provider 없음 |
 | ✕ 미완료 | credential 유형 전체 표 | [공동] | password, API key, OAuth client, token, webhook secret, recovery code, SSH metadata | 각 타입의 secret/meta/expiry/rotation 정책 승인 |
-| ◐ (로컬 보완 후보) | provider catalog schema | [AI] | `534b37c`에 7개 제공자 public-only metadata와 malformed 입력 fail-closed 보완; focused 87/87·독립 P1/P2 0, UI·전체 회귀·baseline 미통합 | exact generated WASM 회귀→push/PR→통합 후에만 완료 전환 |
+| ◐ (원격 보완 후보) | provider catalog schema | [AI] | 전용 branch `534b37c`에 public-only metadata와 malformed 입력 fail-closed 보완; 독립 P1/P2 0·Release WASM 전체 web 회귀 PASS, UI·baseline 미통합 | PR→통합 후에만 완료 전환 |
 | ✕ 미완료 | 로그인 출처 기록 | [AI] | Google/Kakao/Naver/email/passkey/manual을 서비스 계정에 연결 | “어느 아이디로 가입했나” 조회 가능 |
 | ✕ 미완료 | 발급 출처·사용처 provenance | [AI] | created at/by, last verified, connection, environment, owner | 키를 어디서 받아 어디에 넣었는지 추적 가능 |
 | ✕ 미완료 | 상태·만료·마지막 사용·비용 메타데이터 | [AI] | 사용자가 기록하거나 provider 공식 API가 허용하는 범위만 동기화 | active/revoked/expired와 사용·비용 출처가 구분됨 |
@@ -1318,7 +1319,7 @@ AI만으로 완료라고 말할 수 없는 것:
 
 | 2026-09-24 확인 작업 | 로컬 tip | 원격 상태 | 판정 |
 |---|---|---|---|
-| #30 provider public metadata | `534b37c` | 원격 ref는 `d9c6666` | 로컬 보완·focused 87/87·독립 P1/P2 0; generated WASM 부재로 전체 회귀 차단, UI·통합 필요 |
+| #30 provider public metadata | `534b37c` | 전용 원격 fix ref도 `534b37c` | push·독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS; UI·PR·통합 필요 |
 | #58 evidence state labels | `6803eb5` | 원격 ref는 `d9c6666` | 문서 후보·제품 기능 아님 |
 | #93 release artifact manifest | `f1a98b5` | 원격 ref는 `d9c6666` | 로컬 도구 후보·CI 미연결·실행 증거 재확인 필요 |
 
@@ -1466,7 +1467,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 - [ ] `d9c6666`에서 tracked dirty 0과 exact SHA를 다시 기록한다.
 - [ ] 전체 Secret/Rust/WASM/Web 검증을 exact SHA에서 실행하고 각 exit code를 남긴다.
 - [x] #30 `2390b55`, #58 `6803eb5`, #93 `f1a98b5`의 읽기 전용 독립 검토를 완료한다.
-- [ ] #30 보완 tip `534b37c`를 exact generated WASM 환경에서 typecheck·전체 test·build로 재검증한다.
+- [x] #30 보완 tip `534b37c`를 exact Release WASM 환경에서 typecheck·전체 test 1554/1554·build·Secret scan으로 재검증했다.
 - [ ] 필요한 결과만 작은 통합 branch에서 적용하고 전체 회귀를 다시 실행한다.
 - [ ] commit·push·Draft PR·remote CI·main merge를 각각 별도 승인·상태로 기록한다.
 - [ ] GitHub Actions 계정/과금 차단은 사용자가 설정을 확인하기 전 `BLOCKED`로 유지한다.
@@ -1569,7 +1570,7 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 ```text
 현재 제품 단계: 합성 alpha / security-core prototype
 원격 최신 협업 baseline: d9c6666 기록됨
-9월 24일 로컬 후보: #30 `534b37c` 보완·독립 리뷰 완료/전체 회귀 차단, #58·#93 수정 필요; 모두 push·PR·통합 미확인
+9월 24일 후보: #30 `534b37c`는 전용 branch push·독립 리뷰·Release WASM 전체 로컬 회귀 PASS, #58·#93은 local 수정 필요; 모두 PR·통합 미완료
 최신 전체 CI: BLOCKED/UNKNOWN (코드 PASS/FAIL 판정 금지)
 main 통합: 미완료
 실제 Secret 입력: 금지

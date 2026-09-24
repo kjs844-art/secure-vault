@@ -140,8 +140,9 @@ worktree에서 파일이 안 보인다는 이유만으로 삭제됐다고 판단
 |---|---|---|
 | 2026-09-19 통합 tip | `PUSHED` | `41eeed0492e5325816e0797bbefa727408574e3c` |
 | 2026-09-22 협업 baseline | `PUSHED` | `d9c66661db7d7b66f6453e94e467c424107cba66` |
+| 2026-09-24 직전 범용 작업판 snapshot | `PUSHED` | `codex/firstvibe-luna-release-support@eb0127eb10c6e123866320a89e02358e0ce8192e`; 현재 추가 갱신은 아직 uncommitted |
 | 1~100 원격 task branch | `RESERVED` | branch 존재는 구현 완료가 아님 |
-| #30 provider metadata | `LOCAL_COMMIT_REVIEWED_REGRESSION_BLOCKED` | `534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·focused 87/87, generated WASM 부재로 전체 회귀 차단, UI·원격 미연결 |
+| #30 provider metadata | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | `LOCAL_COMMIT_NEEDS_REVISION` | `6803eb5`; 읽기 전용 검토 완료, 의미상 수정점 4개, 원격·통합 전 |
 | #93 release manifest | `LOCAL_COMMIT_NEEDS_REVISION` | `f1a98b5`; 읽기 전용 검토 완료, snapshot·출력 경로 race 등 수정 필요, CI 미연결 |
 | 원격 CI | `BLOCKED/UNKNOWN` | 기록상 계정/과금 차단, 2026-09-24 조회도 404 |
@@ -297,9 +298,9 @@ main_merge_approved: "NO"
 
 ## 4. 다음 배정 후보와 즉시 가능한 읽기 전용 검토
 
-아래 세 로컬 후보의 **읽기 전용 검토는 완료**됐다. 검토 완료는 후보 통합 승인이 아니며,
-수정·테스트 산출물 생성·commit·push·PR·merge는 별도 계약과 승인이 필요하다. 다른 장치에는
-후보 commit이 아직 원격 발행되지 않아 보이지 않을 수 있다.
+아래 세 원본 후보의 **읽기 전용 검토는 완료**됐다. 검토 완료는 후보 통합 승인이 아니다.
+#30 보완 tip `534b37c`만 전용 원격 branch에 발행됐고 #58·#93 후보는 아직 local ref에만 있다.
+수정·테스트 산출물 생성·commit·push·PR·merge는 각각 별도 상태와 증거로 기록한다.
 
 | 선택 | ID | readiness | 읽을 source | 허용 범위 | completion target | 예상 |
 |---|---|---|---|---|---|---:|
@@ -322,8 +323,8 @@ main_merge_approved: "NO"
 
 ```text
 완료: KA-C30-01·KA-C58-01·KA-C93-01 읽기 전용 리뷰
-부분 완료: KA-C30-FIX-01 local commit 534b37c·focused 87/87·독립 리뷰 P1/P2 0;
-          exact generated WASM 준비 후 typecheck·전체 test·build 재검증 필요
+부분 완료: KA-C30-FIX-01 pushed commit 534b37c·focused 87/87·독립 리뷰 P1/P2 0·
+          Release WASM·typecheck·전체 test 1554/1554·build·Secret scan PASS; PR·통합·remote CI는 미완료
 AI 2: KA-C58-FIX-01 계약 작성 후 evidence label 문구 보완
 AI 3: KA-C93-FIX-01 계약 작성 후 release manifest 경계 보완
 Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
@@ -352,7 +353,7 @@ Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 | [ ] | `KA-A05` | `BLOCKED` | exact SHA 원격 CI | 사용자+AI | 외부 상태 | runner 실제 실행·동일 SHA 결과 |
 | [ ] | `KA-A06` | `BACKLOG_HIGH_RISK` | main 보존 통합·충돌 해결 | primary | 2~5일 | 독립 리뷰·전체 회귀·사용자 승인 |
 | [x] | `KA-C30-01` | `READ_ONLY_REPORT_DONE` | provider metadata 후보 통합 판단 | Codex root | 완료 | `E-20260924-C30-GIT-01`, `E-20260924-C30-REVIEW-01`; 후보는 통합 비권장 |
-| [ ] | `KA-C30-FIX-01` | `LOCAL_COMMIT_REVIEWED_REGRESSION_BLOCKED` | #30 fail-closed 입력 경계·날짜 증거·회귀 보완 | Claude 구현+Codex 검증 | 부분 완료 | `534b37c`; focused 87/87·Secret scan·독립 P1/P2 0, generated WASM 부재로 typecheck/full/build 차단 |
+| [ ] | `KA-C30-FIX-01` | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | #30 fail-closed 입력 경계·날짜 증거·회귀 보완 | Claude 구현+Codex 검증 | 통합 전 | 원격 `534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, PR·통합·remote CI 미완료 |
 | [x] | `KA-C58-01` | `READ_ONLY_REPORT_DONE` | evidence label 후보 통합 판단 | Codex root | 완료 | `E-20260924-C58-GIT-01`, `E-20260924-C58-REVIEW-01`; 후보는 통합 비권장 |
 | [ ] | `KA-C58-FIX-01` | `WAITING_ASSIGNMENT` | #58 의미상 수정점 4개 보완·재검토 | 미배정 | 2~4시간 | exact SHA에서 문서 검사·독립 재검토, finding 0 |
 | [x] | `KA-C93-01` | `READ_ONLY_REPORT_DONE` | release manifest 후보 통합 판단 | Codex root | 완료 | `E-20260924-C93-GIT-01`, `E-20260924-C93-REVIEW-01`; 후보는 통합 비권장 |
@@ -525,6 +526,11 @@ stage: LOCAL_DONE
 | `E-20260924-C30-FIX-FOCUSED-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | provider metadata focused Vitest | 1 file / 87 tests passed | 2026-09-24 | 동일 package-lock의 기존 node_modules를 임시 junction으로 연결 후 제거 |
 | `E-20260924-C30-FIX-REVIEW-01` | `KA-C30-FIX-01` | `PASS` | `INDEPENDENT_REVIEW` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | malformed JSON-compatible 입력·UTC 날짜·exact own-key allowlist·허용 범위 | P1 0 / P2 0 | 2026-09-24 | 의미 검토 통과; 전체 회귀 통과나 통합 승인은 아님 |
 | `E-20260924-C30-FIX-REGRESSION-01` | `KA-C30-FIX-01` | `BLOCKED` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | typecheck·전체 web test·production build | typecheck/build exit 1; 40/47 files·1509 tests pass, 7 WASM suites load fail | 2026-09-24 | `src/generated/vault-wasm-demo` 부재; 생성·재검증 전 `VERIFIED` 금지 |
+| `E-20260924-C30-FIX-PUSH-01` | `KA-C30-FIX-01` | `PASS` | `REMOTE_REF` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | 비강제 push 후 `git ls-remote`와 local/upstream divergence | remote SHA 일치 / 0·0 | 2026-09-24 | 전용 원격 branch 백업 완료; PR·merge·통합·CI PASS 아님 |
+| `E-20260924-C30-FIX-WASM-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | 고정 Rust 1.95.0·wasm-bindgen 0.2.128·`build-wasm.ps1 -SyntheticDemo -Release`·`node scripts/test-wasm.mjs --demo` | exit 0 / `WASM_BUILD_OK` / actual runtime 1735 checks | 2026-09-24 | ignore된 합성 Release 산출물; 실제 Secret 없음 |
+| `E-20260924-C30-FIX-REGRESSION-02` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | Release WASM 기준 typecheck·전체 web test·production build·저장소 Secret scan | exit 0 / 47 files·1554 tests / build exit 0 / Secret scan passed | 2026-09-24 | debug WASM 실행은 timeout 10건으로 exit 1; CI와 같은 Release 기준 재실행 PASS, remote CI는 UNKNOWN |
+| `E-20260924-DOC-PUSH-01` | `KA-A03` | `PASS` | `REMOTE_REF` | `eb0127eb10c6e123866320a89e02358e0ce8192e` | 직전 범용 작업판+서비스 체크리스트 snapshot 커밋·비강제 push·원격 SHA 확인 | remote SHA 일치 / 0·0 | 2026-09-24 | `codex/firstvibe-luna-release-support`; 현재 추가 갱신은 아직 uncommitted, PR·merge 안 함 |
+| `E-20260924-DOC-04` | `KA-A03` | `PASS` | `INDEPENDENT_REVIEW` | base `eb0127eb10c6e123866320a89e02358e0ce8192e` + uncommitted 2-file diff | C30 상태·checkbox·고유 evidence ID·과거 BLOCKED 보존·권한 문구 | P1 0 / P2 0 / P3 0; links·UTF-8·공백·fence·diff checks pass; 고신뢰 Secret 형태 0 | 2026-09-24 | 현재 갱신 자체의 commit·push는 아직 미실행; 다른 worktree scanner 교차 실행은 setup 실패로 별도 제한 기록 |
 | `E-20260924-C93-GIT-01` | `KA-C93-01` | `PASS` | `LOCAL` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | baseline 직접 부모·2파일 diff·PowerShell parse·계보·고신뢰 Secret 형태 | exit 0 / parser error 0 / Secret 형태 0 | 2026-09-24 | local task ref만 후보 포함; remote-tracking ref는 baseline |
 | `E-20260924-C93-REVIEW-01` | `KA-C93-01` | `FAIL` | `INDEPENDENT_REVIEW` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | snapshot·출력 경로·strict schema·resource bound·CI·Secret gate 경계 | P1 2 / P2 4 / P3 1 | 2026-09-24 | 실행 검증은 계약상 `NOT_RUN`; 무결성 목록 도구로만 한정 |
 | `E-20260924-DOC-03` | `KA-A03` | `UNKNOWN` | `INDEPENDENT_REVIEW` | 문서가 uncommitted라 Git SHA 없음 | C30·C93 checkbox·후보 상태·evidence ID·SHA·finding 수·권한 문구 일관성 | P1 0 / P2 0 | 2026-09-24 | 로컬 작업판 갱신은 승인 가능; authoritative `PASS`는 commit 후 재검증 필요 |
@@ -667,6 +673,30 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - 다음 안전 단계: exact source에서 synthetic-demo WASM을 생성하거나 검증된 exact-match 산출물을 준비한 뒤
   typecheck·전체 test·build를 재실행하고 새 증거로 판정
 
+### 2026-09-24 — C30 보완·직전 범용 작업판 snapshot 원격 백업
+
+- C30 원격 branch: `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c18582ea120e2d9303cfe73635ad16dcf3`
+- 문서 원격 branch: `codex/firstvibe-luna-release-support@eb0127eb10c6e123866320a89e02358e0ce8192e`
+- push 방식: 양쪽 모두 비강제; push 후 `git ls-remote` exact SHA 일치, local/upstream `0 0`
+- 실제 Secret 사용: NO
+- PR/merge/main 변경/배포: 하지 않음
+- 당시 다음 안전 단계: C30 exact generated WASM 회귀 또는 `KA-C58-FIX-01` 계약 실행
+
+### 2026-09-24 23:41 KST — `KA-C30-FIX-01` Release WASM 전체 로컬 회귀
+
+- exact source: `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c18582ea120e2d9303cfe73635ad16dcf3`
+- 합성 debug WASM 빌드: exit 0, `WASM_BUILD_OK`; 전체 test에서 암호화 연산이 timeout 10건으로 exit 1
+- CI와 같은 합성 Release WASM 빌드: exit 0, `WASM_BUILD_OK`
+- 합성 Release WASM actual runtime smoke: exit 0, 1735 checks PASS
+- Release 기준 typecheck: exit 0
+- Release 기준 전체 web test: 47/47 files, 1554/1554 tests PASS, exit 0
+- production web build: exit 0
+- 저장소 Secret scan: exit 0, `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED`
+- Git 상태·원격 일치: tracked clean, local HEAD=upstream=`534b37c`
+- 임시 `node_modules` junction: exact package-lock SHA 일치 확인 후 사용하고 안전 제거 완료
+- 판정: 로컬 회귀 차단은 해소했지만 PR·통합·remote CI가 없으므로 전체 task checkbox는 `[ ]` 유지
+- 다음 안전 단계: `KA-C58-FIX-01`의 문서 의미 수정 4건을 전용 worktree에서 구현·재검토
+
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
 
@@ -695,7 +725,7 @@ Manager를 사용한다.
 현재 제품 단계: 합성 alpha / security-core prototype
 canonical 협업 baseline: d9c6666
 1~100 task branches: RESERVED가 기본
-9월 24일 로컬 후보: #30은 `534b37c` 보완·독립 리뷰 완료지만 전체 회귀 차단; #58·#93은 수정 필요, 모두 미통합
+9월 24일 후보: #30 `534b37c`는 전용 branch push·독립 리뷰·Release WASM 전체 로컬 회귀 PASS; #58·#93은 local 수정 필요, 모두 미통합
 원격 CI: BLOCKED/UNKNOWN
 main 통합: 미완료
 실제 Secret 입력: 금지
