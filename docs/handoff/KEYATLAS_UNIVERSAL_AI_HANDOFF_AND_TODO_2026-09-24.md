@@ -206,10 +206,12 @@ check_result: PASS | FAIL | BLOCKED | NOT_RUN | UNKNOWN
 
 ```text
 결과: PASS | FAIL | BLOCKED | NOT_RUN | UNKNOWN
-출처: LOCAL | REMOTE_CI | INDEPENDENT_REVIEW | HUMAN_CHECK | SIMULATION
+출처: LOCAL | LOCAL_ENV | REMOTE_REF | REMOTE_CI | INDEPENDENT_REVIEW | HUMAN_CHECK | SIMULATION
 ```
 
 - `PASS`에는 exact SHA, 명령/검토 범위, exit code 또는 finding 수가 있어야 한다.
+- `LOCAL_ENV`는 코드 판정이 아니라 로컬 실행환경·용량·정책 차단 증거다.
+- `REMOTE_REF`는 원격 Git ref와 SHA 확인이며 PR·CI·merge 성공을 뜻하지 않는다.
 - runner가 시작되지 않았으면 코드 `FAIL`이 아니라 `BLOCKED`다.
 - `SIMULATION PASS`는 실제 merge·배포·브라우저 동작의 PASS가 아니다.
 - 다른 SHA의 결과를 현재 SHA로 복사하지 않는다.

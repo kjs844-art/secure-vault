@@ -1,10 +1,10 @@
 # KeyAtlas: 0부터 공개 웹·Android 서비스까지 전체 체크리스트
 
-> 최초 작성: **2026-09-18 KST** · 최신 갱신: **2026-09-24 KST** <br>
+> 최초 작성: **2026-09-18 KST** · 최신 갱신: **2026-09-25 KST** <br>
 > 제품명: **KeyAtlas (working title)** — 최종 이름·상표·도메인은 아직 확정하지 않음 <br>
 > GitHub: [kjs844-art/secure-vault](https://github.com/kjs844-art/secure-vault) <br>
 > 이 문서를 갱신하는 worktree: `C:\Users\USER\Documents\ChatGPT\KeyAtlas\agent-staging\keyatlas-luna-release-support` <br>
-> 문서 브랜치·기준 SHA: `codex/firstvibe-luna-release-support` · `0b1c7bf2a5cf4681adbf845d30c7695251d3fb94` + 이번 미커밋 문서 변경 <br>
+> 문서 브랜치: `codex/firstvibe-luna-release-support` · 현재 exact SHA는 로컬 HEAD와 원격 upstream 일치 여부로 확인 <br>
 > 최신 통합·협업 기준: `41eeed0492e5325816e0797bbefa727408574e3c` → `d9c66661db7d7b66f6453e94e467c424107cba66` <br>
 > 가장 중요한 현재 제한: **`REAL_SECRET_GATE=CLOSED` — 실제 비밀번호·API 키·Secret·복구 코드를 아직 입력하면 안 됨**
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 0. 2026-09-24 최신 상태와 Master TODO
+## 0. 2026-09-25 최신 상태와 Master TODO
 
 ### 0.1 이 문서를 읽는 법과 진실의 우선순위
 
@@ -1574,7 +1574,7 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 ```text
 현재 제품 단계: 합성 alpha / security-core prototype
 원격 최신 협업 baseline: d9c6666 기록됨
-9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 문서 DoD PASS, #93 `594824d`는 PS5.1·scanner·Secret scan·독립 리뷰 PASS; 모두 전용 원격 branch만 있고 PR·통합 미완료
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 문서 DoD PASS, #93 코어 `594824d`와 CI 연결 `c9a1d63`은 로컬 정책·PS5.1·scanner·Secret scan·독립 리뷰 PASS지만 PS7 remote CI는 UNKNOWN; canonical `d9c6666` 전체 회귀는 Secret scan·fmt·Clippy PASS 후 disk error 112로 BLOCKED되고 보고 `196cb27`만 push; 모두 PR·통합 미완료
 최신 전체 CI: BLOCKED/UNKNOWN (코드 PASS/FAIL 판정 금지)
 main 통합: 미완료
 실제 Secret 입력: 금지
