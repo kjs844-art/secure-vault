@@ -29,8 +29,8 @@
 
 | 라벨 | 뜻 | 쓸 수 있는 조건 |
 |---|---|---|
-| `PASS` | 명령·검토가 성공했다 | exact SHA, 실행 명령 또는 검토 범위, exit code 0 또는 Critical/High 0이 모두 기록됨 |
-| `FAIL` | 명령·검토가 실패했다 | 실패한 명령과 exit code 또는 finding이 기록됨. 원인이 확정되지 않아도 `FAIL`이다 |
+| `PASS` | 선언된 성공 기준을 모두 충족했다 | exact SHA, 검사 범위(scope)와 불변조건(invariants), `Critical=0`, `High=0`, 필수 항목 `UNKNOWN=0`이 모두 기록되고 충족됨 |
+| `FAIL` | 선언된 실패 기준을 충족했다 | exact SHA, 검사 범위, 충족된 실패 기준과 명령·exit code 또는 finding이 기록됨. 원인이 확정되지 않았다는 이유만으로 `FAIL`을 쓰지 않음 |
 | `BLOCKED` | 전제 조건이 없어 실행하지 못했다 | 막힌 원인(선행 작업, 권한, 결제, 도구 부재 등)을 한 줄로 기록 |
 | `NOT_RUN` | 실행할 수 있었지만 하지 않았다 | 범위 밖이거나 비용 때문에 생략한 이유를 기록 |
 | `UNKNOWN` | 증거가 없거나 서로 모순된다 | 기본값이다. 증거가 비어 있으면 자동으로 이 값이다 |
@@ -44,7 +44,11 @@
    `PASS`를 대신하지 않는다.
 4. 다른 SHA의 `PASS`를 새 SHA로 옮겨 적지 않는다. 문서만 바뀐 commit이라도 새 SHA는
    다시 확인하거나 `UNKNOWN`으로 둔다.
-5. 부분 실행은 범위를 숫자로 적는다. 예: `PASS (LOCAL, 102/102 scanner regressions)`.
+5. 부분 실행은 5절 형식을 유지하면서 범위를 숫자로 적는다. 예:
+   `Scanner regressions: PASS (LOCAL, d9c66661db7d, fail-closed scanner invariants, 102/102; Critical=0; High=0; required UNKNOWN=0)`.
+6. `Low` 또는 `Medium` finding만 있다는 이유로 자동 `FAIL` 처리하지 않는다. 작업 계약에
+   선언된 실패 기준을 실제로 충족했는지 판정하고, 미충족이면 해당 finding과 잔여 위험을
+   별도로 기록한다.
 
 ## 3. 증거 출처 라벨
 
@@ -69,37 +73,40 @@
 | `MERGED` | 사용자 승인 기록과 병합 commit SHA |
 
 `REMOTE_CI`가 `BLOCKED`인 동안 작업은 `VERIFIED`로 올라갈 수 없다. 로컬 `PASS`를 모두
-모았더라도 상태는 `DRAFT_PR`에 머물며 보고에 `REMOTE_CI: BLOCKED (사유)`를 남긴다.
+모았더라도 `BLOCKED` 자체가 `DRAFT_PR`을 만들거나 뜻하지는 않는다. 실제로 확인된 현재
+단계(예: `PUSHED` 또는 이미 생성된 `DRAFT_PR`)를 그대로 유지하고 보고에
+`REMOTE_CI: BLOCKED (확인된 사실; 원인 미확정이면 UNKNOWN)`를 남긴다.
 
 ## 5. 보고 한 줄 형식
 
 ```text
-<검사 이름>: <결과> (<출처>, <exact SHA 앞 12자리>, <명령 또는 범위>, <수치>)
+<검사 이름>: <결과> (<출처>, <exact SHA 앞 12자리>, <명령 또는 범위>, <수치 또는 N/A>)
 ```
 
 예:
 
 ```text
-Secret scan: PASS (LOCAL, d9c66661db7d, scripts/check-repository-secrets.ps1, exit 0)
-Scanner regressions: PASS (LOCAL, d9c66661db7d, 102/102)
-Security gates workflow: BLOCKED (REMOTE_CI, d9c66661db7d, job not started: account billing)
-Web unit tests: NOT_RUN (docs-only change)
-Browser multi-tab: UNKNOWN (no HUMAN_CHECK recorded)
+Secret scan: PASS (LOCAL, d9c66661db7d, repository secret-gate invariants, exit 0; Critical=0; High=0; required UNKNOWN=0)
+Scanner regressions: PASS (LOCAL, d9c66661db7d, fail-closed scanner invariants, 102/102; Critical=0; High=0; required UNKNOWN=0)
+Security gates workflow: BLOCKED (REMOTE_CI, d9c66661db7d, Security gates job, N/A: job not started; cause UNKNOWN)
+Web unit tests: NOT_RUN (LOCAL, d9c66661db7d, npm test, N/A: docs-only scope)
+Browser multi-tab: UNKNOWN (HUMAN_CHECK, d9c66661db7d, browser multi-tab behavior, N/A: no human record)
 ```
 
 ## 6. 제품·데모 화면 문구
 
 합성 데모 화면이나 공개 문서에서 검증 상태를 사용자에게 보여 줄 때는 아래 문구만
-쓴다. 내부 라벨을 그대로 노출하지 않는다.
+쓴다. 내부 라벨을 그대로 노출하지 않는다. 검사 이름을 생략하지 않으며, 합성 fixture와
+`REMOTE_CI`가 겹치면 합성 데이터라는 한계를 우선 보존한다.
 
 | 내부 상태 | 한국어 | English |
 |---|---|---|
-| `PASS` + 합성 fixture | 합성 데이터로 확인됨 | Checked with synthetic data |
-| `PASS` + `REMOTE_CI` | 자동 검사를 통과함 | Passed automated checks |
-| `FAIL` | 확인 실패 | Check failed |
-| `BLOCKED` | 확인 대기 중 | Waiting to be checked |
-| `NOT_RUN` | 이번 범위에서 확인하지 않음 | Not checked in this scope |
-| `UNKNOWN` | 확인되지 않음 | Not verified |
+| `PASS` + 합성 fixture (`REMOTE_CI` 포함) | `<검사명>: 합성 데이터 자동 검사를 통과함` | `<Check name>: Passed automated checks with synthetic data` |
+| `PASS` + `REMOTE_CI` (비합성 검사만) | `<검사명>: 자동 검사를 통과함` | `<Check name>: Passed automated checks` |
+| `FAIL` | `<검사명>: 확인 실패` | `<Check name>: Check failed` |
+| `BLOCKED` | `<검사명>: 확인 대기 중` | `<Check name>: Waiting to be checked` |
+| `NOT_RUN` | `<검사명>: 이번 범위에서 확인하지 않음` | `<Check name>: Not checked in this scope` |
+| `UNKNOWN` | `<검사명>: 확인되지 않음` | `<Check name>: Not verified` |
 
 금지 표현(상태와 관계없이 사용하지 않는다):
 
