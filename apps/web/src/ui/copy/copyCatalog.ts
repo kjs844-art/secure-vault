@@ -99,6 +99,16 @@ const ko = {
     errorBody: "잠시 뒤 다시 시도하세요.",
     errorReference: "참조 코드 {code}",
   },
+  form: {
+    unsavedChanges: "저장하지 않은 변경 사항이 있습니다",
+    changedFieldCount: "바뀐 항목 {count}개",
+    saving: "저장 중",
+    saved: "저장했습니다",
+    saveFailed: "저장하지 못했습니다. 바꾼 내용은 이 화면에 그대로 남아 있습니다.",
+    discardConfirm: "저장하지 않은 변경 사항을 버릴까요?",
+    discard: "변경 사항 버리기",
+    keepEditing: "계속 편집",
+  },
 } as const satisfies CopyTree;
 
 export type CopyCatalog = Widen<typeof ko>;
@@ -173,6 +183,16 @@ const en: CopyCatalog = {
     errorTitle: "Something went wrong",
     errorBody: "Please try again in a moment.",
     errorReference: "Reference code {code}",
+  },
+  form: {
+    unsavedChanges: "You have unsaved changes",
+    changedFieldCount: "{count} fields changed",
+    saving: "Saving",
+    saved: "Saved",
+    saveFailed: "Could not save. Your changes are still on this screen.",
+    discardConfirm: "Discard your unsaved changes?",
+    discard: "Discard changes",
+    keepEditing: "Keep editing",
   },
 };
 
