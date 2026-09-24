@@ -187,6 +187,36 @@ describe("validateProviderMetadataCatalogV1 with untrusted runtime input", () =>
     expectReports([{}], atZero("UNEXPECTED_FIELD"));
   });
 
+  it("rejects symbol and non-enumerable fields outside the exact allowlist", () => {
+    const symbolEntry = { ...VALID, [Symbol("synthetic-extra")]: "synthetic" };
+    const hiddenEntry = { ...VALID } as ProviderMetadataV1 & Record<string, unknown>;
+    Object.defineProperty(hiddenEntry, "apiKeyExample", {
+      configurable: true,
+      enumerable: false,
+      value: "synthetic-placeholder",
+    });
+
+    expectReports([symbolEntry], atZero("UNEXPECTED_FIELD"));
+    expectReports([hiddenEntry], atZero("UNEXPECTED_FIELD"));
+  });
+
+  it("rejects symbol fields on nested exact-key records", () => {
+    const docLink = {
+      kind: "credentials",
+      url: "https://docs.example.com/keys",
+      [Symbol("synthetic-extra")]: "synthetic",
+    };
+    const linkCheck = {
+      result: "PASS",
+      scope: "http_reachability",
+      checkedOn: "2026-09-24",
+      [Symbol("synthetic-extra")]: "synthetic",
+    };
+
+    expectReports([{ ...VALID, docLinks: [docLink] }], atZero("INVALID_DOC_LINK"));
+    expectReports([{ ...VALID, linkCheck }], atZero("INVALID_LINK_CHECK"));
+  });
+
   const fieldCases: readonly [string, Record<string, unknown>, ProviderMetadataIssueV1[]][] = [
     ["null id", { id: null }, ["INVALID_ID"]],
     ["number id", { id: 7 }, ["INVALID_ID"]],

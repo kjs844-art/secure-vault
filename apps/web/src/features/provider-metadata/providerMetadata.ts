@@ -83,8 +83,10 @@ function isPlainRecord(value: unknown): value is PlainRecord {
 }
 
 function hasExactKeys(value: PlainRecord, allowed: readonly string[]): boolean {
-  const keys = Object.keys(value);
-  return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
+  // Object.keys는 Symbol key와 non-enumerable own property를 숨기므로 exact allowlist에 쓸 수 없다.
+  const keys = Reflect.ownKeys(value);
+  return keys.length === allowed.length &&
+    keys.every((key) => typeof key === "string" && allowed.includes(key));
 }
 
 /** 모든 원소가 문자열인 배열이면 복사본을, 아니면 null을 돌려준다. */
