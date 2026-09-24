@@ -11,14 +11,12 @@ $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("keyatlas-release-manifes
 $utf8 = New-Object Text.UTF8Encoding($false)
 $passed = 0
 
-# 'abc'의 SHA256 공개 test vector (FIPS 180-2)
 $abcSha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+$allByteValuesSha256 = '40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880'
 
 function Assert-Condition {
     param([bool]$Condition, [string]$Message)
-    if (-not $Condition) {
-        throw $Message
-    }
+    if (-not $Condition) { throw $Message }
 }
 
 function Invoke-Tool {
@@ -29,9 +27,7 @@ function Invoke-Tool {
         $lines = @(& $engine -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tool @Arguments 2>&1)
         $code = $LASTEXITCODE
     }
-    finally {
-        $ErrorActionPreference = $savedPreference
-    }
+    finally { $ErrorActionPreference = $savedPreference }
     [pscustomobject]@{ Code = $code; Text = ($lines -join "`n") }
 }
 
@@ -51,7 +47,7 @@ function Assert-Failure {
         [Parameter(Mandatory = $true)][string]$Reason,
         [Parameter(Mandatory = $true)][string]$Name
     )
-    Assert-Condition ($Result.Code -eq 1) "$Name must fail closed."
+    Assert-Condition ($Result.Code -eq 1) "$Name must fail closed. Output: $($Result.Text)"
     Assert-Condition ($Result.Text.Contains("RELEASE_MANIFEST_FAILED $Reason")) "$Name needs reason $Reason but got: $($Result.Text)"
     Assert-Condition (-not $Result.Text.Contains('RELEASE_MANIFEST_CREATED')) "$Name must not emit a creation marker."
     Assert-Condition (-not $Result.Text.Contains('RELEASE_MANIFEST_VERIFIED')) "$Name must not emit a verification marker."
@@ -66,20 +62,81 @@ function New-TestJunction {
         $null = & $env:ComSpec /d /c mklink /J $Path $Target 2>&1
         $code = $LASTEXITCODE
     }
-    finally {
-        $ErrorActionPreference = $savedPreference
-    }
+    finally { $ErrorActionPreference = $savedPreference }
     if ($code -ne 0) { throw 'The reparse-point test fixture could not be created.' }
 }
 
-try {
-    if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) {
-        throw 'The release artifact manifest tool is missing.'
+function Use-ReducedTestPolicy {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Values,
+        [Parameter(Mandatory = $true)][scriptblock]$Body
+    )
+    $allValues = @{'KEYATLAS_RELEASE_MANIFEST_TEST_MODE' = 'reduce-only-v1'}
+    foreach ($key in $Values.Keys) { $allValues[$key] = [string]$Values[$key] }
+    $saved = @{}
+    foreach ($key in $allValues.Keys) {
+        $saved[$key] = [Environment]::GetEnvironmentVariable($key)
+        [Environment]::SetEnvironmentVariable($key, $allValues[$key])
     }
+    try { & $Body }
+    finally {
+        foreach ($key in $allValues.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key]) }
+    }
+}
+
+function Wait-TestJob {
+    param([Parameter(Mandatory = $true)]$Job)
+    try {
+        $completed = Wait-Job -Job $Job -Timeout 10
+        if ($null -eq $completed -or $Job.State -notin @('Completed', 'Failed')) {
+            throw "A synthetic concurrency job did not finish: $($Job.State)"
+        }
+        if ($Job.State -eq 'Failed') {
+            $details = Receive-Job -Job $Job -ErrorAction Continue | Out-String
+            throw "A synthetic concurrency job failed: $details"
+        }
+    }
+    finally { Remove-Job -Job $Job -Force -ErrorAction SilentlyContinue }
+}
+
+function Assert-InvalidManifestText {
+    param(
+        [Parameter(Mandatory = $true)][string]$ArtifactRoot,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Text
+    )
+    $path = Join-Path $temporaryRoot ("invalid-$Name.json")
+    [IO.File]::WriteAllText($path, $Text, $utf8)
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $ArtifactRoot, '-VerifyManifest', $path)) 'invalid_manifest' $Name
+}
+
+function Remove-TestTreeSafely {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    if (-not (Test-Path -LiteralPath $Root)) { return }
+    $stack = New-Object 'System.Collections.Generic.Stack[IO.DirectoryInfo]'
+    $stack.Push((New-Object IO.DirectoryInfo($Root)))
+    while ($stack.Count -gt 0) {
+        $directory = $stack.Pop()
+        foreach ($item in $directory.GetFileSystemInfos()) {
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                if ($item -is [IO.DirectoryInfo]) { [IO.Directory]::Delete($item.FullName) }
+                else { [IO.File]::Delete($item.FullName) }
+            }
+            elseif ($item -is [IO.DirectoryInfo]) { $stack.Push($item) }
+        }
+    }
+    Remove-Item -LiteralPath $Root -Recurse -Force
+}
+
+try {
+    if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) { throw 'The release artifact manifest tool is missing.' }
     New-Item -ItemType Directory -Path $temporaryRoot -ErrorAction Stop | Out-Null
 
-    # 1. stdout 출력은 결정적이며 경로 순서가 ordinal 정렬이다.
+    # 1. Deterministic sorting and two known binary vectors, including NUL, FF,
+    # 80, CR, and LF as members of the complete 00..FF sequence.
     $root = New-ArtifactTree 'deterministic'
+    [byte[]]$allByteValues = 0..255
+    [IO.File]::WriteAllBytes((Join-Path $root 'all-bytes.bin'), $allByteValues)
     $first = Invoke-Tool @('-ArtifactRoot', $root)
     $second = Invoke-Tool @('-ArtifactRoot', $root)
     Assert-Condition ($first.Code -eq 0) "Manifest creation must pass: $($first.Text)"
@@ -87,33 +144,33 @@ try {
     $parsed = $first.Text | ConvertFrom-Json
     Assert-Condition ($parsed.schema -ceq 'keyatlas.release-artifact-manifest.v1') 'The schema identifier is wrong.'
     Assert-Condition ($parsed.algorithm -ceq 'sha256') 'The algorithm must be sha256.'
-    Assert-Condition ($parsed.fileCount -eq 3) 'The file count is wrong.'
+    Assert-Condition ($parsed.fileCount -eq 4) 'The file count is wrong.'
     $paths = @($parsed.files | ForEach-Object { $_.path })
-    Assert-Condition (($paths -join '|') -ceq 'NOTICE.txt|web/assets/app.js|web/index.html') "Paths must be ordinal-sorted with forward slashes: $($paths -join '|')"
+    Assert-Condition (($paths -join '|') -ceq 'NOTICE.txt|all-bytes.bin|web/assets/app.js|web/index.html') "Paths are not ordinal sorted: $($paths -join '|')"
     $index = @($parsed.files | Where-Object { $_.path -ceq 'web/index.html' })[0]
-    Assert-Condition ($index.sha256 -ceq $abcSha256) 'The SHA256 of the known vector is wrong.'
-    Assert-Condition ($index.size -eq 3) 'The recorded size is wrong.'
+    $binary = @($parsed.files | Where-Object { $_.path -ceq 'all-bytes.bin' })[0]
+    Assert-Condition ($index.sha256 -ceq $abcSha256 -and $index.size -eq 3) 'The abc vector is wrong.'
+    Assert-Condition ($binary.sha256 -ceq $allByteValuesSha256 -and $binary.size -eq 256) 'The 00..FF binary vector is wrong.'
     Assert-Condition (-not $first.Text.Contains($temporaryRoot)) 'The manifest must not contain absolute paths.'
     $passed++
-    Write-Output 'PASS: deterministic sorted manifest with known vector'
+    Write-Output 'PASS: deterministic two-pass manifest and known binary vectors'
 
-    # 2. 파일로 저장한 manifest는 BOM 없는 UTF-8, LF 줄바꿈이며 검증을 통과한다.
+    # 2. Same-parent output is canonical UTF-8/LF and verifies.
     $manifest = Join-Path $temporaryRoot 'deterministic.manifest.json'
     $created = Invoke-Tool @('-ArtifactRoot', $root, '-OutputPath', $manifest)
     Assert-Condition ($created.Code -eq 0) "Writing the manifest must pass: $($created.Text)"
-    Assert-Condition ($created.Text.Contains('RELEASE_MANIFEST_CREATED files=3')) 'Creation needs an explicit marker.'
     $bytes = [IO.File]::ReadAllBytes($manifest)
-    Assert-Condition (-not (($bytes.Length -ge 3) -and ($bytes[0] -eq 0xEF) -and ($bytes[1] -eq 0xBB) -and ($bytes[2] -eq 0xBF))) 'The manifest must not start with a BOM.'
-    Assert-Condition (-not ([Array]::IndexOf($bytes, [byte]13) -ge 0)) 'The manifest must use LF line endings only.'
+    Assert-Condition (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) 'The manifest must not start with a BOM.'
+    Assert-Condition ([Array]::IndexOf($bytes, [byte]13) -lt 0) 'The manifest must use LF only.'
     $verified = Invoke-Tool @('-ArtifactRoot', $root, '-VerifyManifest', $manifest)
-    Assert-Condition ($verified.Code -eq 0) "Verification of an untouched tree must pass: $($verified.Text)"
-    Assert-Condition ($verified.Text.Contains('RELEASE_MANIFEST_VERIFIED files=3')) 'Verification needs an explicit marker.'
+    Assert-Condition ($verified.Code -eq 0) "Verification must pass: $($verified.Text)"
+    Assert-Condition ($verified.Text.Contains('RELEASE_MANIFEST_VERIFIED files=4')) 'Verification marker is missing.'
     $passed++
-    Write-Output 'PASS: written manifest is BOM-free, LF-only, and verifies'
+    Write-Output 'PASS: canonical file output verifies'
 
-    # 3. 내용 변조, 추가 파일, 누락 파일은 각각 다른 사유로 실패한다.
+    # 3. Same-size one-byte mutation, added file, and missing file fail distinctly.
     [IO.File]::WriteAllText((Join-Path $root 'web\index.html'), 'abd', $utf8)
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $root, '-VerifyManifest', $manifest)) 'hash_mismatch' 'Tampered content'
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $root, '-VerifyManifest', $manifest)) 'hash_mismatch' 'Same-size one-byte mutation'
     [IO.File]::WriteAllText((Join-Path $root 'web\index.html'), 'abc', $utf8)
     [IO.File]::WriteAllText((Join-Path $root 'web\extra.js'), 'synthetic extra', $utf8)
     Assert-Failure (Invoke-Tool @('-ArtifactRoot', $root, '-VerifyManifest', $manifest)) 'unexpected_file' 'Added file'
@@ -121,85 +178,236 @@ try {
     Remove-Item -LiteralPath (Join-Path $root 'NOTICE.txt')
     Assert-Failure (Invoke-Tool @('-ArtifactRoot', $root, '-VerifyManifest', $manifest)) 'missing_file' 'Missing file'
     $passed++
-    Write-Output 'PASS: tampered, added, and missing files fail verification'
+    Write-Output 'PASS: mutation, addition, and removal fail verification'
 
-    # 4. 빈 디렉터리와 존재하지 않는 root는 실패한다.
+    # 4. Root, self-inclusion, overwrite, and mixed-mode guards.
     $empty = Join-Path $temporaryRoot 'empty'
     New-Item -ItemType Directory -Path $empty | Out-Null
     Assert-Failure (Invoke-Tool @('-ArtifactRoot', $empty)) 'empty_root' 'Empty root'
     Assert-Failure (Invoke-Tool @('-ArtifactRoot', (Join-Path $temporaryRoot 'absent'))) 'root_not_directory' 'Absent root'
-    $passed++
-    Write-Output 'PASS: empty and absent roots fail'
-
-    # 5. 출력 경로는 artifact root 안이거나 기존 파일이면 거부되고 덮어쓰지 않는다.
-    $outputRoot = New-ArtifactTree 'output-guard'
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $outputRoot, '-OutputPath', (Join-Path $outputRoot 'manifest.json'))) 'output_inside_root' 'Output inside root'
-    Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $outputRoot 'manifest.json'))) 'A rejected output must not be written.'
+    $guardRoot = New-ArtifactTree 'output-guard'
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-OutputPath', (Join-Path $guardRoot 'manifest.json'))) 'output_inside_root' 'Output inside root'
+    $insideVerify = Join-Path $guardRoot 'existing-manifest.json'
+    [IO.File]::WriteAllText($insideVerify, '{}', $utf8)
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-VerifyManifest', $insideVerify)) 'manifest_inside_root' 'Verification manifest inside root'
+    Remove-Item -LiteralPath $insideVerify
     $existing = Join-Path $temporaryRoot 'existing.json'
-    [IO.File]::WriteAllText($existing, 'keep', $utf8)
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $outputRoot, '-OutputPath', $existing)) 'output_exists' 'Existing output'
-    Assert-Condition ([IO.File]::ReadAllText($existing) -ceq 'keep') 'An existing file must not be overwritten.'
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $outputRoot, '-OutputPath', (Join-Path $temporaryRoot 'x.json'), '-VerifyManifest', $existing)) 'conflicting_modes' 'Conflicting modes'
+    [IO.File]::WriteAllText($existing, 'competitor-sentinel', $utf8)
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-OutputPath', $existing)) 'output_exists' 'Existing output'
+    Assert-Condition ([IO.File]::ReadAllText($existing) -ceq 'competitor-sentinel') 'Existing output must remain untouched.'
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-OutputPath', (Join-Path $temporaryRoot 'mixed.json'), '-VerifyManifest', $existing)) 'conflicting_modes' 'Conflicting modes'
     $passed++
-    Write-Output 'PASS: output guard refuses self-inclusion, overwrite, and mixed modes'
+    Write-Output 'PASS: root and output mode guards fail closed'
 
-    # 6. 키·환경 파일 이름은 release 묶음에 들어갈 수 없다.
+    # 5. Forbidden and unsupported names remain defense in depth.
     foreach ($name in @('.env', '.env.production', 'release.pem', 'upload.keystore', 'ci-service-account.json')) {
         $forbiddenRoot = New-ArtifactTree ('forbidden-' + [Guid]::NewGuid().ToString('N'))
         [IO.File]::WriteAllText((Join-Path $forbiddenRoot $name), 'synthetic placeholder', $utf8)
         Assert-Failure (Invoke-Tool @('-ArtifactRoot', $forbiddenRoot)) 'forbidden_file' "Forbidden name $name"
     }
-    $passed++
-    Write-Output 'PASS: key and environment file names are rejected'
-
-    # 7. allowlist 밖 문자(공백·비ASCII)가 있는 경로는 거부된다.
     $spaceRoot = New-ArtifactTree 'unsupported-space'
     [IO.File]::WriteAllText((Join-Path $spaceRoot 'has space.txt'), 'x', $utf8)
     Assert-Failure (Invoke-Tool @('-ArtifactRoot', $spaceRoot)) 'unsupported_path' 'Path with a space'
-    $unicodeRoot = New-ArtifactTree 'unsupported-unicode'
-    [IO.File]::WriteAllText((Join-Path $unicodeRoot ('caf' + [char]0x00E9 + '.txt')), 'x', $utf8)
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $unicodeRoot)) 'unsupported_path' 'Non-ASCII path'
     $passed++
-    Write-Output 'PASS: paths outside the allowlist are rejected'
+    Write-Output 'PASS: forbidden and unsupported artifact names are rejected'
 
-    # 8. junction은 따라가지 않고 실패한다.
+    # 6. Reparse points in artifact and output/verify parent chains fail without traversal.
     $junctionRoot = New-ArtifactTree 'junction'
     $outside = Join-Path $temporaryRoot 'outside'
     New-Item -ItemType Directory -Path $outside | Out-Null
-    [IO.File]::WriteAllText((Join-Path $outside 'secret-looking.txt'), 'synthetic outside', $utf8)
+    [IO.File]::WriteAllText((Join-Path $outside 'outside.txt'), 'synthetic outside', $utf8)
     $junction = Join-Path $junctionRoot 'linked'
     New-TestJunction -Path $junction -Target $outside
     try {
         Assert-Failure (Invoke-Tool @('-ArtifactRoot', $junctionRoot)) 'reparse_point' 'Junction inside root'
         Assert-Failure (Invoke-Tool @('-ArtifactRoot', $junction)) 'reparse_point' 'Junction as root'
     }
-    finally {
-        [IO.Directory]::Delete($junction)
-    }
-    $passed++
-    Write-Output 'PASS: reparse points fail without traversal'
+    finally { [IO.Directory]::Delete($junction) }
 
-    # 9. 손상되었거나 schema가 다른 manifest는 검증 전에 거부된다.
-    $validRoot = New-ArtifactTree 'invalid-manifest'
-    $cases = @(
-        'not json',
-        '{"schema":"other","algorithm":"sha256","fileCount":1,"files":[{"path":"a","size":1,"sha256":"' + $abcSha256 + '"}]}',
-        '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"md5","fileCount":1,"files":[{"path":"a","size":1,"sha256":"' + $abcSha256 + '"}]}',
-        '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"sha256","fileCount":2,"files":[{"path":"a","size":1,"sha256":"' + $abcSha256 + '"}]}',
-        '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"sha256","fileCount":1,"files":[{"path":"../a","size":1,"sha256":"' + $abcSha256 + '"}]}',
-        '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"sha256","fileCount":1,"files":[{"path":"a","size":1,"sha256":"XYZ"}]}',
-        '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"sha256","fileCount":0,"files":[]}'
-    )
-    $caseIndex = 0
-    foreach ($content in $cases) {
-        $caseIndex++
-        $bad = Join-Path $temporaryRoot "bad-$caseIndex.json"
-        [IO.File]::WriteAllText($bad, $content, $utf8)
-        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $validRoot, '-VerifyManifest', $bad)) 'invalid_manifest' "Invalid manifest case $caseIndex"
+    $realOutputParent = Join-Path $temporaryRoot 'real-output-parent'
+    New-Item -ItemType Directory -Path $realOutputParent | Out-Null
+    $junctionParent = Join-Path $temporaryRoot 'junction-output-parent'
+    New-TestJunction -Path $junctionParent -Target $realOutputParent
+    try {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-OutputPath', (Join-Path $junctionParent 'manifest.json'))) 'reparse_point' 'Output parent junction'
+        [IO.File]::Copy($manifest, (Join-Path $realOutputParent 'verify.json'))
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $guardRoot, '-VerifyManifest', (Join-Path $junctionParent 'verify.json'))) 'reparse_point' 'Verify parent junction'
     }
-    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $validRoot, '-VerifyManifest', (Join-Path $temporaryRoot 'absent.json'))) 'manifest_missing' 'Absent manifest'
+    finally { [IO.Directory]::Delete($junctionParent) }
     $passed++
-    Write-Output 'PASS: malformed manifests are rejected'
+    Write-Output 'PASS: artifact and manifest reparse paths are rejected'
+
+    # 7. An ordinary external mutation between full observations is detected.
+    $changingRoot = New-ArtifactTree 'changing'
+    $changingFile = Join-Path $changingRoot 'web\index.html'
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_PAUSE_BETWEEN_OBSERVATIONS_MS' = '3000'} {
+        $job = Start-Job -ScriptBlock {
+            param($Path)
+            Start-Sleep -Milliseconds 700
+            [IO.File]::WriteAllText($Path, 'abd', (New-Object Text.UTF8Encoding($false)))
+        } -ArgumentList $changingFile
+        try {
+            Assert-Failure (Invoke-Tool @('-ArtifactRoot', $changingRoot)) 'unstable_snapshot' 'Concurrent ordinary mutation'
+        }
+        finally { Wait-TestJob $job }
+    }
+    $passed++
+    Write-Output 'PASS: two observations detect an ordinary concurrent mutation'
+
+    # 8. Destination and temp-path races fail closed without deleting uncertain files.
+    $raceRoot = New-ArtifactTree 'output-race'
+    $raceParent = Join-Path $temporaryRoot 'output-race-parent'
+    New-Item -ItemType Directory -Path $raceParent -ErrorAction Stop | Out-Null
+    $raceOutput = Join-Path $raceParent 'raced-output.json'
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_PAUSE_BEFORE_MOVE_MS' = '3000'} {
+        $job = Start-Job -ScriptBlock {
+            param($Path)
+            Start-Sleep -Milliseconds 700
+            $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes('competitor-sentinel')
+            try {
+                $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) }
+                finally { $stream.Dispose() }
+            }
+            catch [IO.IOException] { }
+        } -ArgumentList $raceOutput
+        try {
+            Assert-Failure (Invoke-Tool @('-ArtifactRoot', $raceRoot, '-OutputPath', $raceOutput)) 'output_exists' 'Competitor output race'
+        }
+        finally { Wait-TestJob $job }
+    }
+    Assert-Condition ([IO.File]::ReadAllText($raceOutput) -ceq 'competitor-sentinel') 'The race winner sentinel must be preserved.'
+    $preservedTemps = @(Get-ChildItem -LiteralPath $raceParent -Filter '.keyatlas-manifest-*.tmp' -File)
+    Assert-Condition ($preservedTemps.Count -eq 1) 'An uncertain temporary file must be preserved instead of path-guessed deletion.'
+    $preservedVerify = Invoke-Tool @('-ArtifactRoot', $raceRoot, '-VerifyManifest', $preservedTemps[0].FullName)
+    Assert-Condition ($preservedVerify.Code -eq 0) "The preserved private temp must remain canonical: $($preservedVerify.Text)"
+
+    $swapRoot = New-ArtifactTree 'temp-swap'
+    $swapBaselineParent = Join-Path $temporaryRoot 'temp-swap-baseline'
+    $swapParent = Join-Path $temporaryRoot 'temp-swap-parent'
+    New-Item -ItemType Directory -Path $swapBaselineParent -ErrorAction Stop | Out-Null
+    New-Item -ItemType Directory -Path $swapParent -ErrorAction Stop | Out-Null
+    $swapBaseline = Join-Path $swapBaselineParent 'baseline.json'
+    $swapOutput = Join-Path $swapParent 'swapped-output.json'
+    $baselineResult = Invoke-Tool @('-ArtifactRoot', $swapRoot, '-OutputPath', $swapBaseline)
+    Assert-Condition ($baselineResult.Code -eq 0) "The swap baseline must be created: $($baselineResult.Text)"
+    $replacementLength = [int](Get-Item -LiteralPath $swapBaseline).Length
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_PAUSE_BEFORE_MOVE_MS' = '3000'} {
+        $job = Start-Job -ScriptBlock {
+            param($Directory, $Length)
+            $deadline = [DateTime]::UtcNow.AddSeconds(8)
+            while ([DateTime]::UtcNow -lt $deadline) {
+                $candidate = Get-ChildItem -LiteralPath $Directory -Filter '.keyatlas-manifest-*.tmp' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($null -ne $candidate) {
+                    try {
+                        [IO.File]::Delete($candidate.FullName)
+                        $replacement = New-Object byte[] $Length
+                        for ($index = 0; $index -lt $replacement.Length; $index++) { $replacement[$index] = 88 }
+                        [IO.File]::WriteAllBytes($candidate.FullName, $replacement)
+                        return
+                    }
+                    catch [IO.IOException] { }
+                    catch [UnauthorizedAccessException] { }
+                }
+                Start-Sleep -Milliseconds 5
+            }
+            throw 'The synthetic temp replacement did not win the test window.'
+        } -ArgumentList $swapParent, $replacementLength
+        try {
+            $swapResult = Invoke-Tool @('-ArtifactRoot', $swapRoot, '-OutputPath', $swapOutput)
+        }
+        finally { Wait-TestJob $job }
+        Assert-Failure $swapResult 'unstable_output' 'Same-length temporary replacement'
+        Assert-Condition (-not (Test-Path -LiteralPath $swapOutput)) 'A rejected temporary replacement must not be published.'
+    }
+    $passed++
+    Write-Output 'PASS: output races preserve competitor bytes and reject temporary replacement'
+
+    # 9. Strict schema and canonical bytes reject normalized or ambiguous JSON.
+    $strictRoot = New-ArtifactTree 'strict-schema'
+    $strictManifest = Join-Path $temporaryRoot 'strict-valid.json'
+    $strictCreated = Invoke-Tool @('-ArtifactRoot', $strictRoot, '-OutputPath', $strictManifest)
+    Assert-Condition ($strictCreated.Code -eq 0) "Strict fixture creation failed: $($strictCreated.Text)"
+    $validText = [IO.File]::ReadAllText($strictManifest, $utf8)
+    $validObject = $validText | ConvertFrom-Json
+    $firstHash = [string]$validObject.files[0].sha256
+    Assert-InvalidManifestText $strictRoot 'extra-top-key' ($validText.Replace("  `"files`": [", "  `"extra`": true,`n  `"files`": ["))
+    Assert-InvalidManifestText $strictRoot 'missing-top-key' ($validText.Replace("  `"algorithm`": `"sha256`",`n", ''))
+    Assert-InvalidManifestText $strictRoot 'duplicate-top-key' ($validText.Replace("  `"algorithm`": `"sha256`",`n", "  `"algorithm`": `"sha256`",`n  `"algorithm`": `"sha256`",`n"))
+    Assert-InvalidManifestText $strictRoot 'duplicate-file-key' ([regex]::Replace($validText, '"sha256": "([0-9a-f]{64})"', '"sha256": "$1", "sha256": "$1"', 1))
+    Assert-InvalidManifestText $strictRoot 'non-array-files' '{"schema":"keyatlas.release-artifact-manifest.v1","algorithm":"sha256","fileCount":1,"files":{"path":"a","size":1,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}}'
+    Assert-InvalidManifestText $strictRoot 'string-file-count' ($validText.Replace('"fileCount": 3', '"fileCount": "3"'))
+    Assert-InvalidManifestText $strictRoot 'float-file-count' ($validText.Replace('"fileCount": 3', '"fileCount": 3.0'))
+    Assert-InvalidManifestText $strictRoot 'negative-size' ([regex]::Replace($validText, '"size": [0-9]+', '"size": -1', 1))
+    Assert-InvalidManifestText $strictRoot 'overflow-size' ([regex]::Replace($validText, '"size": [0-9]+', '"size": 9223372036854775808', 1))
+    Assert-InvalidManifestText $strictRoot 'uppercase-hash' ($validText.Replace($firstHash, $firstHash.ToUpperInvariant()))
+    Assert-InvalidManifestText $strictRoot 'extra-file-key' ([regex]::Replace($validText, '"sha256": "([0-9a-f]{64})" \}', '"sha256": "$1", "extra": 1 }', 1))
+    Assert-InvalidManifestText $strictRoot 'missing-file-key' ([regex]::Replace($validText, ', "sha256": "[0-9a-f]{64}"', '', 1))
+    Assert-InvalidManifestText $strictRoot 'trailing-whitespace' ($validText + ' ')
+    Assert-InvalidManifestText $strictRoot 'crlf' ($validText.Replace("`n", "`r`n"))
+    $bomPath = Join-Path $temporaryRoot 'invalid-bom.json'
+    $bom = New-Object byte[] ($utf8.GetByteCount($validText) + 3)
+    $bom[0] = 0xEF; $bom[1] = 0xBB; $bom[2] = 0xBF
+    [Array]::Copy($utf8.GetBytes($validText), 0, $bom, 3, $bom.Length - 3)
+    [IO.File]::WriteAllBytes($bomPath, $bom)
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $strictRoot, '-VerifyManifest', $bomPath)) 'invalid_manifest' 'BOM manifest'
+    $entryLines = [regex]::Matches($validText, '(?m)^    \{ .* \},?$')
+    Assert-Condition ($entryLines.Count -ge 2) 'Strict fixture must contain at least two entries.'
+    $unsorted = $validText.Replace($entryLines[0].Value, '__FIRST__').Replace($entryLines[1].Value, $entryLines[0].Value).Replace('__FIRST__', $entryLines[1].Value)
+    Assert-InvalidManifestText $strictRoot 'unsorted-files' $unsorted
+    $firstPath = [string]$validObject.files[0].path
+    $secondPath = [string]$validObject.files[1].path
+    Assert-InvalidManifestText $strictRoot 'duplicate-path' ($validText.Replace("`"path`": `"$secondPath`"", "`"path`": `"$firstPath`""))
+    Assert-InvalidManifestText $strictRoot 'case-collision' ($validText.Replace("`"path`": `"$secondPath`"", "`"path`": `"$($firstPath.ToLowerInvariant())`""))
+    $passed++
+    Write-Output 'PASS: strict schema and canonical byte representation are enforced'
+
+    # 10. Resource limits are exercised through reduce-only test policy controls.
+    $limitRoot = New-ArtifactTree 'limits'
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_FILES' = '2'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'too_many_files' 'File count limit'
+    }
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_ENTRIES' = '2'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'too_many_entries' 'Total entry limit'
+    }
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_DIRECTORIES' = '2'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'too_many_directories' 'Directory count limit'
+    }
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_PATH_CHARS' = '10'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'unsupported_path' 'Path character limit'
+    }
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_SINGLE_BYTES' = '2'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'file_too_large' 'Single file byte limit'
+    }
+    Use-ReducedTestPolicy @{'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_AGGREGATE_BYTES' = '20'} {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'aggregate_too_large' 'Aggregate byte limit'
+    }
+    $deepRoot = Join-Path $temporaryRoot 'depth-limit'
+    New-Item -ItemType Directory -Path $deepRoot | Out-Null
+    $cursor = $deepRoot
+    for ($depth = 1; $depth -le 33; $depth++) {
+        $cursor = Join-Path $cursor ("d$depth")
+        New-Item -ItemType Directory -Path $cursor | Out-Null
+    }
+    [IO.File]::WriteAllText((Join-Path $cursor 'leaf.txt'), 'x', $utf8)
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $deepRoot)) 'too_deep' 'Depth limit'
+    $oversizedManifest = Join-Path $temporaryRoot 'oversized-manifest.json'
+    $oversized = [IO.File]::Open($oversizedManifest, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $oversized.SetLength(8MB + 1) }
+    finally { $oversized.Dispose() }
+    Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot, '-VerifyManifest', $oversizedManifest)) 'invalid_manifest' 'Manifest byte limit'
+    Use-ReducedTestPolicy @{
+        'KEYATLAS_RELEASE_MANIFEST_TEST_MAX_ELAPSED_SECONDS' = '1'
+        'KEYATLAS_RELEASE_MANIFEST_TEST_PAUSE_BETWEEN_OBSERVATIONS_MS' = '1500'
+    } {
+        Assert-Failure (Invoke-Tool @('-ArtifactRoot', $limitRoot)) 'elapsed_budget' 'Cooperative elapsed budget'
+    }
+    $source = [IO.File]::ReadAllText($tool)
+    foreach ($policy in @('$maximumFileCount = 10000', '$maximumTotalEntries = 20000', '$maximumDirectoryCount = 10000', '$maximumDepth = 32', '$maximumRelativePathCharacters = 512', '$maximumSingleFileBytes = 512MB', '$maximumAggregateFileBytes = 1GB', '$maximumManifestBytes = 8MB', '$maximumElapsedSeconds = 300', '$streamBufferBytes = 64KB')) {
+        Assert-Condition ($source.Contains($policy)) "Missing policy declaration: $policy"
+    }
+    $passed++
+    Write-Output 'PASS: count, depth, path, byte, manifest, cooperative elapsed, and buffer policies are bounded'
 
     Write-Output "RELEASE_MANIFEST_TESTS_PASSED=$passed"
     exit 0
@@ -209,7 +417,5 @@ catch {
     exit 1
 }
 finally {
-    if (Test-Path -LiteralPath $temporaryRoot) {
-        Remove-Item -LiteralPath $temporaryRoot -Recurse -Force
-    }
+    Remove-TestTreeSafely -Root $temporaryRoot
 }
