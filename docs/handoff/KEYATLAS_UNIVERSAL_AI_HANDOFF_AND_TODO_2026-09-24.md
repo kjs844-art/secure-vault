@@ -144,7 +144,7 @@ worktree에서 파일이 안 보인다는 이유만으로 삭제됐다고 판단
 | 1~100 원격 task branch | `RESERVED` | branch 존재는 구현 완료가 아님 |
 | #30 provider metadata | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | `PUSHED_LOCAL_DONE` | `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·문서/Secret 검사·독립 재검토 P1/P2/P3 0, PR·통합·remote CI 미완료 |
-| #93 release manifest | `LOCAL_COMMIT_NEEDS_REVISION` | `f1a98b5`; 읽기 전용 검토 완료, snapshot·출력 경로 race 등 수정 필요, CI 미연결 |
+| #93 release manifest | `PUSHED_LOCAL_SECURITY_FIX_DONE` | `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d`; PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0, PS7 실행환경 차단·CI/PR/통합 미완료 |
 | 원격 CI | `BLOCKED/UNKNOWN` | 기록상 계정/과금 차단, 2026-09-24 조회도 404 |
 | main 통합 | `NOT_DONE` | 최신 baseline·로컬 후보가 main에 반영됐다는 증거 없음 |
 | 실제 Secret | `FORBIDDEN` | 독립 감사·복구·동기화·운영 gate 미충족 |
@@ -299,7 +299,7 @@ main_merge_approved: "NO"
 ## 4. 다음 배정 후보와 즉시 가능한 읽기 전용 검토
 
 아래 세 원본 후보의 **읽기 전용 검토는 완료**됐다. 검토 완료는 후보 통합 승인이 아니다.
-#30 보완 tip `534b37c`와 #58 보완 tip `090c731`은 전용 원격 branch에 발행됐고 #93 후보는 아직 local ref에만 있다.
+#30 보완 tip `534b37c`, #58 보완 tip `090c731`, #93 보완 tip `594824d`는 각각 전용 원격 branch에 발행됐다.
 수정·테스트 산출물 생성·commit·push·PR·merge는 각각 별도 상태와 증거로 기록한다.
 
 | 선택 | ID | readiness | 읽을 source | 허용 범위 | completion target | 예상 |
@@ -313,7 +313,7 @@ main_merge_approved: "NO"
 | ID | 작업 | 계약에 더 필요한 값 | 예상 |
 |---|---|---|---:|
 | `KA-BASE-01` | canonical exact SHA 전체 회귀 | 전용 worktree·실행환경·산출물 경로·명령 | 0.5~2일 |
-| `KA-C93-FIX-01` | #93 snapshot·출력 race·strict schema·CI 보완 | task branch·허용 파일·검증 명령·독립 reviewer | 1~2일 |
+| `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | integration base·workflow 허용 파일·PS7 runner | 0.5~1일 |
 | `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | task branch·허용 파일·reviewer·completion target | 2~4일 |
 | `KA-PRI-P02` | domain contract | P01 final SHA·task branch·허용 파일·검사 | 4~8일 |
 | `KA-QA-01` | 브라우저 다중탭 E2E 계획 | task branch·browser fixture·산출물 경로·검사 | 1~2일 |
@@ -325,7 +325,8 @@ main_merge_approved: "NO"
 부분 완료: KA-C30-FIX-01 pushed commit 534b37c·focused 87/87·독립 리뷰 P1/P2 0·
           Release WASM·typecheck·전체 test 1554/1554·build·Secret scan PASS; PR·통합·remote CI는 미완료
 완료: KA-C58-FIX-01 pushed commit 090c731·의미 수정 4건·Secret scan·독립 리뷰 P1/P2/P3 0
-AI 3: KA-C93-FIX-01 계약 작성 후 release manifest 경계 보완
+완료: KA-C93-FIX-01 pushed commit 594824d·PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
+남음: KA-C93-CI-01 PS7 runner·hard process timeout·workflow 연결, PR·통합·remote CI
 Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 ```
 
@@ -356,7 +357,8 @@ Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 | [x] | `KA-C58-01` | `READ_ONLY_REPORT_DONE` | evidence label 후보 통합 판단 | Codex root | 완료 | `E-20260924-C58-GIT-01`, `E-20260924-C58-REVIEW-01`; 후보는 통합 비권장 |
 | [x] | `KA-C58-FIX-01` | `PUSHED_LOCAL_DONE` | #58 의미상 수정점 4개 보완·재검토 | Codex+독립 reviewer | 완료 | target=`LOCAL_DONE`; 원격 `090c731`; 한 문서만 변경·Secret scan PASS·독립 P1/P2/P3 0 |
 | [x] | `KA-C93-01` | `READ_ONLY_REPORT_DONE` | release manifest 후보 통합 판단 | Codex root | 완료 | `E-20260924-C93-GIT-01`, `E-20260924-C93-REVIEW-01`; 후보는 통합 비권장 |
-| [ ] | `KA-C93-FIX-01` | `WAITING_ASSIGNMENT` | #93 stable snapshot·원자적 출력·strict schema·CI 보완 | 미배정 | 1~2일 | race/reparse/schema/resource fixture, PS5.1·PS7·CI, 독립 보안 재검토 |
+| [x] | `KA-C93-FIX-01` | `PUSHED_LOCAL_SECURITY_FIX_DONE` | #93 stable snapshot·fail-closed 출력·strict schema·resource bound 보완 | Codex+독립 reviewer 2명 | 완료 | target=`LOCAL_SECURITY_FIX_DONE`; 원격 `594824d`; PS5.1 10/10·scanner 102/102·Secret scan PASS·P1/P2/P3 0 |
+| [ ] | `KA-C93-CI-01` | `BLOCKED_PS7_ENV_AND_REMOTE_CI` | #93 manifest test의 PS7·workflow·hard timeout 연결 | integration owner | 0.5~1일 | PS7 runner 실행·workflow exact SHA 결과; PR·통합은 별도 |
 
 ### B. Secure Vault·저장·복구
 
@@ -535,6 +537,10 @@ stage: LOCAL_DONE
 | `E-20260924-DOC-04` | `KA-A03` | `PASS` | `INDEPENDENT_REVIEW` | base `eb0127eb10c6e123866320a89e02358e0ce8192e` + 당시 uncommitted 2-file diff | C30 상태·checkbox·고유 evidence ID·과거 BLOCKED 보존·권한 문구 | P1 0 / P2 0 / P3 0; links·UTF-8·공백·fence·diff checks pass; 고신뢰 Secret 형태 0 | 2026-09-24 | 검토 당시 갱신은 아직 commit·push 전이었음; 다른 worktree scanner 교차 실행은 setup 실패로 별도 제한 기록 |
 | `E-20260924-C93-GIT-01` | `KA-C93-01` | `PASS` | `LOCAL` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | baseline 직접 부모·2파일 diff·PowerShell parse·계보·고신뢰 Secret 형태 | exit 0 / parser error 0 / Secret 형태 0 | 2026-09-24 | local task ref만 후보 포함; remote-tracking ref는 baseline |
 | `E-20260924-C93-REVIEW-01` | `KA-C93-01` | `FAIL` | `INDEPENDENT_REVIEW` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | snapshot·출력 경로·strict schema·resource bound·CI·Secret gate 경계 | P1 2 / P2 4 / P3 1 | 2026-09-24 | 실행 검증은 계약상 `NOT_RUN`; 무결성 목록 도구로만 한정 |
+| `E-20260925-C93-FIX-LOCAL-01` | `KA-C93-FIX-01` | `PASS` | `LOCAL` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | base `f1a98b5` 계보·허용 2파일·PowerShell parse·PS5.1 manifest 회귀·scanner 회귀·저장소 Secret scan·diff 검사 | parse 2/2·manifest 10/10·scanner 102/102·exit 0·`REAL_SECRET_GATE=CLOSED` | 2026-09-25 | 실제 Secret 없음; manifest는 Secret scanner 대체가 아님 |
+| `E-20260925-C93-FIX-REVIEW-01` | `KA-C93-FIX-01` | `PASS` | `INDEPENDENT_REVIEW` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | same-handle snapshot·2-pass tree·strict JSON·resource bound·temp/output race·cleanup identity·cooperative timeout 문구 | reviewer 2명 모두 P1 0 / P2 0 / P3 0 | 2026-09-25 | 최초 P1/P2 공격 재현 후 exact-byte pre/post publish 검사와 불확실 temp 보존으로 수정 |
+| `E-20260925-C93-FIX-PUSH-01` | `KA-C93-FIX-01` | `PASS` | `REMOTE_REF` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 전용 원격 branch 백업; PR·merge·main·remote CI 없음 |
+| `E-20260925-C93-FIX-PS7-01` | `KA-C93-CI-01` | `BLOCKED` | `LOCAL_ENV` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | `pwsh.exe --version`과 PS7 재실행 시도 | Windows access block / NOT_RUN | 2026-09-25 | 보안 정책을 우회하지 않음; PS5.1 실제 실행은 PASS |
 | `E-20260924-DOC-03` | `KA-A03` | `UNKNOWN` | `INDEPENDENT_REVIEW` | 문서가 uncommitted라 Git SHA 없음 | C30·C93 checkbox·후보 상태·evidence ID·SHA·finding 수·권한 문구 일관성 | P1 0 / P2 0 | 2026-09-24 | 로컬 작업판 갱신은 승인 가능; authoritative `PASS`는 commit 후 재검증 필요 |
 
 ---
@@ -709,9 +715,27 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - 독립 리뷰: 최초 P2 1/P3 1 수정 후 P1/P2/P3 0, 네 가지 계약 DoD 충족
 - Git: commit 후 비강제 push, local HEAD=upstream=`090c731`, working tree clean
 - 실제 Secret 사용: NO, `REAL_SECRET_GATE=CLOSED`
-- PR/merge/main/remote CI: 하지 않음 또는 UNKNOWN
+- PR: 생성하지 않음; merge/main: 미실행; remote CI: `BLOCKED/UNKNOWN`이며 실행 PASS 증거 없음
 - checkbox 판정: completion target=`LOCAL_DONE` 충족 및 원격 백업 완료로 `KA-C58-FIX-01`만 `[x]`
 - 다음 안전 단계: `KA-C93-FIX-01` 계약 작성 또는 canonical exact SHA 전체 회귀
+
+### 2026-09-25 01:00 KST — `KA-C93-FIX-01` 보안 보완·독립 재검토·원격 백업
+
+- worktree/branch: `keyatlas-c93-fix-01` / `codex/firstvibe-collab-93-release-artifact-manifest-fix-01`
+- implementation base: `f1a98b5acc0d24e591dba87ca60ae3f25f88344f`
+- exact commit/upstream: `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c`
+- 변경 범위: `scripts/new-release-artifact-manifest.ps1`, `tests/verification/new-release-artifact-manifest.Tests.ps1` 두 파일만
+- 보완: 한 read handle의 size+SHA-256, 두 번의 tree 관찰, strict canonical JSON, 수량·크기·깊이·시간 한도,
+  reparse 거부, 비덮어쓰기 move, 이동 전·후 canonical exact-byte 검사, 불확실 temp 비삭제
+- 공격 재현: 최초 같은 길이 temp 교체에서 잘못된 success와 path-guess cleanup P1/P2를 확인한 뒤 회귀로 차단
+- 검사: PowerShell parse 2/2, PS5.1 manifest 10/10, scanner 102/102, 저장소 Secret scan, `git diff --check` 모두 exit 0
+- 독립 리뷰: reviewer 2명 모두 최종 P1 0 / P2 0 / P3 0
+- 환경 제한: `pwsh.exe`는 Windows access block으로 PS7 재실행 `NOT_RUN`; 정책 우회 없음
+- Git: 비강제 push 후 local HEAD=upstream, working tree clean
+- 실제 Secret 사용: NO, `REAL_SECRET_GATE=CLOSED`
+- PR: 생성하지 않음; merge/main: 미실행; remote CI: `BLOCKED/UNKNOWN`이며 실행 PASS 증거 없음
+- checkbox 판정: completion target=`LOCAL_SECURITY_FIX_DONE` 충족으로 `KA-C93-FIX-01` `[x]`; CI 연결은 `KA-C93-CI-01` `[ ]`
+- 다음 안전 단계: canonical exact SHA 전체 회귀 또는 C93 workflow 연결 계약 작성
 
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
@@ -741,7 +765,7 @@ Manager를 사용한다.
 현재 제품 단계: 합성 alpha / security-core prototype
 canonical 협업 baseline: d9c6666
 1~100 task branches: RESERVED가 기본
-9월 24~25일 후보: #30 `534b37c`는 원격 branch·독립 리뷰·Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 원격 branch·문서 DoD 완료; #93은 local 수정 필요, 모두 미통합
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 `594824d`는 PS5.1·scanner·Secret scan·독립 리뷰 PASS; 모두 전용 원격 branch만 있고 PR·통합 미완료
 원격 CI: BLOCKED/UNKNOWN
 main 통합: 미완료
 실제 Secret 입력: 금지

@@ -51,7 +51,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 아니다. 사용자가 소유·통제하는 자료와 공식 제공자 화면/API에서 증거를 모으고, 삭제·탈퇴·
 동의 철회 요청을 준비하며, 사용자가 최종 승인한 사건의 진행 상태와 결과를 보존하는 기능이다.
 
-### 0.3 2026-09-24 Git·구현 증거 스냅샷
+### 0.3 2026-09-25 Git·구현 증거 스냅샷
 
 | 항목 | 현재 판정 | 정확한 의미 |
 |---|---|---|
@@ -60,14 +60,14 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 | 1~100 협업 branch | ○ 예약됨 / ✕ 작업 완료 아님 | 원격 branch가 baseline을 가리키는 것은 작업 공간 예약일 뿐 구현·테스트·PR·merge 증거가 아님 |
 | #30 provider metadata | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·Secret scan·독립 P1/P2/P3 0, PR·통합·remote CI 미완료 |
-| #93 release manifest | ⚠ 로컬 후보 | `f1a98b5`; 로컬 SHA-256 manifest 스크립트·테스트가 있으나 CI 연결·통합·원격 검증 미확인 |
+| #93 release manifest | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d`; PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0, PS7·CI/PR·통합 미완료 |
 | main | ✕ 최신 통합 아님 | 기능·협업 tip을 main에 병합했다는 증거가 없음 |
 | 실제 Secret 사용 | ✕ 금지 | 외부 감사·복구·동기화·플랫폼·운영 gate가 닫혀 있음 |
 | Privacy Cleanup | ✕ 구현 전 | 이번 갱신에서 제품 요구와 TODO를 추가했으며 코드·화면·외부 연결은 아직 없음 |
 
 `commit 존재 → push → PR → 검증 → review → merge → 배포`는 각각 별도 상태다.
 #30 보완 tip은 전용 원격 branch에 백업됐지만 세 후보 모두 **통합 완료로 표기하지 않는다.**
-#58 보완 tip은 전용 원격 branch에 백업됐고 #93 원본 후보는 아직 local ref에만 있다.
+#58과 #93 보완 tip도 각각 전용 원격 branch에 백업됐으며, 세 후보 모두 PR·통합 완료는 아니다.
 
 ### 0.4 한눈에 보는 완료·부분완료·남은 일
 
@@ -79,6 +79,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 - [x] [문서/원격] 2026-09-19 통합 체크포인트 `41eeed0` 기록
 - [x] [문서/원격] 2026-09-22 협업 1~100 baseline `d9c6666` 기록
 - [x] [설계] 서비스 로그인과 금고 잠금 해제를 분리하고 운영자 평문 복구 백도어를 두지 않는 원칙
+- [x] [로컬/원격 branch] #93 manifest core `594824d`의 PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
 
 #### 부분완료 — 다음 검증이나 통합이 있어야 닫힘
 
@@ -86,7 +87,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 - [ ] [부분] 실제 브라우저 다중 탭·저장공간·업그레이드·파일 backup/restore 검증
 - [ ] [부분] Windows actual-handle/VFS 또는 승인된 broker 저장 경계 결정
 - [ ] [부분] recovery slot·device roster·key epoch·Android 정책 ADR을 Accepted 상태로 전환
-- [ ] [부분] #30은 exact Release WASM 전체 로컬 회귀, #58은 문서 의미 수정·재검토를 마쳤고, #93 수정 후 세 후보를 작은 PR 단위로 통합
+- [ ] [부분] #30·#58·#93의 범위별 로컬 완료·원격 백업을 바탕으로 PS7/CI 등 남은 검증 후 세 후보를 작은 PR 단위로 통합
 - [ ] [부분] GitHub Actions의 계정/과금 외부 차단을 사용자 확인 후 exact SHA에서 재실행
 
 #### 아직 구현하지 않은 핵심 제품 기능
@@ -275,7 +276,7 @@ Google·Naver·Kakao 로그인이나 개인정보 하나로 모든 가입 사이
 | 최신 원격 CI | ? BLOCKED/UNKNOWN | 저장소 기록상 payment/spending-limit로 step 0개 종료; 2026-09-24 `gh` 조회도 404여서 PASS/FAIL로 판정하지 않음 |
 | `main` 통합 | ✕ 미완료 | `d9c6666` 및 9월 24일 로컬 후보가 main에 병합됐다는 증거 없음 |
 | 1~100 협업 작업 | ◐ 예약만 됨 | 원격 branch 생성은 완료가 아니며 초기 상태는 모두 baseline `d9c6666` |
-| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 문서 DoD·독립 P1/P2/P3 0·push 완료, #93은 local-only; 셋 모두 PR·remote CI·baseline 통합·main merge 미완료 |
+| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c` Release WASM 전체 로컬 회귀 PASS, #58 `090c731` 문서 DoD PASS, #93 `594824d` PS5.1·scanner·Secret scan·독립 리뷰 PASS; 셋 모두 전용 원격 branch만 있고 PR·remote CI·baseline 통합·main merge 미완료 |
 | Spring Boot API | ✕ 미완료 | `services/api`는 placeholder 수준 |
 | PostgreSQL 운영 DB | ✕ 미완료 | schema·migration·운영 인스턴스 없음 |
 | Google/passkey 로그인 | ✕ 미완료 | 설계만 있고 실제 OAuth client·서버 흐름 없음 |
@@ -467,7 +468,7 @@ Google / Passkey 로그인
 | ✕ 미완료 | `main` 보호 규칙 | [사용자] | GitHub → Settings → Branches/Rulesets | force push 금지, required checks, 승인자 수 적용 |
 | ✕ 미완료 | CODEOWNERS와 보안 코어 승인 정책 | [AI] | `.github/CODEOWNERS`에 crypto/storage/sync 소유자 지정 | 중요 파일은 보안 리뷰 없이 병합 불가 |
 | ◐ (일부만 됨) | 실제 Secret Git 차단 | [AI] | local/CI scanner·fixture allowlist 기반 존재 | exact 통합 SHA local+remote 재검증과 pre-commit 정책 잔여 |
-| ◐ (로컬 후보) | 릴리스 artifact manifest | [AI] | #93 `f1a98b5` 로컬 SHA-256 manifest 도구 | 자체 테스트 재실행·CI 연결·push/PR·통합 잔여 |
+| ◐ (원격 보완 후보) | 릴리스 artifact manifest | [AI] | #93 `594824d` stable snapshot·strict schema·fail-closed publish 도구 | PS5.1 10/10·scanner 102/102·독립 리뷰 완료; PS7·CI 연결·PR·통합 잔여 |
 | ✕ 미완료 | 릴리스 태그·CHANGELOG·SBOM·서명 규칙 | [AI] | tag, changelog, SBOM, provenance, signing 문서화 | 동일 tag의 source/SBOM/build provenance 추적 가능 |
 | ◐ (일부만 됨) | AI별 worktree·브랜치·파일 소유권 표 | [AI] | 1~100 manifest·assignment contract 존재 | 실제 배정·검증·PR 상태가 manifest와 일치 |
 
@@ -1317,11 +1318,11 @@ AI만으로 완료라고 말할 수 없는 것:
 `d9c6666`에서 출발하도록 예약됐으며, **RESERVED는 구현 완료가 아니다.** 아래 `(1A)~(35)`
 표는 2026-09-18의 앞선 분해 이력으로 보존하고, 새 작업 배정에는 1~100 manifest를 쓴다.
 
-| 2026-09-24 확인 작업 | 로컬 tip | 원격 상태 | 판정 |
+| 2026-09-24~25 확인 작업 | 로컬 tip | 원격 상태 | 판정 |
 |---|---|---|---|
 | #30 provider public metadata | `534b37c` | 전용 원격 fix ref도 `534b37c` | push·독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS; UI·PR·통합 필요 |
 | #58 evidence state labels | `090c731` | 전용 원격 fix ref도 `090c731` | 의미 수정 4건·Secret scan·독립 P1/P2/P3 0; 문서 DoD 완료, 제품 기능·통합은 아님 |
-| #93 release artifact manifest | `f1a98b5` | 원격 ref는 `d9c6666` | 로컬 도구 후보·CI 미연결·실행 증거 재확인 필요 |
+| #93 release artifact manifest | `594824d` | 전용 원격 fix ref도 `594824d` | PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0; PS7·CI·PR·통합 필요 |
 
 Privacy addendum P01~P12는 기존 1~100 범위를 조용히 변경하지 않고, 통합 기준 SHA가
 확정된 뒤 별도 manifest로 생성한다. 현재는 계획만 있으며 branch를 만들지 않았다.
@@ -1469,6 +1470,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 - [x] #30 `2390b55`, #58 `6803eb5`, #93 `f1a98b5`의 읽기 전용 독립 검토를 완료한다.
 - [x] #30 보완 tip `534b37c`를 exact Release WASM 환경에서 typecheck·전체 test 1554/1554·build·Secret scan으로 재검증했다.
 - [x] #58 보완 tip `090c731`에서 evidence-state 의미 수정 4건·문서 검사·Secret scan·독립 재검토 P1/P2/P3 0을 확인했다.
+- [x] #93 보완 tip `594824d`에서 snapshot·strict schema·resource/race 경계를 보완하고 PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0을 확인했다.
 - [ ] 필요한 결과만 작은 통합 branch에서 적용하고 전체 회귀를 다시 실행한다.
 - [ ] commit·push·Draft PR·remote CI·main merge를 각각 별도 승인·상태로 기록한다.
 - [ ] GitHub Actions 계정/과금 차단은 사용자가 설정을 확인하기 전 `BLOCKED`로 유지한다.
@@ -1487,7 +1489,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 
 ### 그 다음 순서
 
-1. 최신 통합 기준선 회귀와 남은 #93 수정 검증을 마친 뒤 #30·#58·#93을 선별 통합
+1. 최신 통합 기준선 회귀와 #93 PS7/CI 연결 검증을 마친 뒤 #30·#58·#93을 선별 통합
 2. P01~P06 합성 Identity Map·Consent·Cleanup 상태기계와 UI
 3. 실제 브라우저 두 탭 등록·편집·회전 경합 E2E
 4. 실제 파일 backup download→새 profile restore roundtrip
@@ -1571,7 +1573,7 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 ```text
 현재 제품 단계: 합성 alpha / security-core prototype
 원격 최신 협업 baseline: d9c6666 기록됨
-9월 24~25일 후보: #30 `534b37c`는 원격 branch·독립 리뷰·Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 원격 branch·문서 DoD 완료, #93은 local 수정 필요; 모두 PR·통합 미완료
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 문서 DoD PASS, #93 `594824d`는 PS5.1·scanner·Secret scan·독립 리뷰 PASS; 모두 전용 원격 branch만 있고 PR·통합 미완료
 최신 전체 CI: BLOCKED/UNKNOWN (코드 PASS/FAIL 판정 금지)
 main 통합: 미완료
 실제 Secret 입력: 금지
