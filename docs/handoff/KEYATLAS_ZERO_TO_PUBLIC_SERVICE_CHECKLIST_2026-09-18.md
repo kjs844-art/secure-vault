@@ -61,6 +61,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 | #30 provider metadata | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·Secret scan·독립 P1/P2/P3 0, PR·통합·remote CI 미완료 |
 | #93 release manifest | ⚠ 원격 보완 후보 | 코어 branch `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d`; CI branch `codex/firstvibe-collab-93-ci-fix-01@c9a1d63`; PS5.1 10/10·workflow 정책 12/12·scanner 102/102·Secret scan·독립 리뷰 P1/P2/P3 0, PS7 exact-SHA·PR·통합 미완료 |
+| canonical 전체 회귀 | ⚠ 공간 차단 | source `d9c6666`; report branch `codex/firstvibe-base-regression-20260925-01@196cb27`; Secret scan·fmt·Clippy PASS, default tests disk error 112/exit 101, 이후 검사 NOT_RUN |
 | main | ✕ 최신 통합 아님 | 기능·협업 tip을 main에 병합했다는 증거가 없음 |
 | 실제 Secret 사용 | ✕ 금지 | 외부 감사·복구·동기화·플랫폼·운영 gate가 닫혀 있음 |
 | Privacy Cleanup | ✕ 구현 전 | 이번 갱신에서 제품 요구와 TODO를 추가했으며 코드·화면·외부 연결은 아직 없음 |
@@ -276,7 +277,7 @@ Google·Naver·Kakao 로그인이나 개인정보 하나로 모든 가입 사이
 | 최신 원격 CI | ? BLOCKED/UNKNOWN | 저장소 기록상 payment/spending-limit로 step 0개 종료; 2026-09-25 `gh` 토큰 무효로 Actions 조회 404, exact-SHA PASS/FAIL을 판정하지 않음 |
 | `main` 통합 | ✕ 미완료 | `d9c6666` 및 9월 24일 로컬 후보가 main에 병합됐다는 증거 없음 |
 | 1~100 협업 작업 | ◐ 예약만 됨 | 원격 branch 생성은 완료가 아니며 초기 상태는 모두 baseline `d9c6666` |
-| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c` Release WASM 전체 로컬 회귀 PASS, #58 `090c731` 문서 DoD PASS, #93 코어 `594824d`와 CI `c9a1d63`의 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 PASS; 셋 모두 전용 원격 branch만 있고 PR·remote CI·baseline 통합·main merge 미완료 |
+| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c` Release WASM 전체 로컬 회귀 PASS, #58 `090c731` 문서 DoD PASS, #93 코어 `594824d`와 CI `c9a1d63`의 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 PASS; canonical `d9c6666` 전체 회귀는 disk error 112로 BLOCKED; 셋 모두 전용 원격 branch만 있고 PR·remote CI·baseline 통합·main merge 미완료 |
 | Spring Boot API | ✕ 미완료 | `services/api`는 placeholder 수준 |
 | PostgreSQL 운영 DB | ✕ 미완료 | schema·migration·운영 인스턴스 없음 |
 | Google/passkey 로그인 | ✕ 미완료 | 설계만 있고 실제 OAuth client·서버 흐름 없음 |
@@ -1489,7 +1490,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 
 ### 그 다음 순서
 
-1. 최신 통합 기준선 회귀와 #93 PS7 exact-SHA CI 검증을 마친 뒤 #30·#58·#93을 선별 통합
+1. 충분한 build 공간과 정식 계약을 확보해 최신 통합 기준선 전체 회귀를 처음부터 완료하고, #93 PS7 exact-SHA CI 검증 후 #30·#58·#93을 선별 통합
 2. P01~P06 합성 Identity Map·Consent·Cleanup 상태기계와 UI
 3. 실제 브라우저 두 탭 등록·편집·회전 경합 E2E
 4. 실제 파일 backup download→새 profile restore roundtrip

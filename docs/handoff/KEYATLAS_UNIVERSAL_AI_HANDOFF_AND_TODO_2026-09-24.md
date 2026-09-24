@@ -145,6 +145,7 @@ worktree에서 파일이 안 보인다는 이유만으로 삭제됐다고 판단
 | #30 provider metadata | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
 | #58 evidence labels | `PUSHED_LOCAL_DONE` | `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·문서/Secret 검사·독립 재검토 P1/P2/P3 0, PR·통합·remote CI 미완료 |
 | #93 release manifest | `PUSHED_LOCAL_SECURITY_FIX_DONE_CI_WIRED` | 코어 `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d`; CI 연결 `codex/firstvibe-collab-93-ci-fix-01@c9a1d63`; PS5.1 manifest 10/10·workflow 정책 12/12·Secret scan·독립 리뷰 P1/P2/P3 0, PS7 원격 실행·PR·통합 미완료 |
+| canonical 전체 회귀 | `BLOCKED` | source `d9c6666`; 보고 `codex/firstvibe-base-regression-20260925-01@196cb27`; Secret scan·fmt·Clippy PASS 후 default tests가 disk error 112/exit 101로 중단, 나머지 NOT_RUN |
 | 원격 CI | `BLOCKED/UNKNOWN` | 기록상 계정/과금 차단; 2026-09-25 `gh` 토큰 무효로 Actions 조회 404, exact-SHA PASS 증거 없음 |
 | main 통합 | `NOT_DONE` | 최신 baseline·로컬 후보가 main에 반영됐다는 증거 없음 |
 | 실제 Secret | `FORBIDDEN` | 독립 감사·복구·동기화·운영 gate 미충족 |
@@ -313,7 +314,7 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 
 | ID | 작업 | 현재 상태·계약 또는 남은 값 | 예상 |
 |---|---|---|---:|
-| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 전용 worktree·실행환경·산출물 경로·명령 | 0.5~2일 |
+| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 부분 보고 `196cb27` push; 사전 계약·충분한 공간·전체 재실행이 남음 | 공간 확보 후 |
 | `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | 연결 코드는 `c9a1d63`에 push 완료; PS7 runner exact-SHA 결과·PR·통합이 남음 | 원격 상태 |
 | `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | task branch·허용 파일·reviewer·completion target | 2~4일 |
 | `KA-PRI-P02` | domain contract | P01 final SHA·task branch·허용 파일·검사 | 4~8일 |
@@ -329,7 +330,8 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 완료: KA-C93-FIX-01 pushed commit 594824d·PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
 부분 완료: KA-C93-CI-01 pushed commit c9a1d63·workflow 연결·runner step timeout·PS5.1 10/10·정책 12/12·독립 리뷰 P1/P2/P3 0
 남음: KA-C93-CI-01 PS7 runner exact-SHA PASS, PR·통합·remote CI 확인
-Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
+차단: KA-BASE-01 source d9c6666에서 Secret scan·fmt·Clippy PASS, default tests는 disk error 112/exit 101; 보고 196cb27 push
+Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 ```
 
 ---
@@ -351,7 +353,7 @@ Primary: KA-BASE-01·KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 | [x] | `KA-A01` | `PUSHED` | 2026-09-19 통합 체크포인트 기록 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-integration-20260919@41eeed0492e5325816e0797bbefa727408574e3c` |
 | [x] | `KA-A02` | `PUSHED` | 1~100 협업 baseline·manifest 작성 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-collab-001-100-baseline@d9c66661db7d7b66f6453e94e467c424107cba66` |
 | [ ] | `KA-A03` | `LOCAL_DONE` | 전체 설계·현황·TODO 문서 2026-09-24 갱신 | Codex root | 완료 | 로컬 문서 완료; 검증·원격 통합 증거는 이 세션 로그 참조 |
-| [ ] | `KA-BASE-01` | `WAITING_ASSIGNMENT` | canonical exact SHA 전체 로컬 회귀 | 미배정 | 0.5~2일 | Secret/Rust/WASM/Web 명령별 exit code |
+| [ ] | `KA-BASE-01` | `BLOCKED` | canonical exact SHA 전체 로컬 회귀 | Codex root | 공간 확보 후 | 원격 보고 `196cb27`; source `d9c6666`; Secret scan·fmt·Clippy PASS, default tests disk error 112/exit 101, 이후 Rust·WASM·Web NOT_RUN; 사전 assignment contract 미완료 |
 | [ ] | `KA-A05` | `BLOCKED` | exact SHA 원격 CI | 사용자+AI | 외부 상태 | runner 실제 실행·동일 SHA 결과 |
 | [ ] | `KA-A06` | `BACKLOG_HIGH_RISK` | main 보존 통합·충돌 해결 | primary | 2~5일 | 독립 리뷰·전체 회귀·사용자 승인 |
 | [x] | `KA-C30-01` | `READ_ONLY_REPORT_DONE` | provider metadata 후보 통합 판단 | Codex root | 완료 | `E-20260924-C30-GIT-01`, `E-20260924-C30-REVIEW-01`; 후보는 통합 비권장 |
@@ -547,6 +549,10 @@ stage: LOCAL_DONE
 | `E-20260925-C93-CI-REVIEW-01` | `KA-C93-CI-01` | `PASS` | `INDEPENDENT_REVIEW` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 같은 job의 두 engine step·외부 step timeout·exit/marker fail-closed·순서·mutation 거부·권한/의존성 비확장 | P1 0 / P2 0 / P3 0 | 2026-09-25 | 실제 10분 hang 유도와 원격 PS7 실행은 별도 미검증 |
 | `E-20260925-C93-CI-PUSH-01` | `KA-C93-CI-01` | `PASS` | `REMOTE_REF` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 전용 원격 branch 백업; PR·merge·main 없음 |
 | `E-20260925-C93-CI-REMOTE-01` | `KA-C93-CI-01` | `UNKNOWN` | `REMOTE_CI` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | `gh run list`와 `gh auth status` | Actions 404 / GitHub CLI token invalid | 2026-09-25 | git push 성공과 Actions PASS는 별개; 재인증 전 원격 결과를 추정하지 않음 |
+| `E-20260925-BASE-LOCAL-01` | `KA-BASE-01` | `BLOCKED` | `LOCAL` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | 첫 Secret scan·Workspace verifier | Secret PASS·fmt 0·Clippy 0·default tests 101 / Windows error 112 | 2026-09-25 | probe/doctest/WASM/Web/post-build scan은 NOT_RUN; actual Secret 없음 |
+| `E-20260925-BASE-REVIEW-01` | `KA-BASE-01` | `PASS` | `INDEPENDENT_REVIEW` | report `196cb273793054751314dbefd742a869ce5733fa` | SHA·exit code·NOT_RUN·디스크·삭제·체크박스 과장 여부 | P1 0 / P2 0 / P3 0 | 2026-09-25 | 문서 증거 리뷰만 PASS; 전체 회귀는 계속 BLOCKED |
+| `E-20260925-BASE-PUSH-01` | `KA-BASE-01` | `PASS` | `REMOTE_REF` | `196cb273793054751314dbefd742a869ce5733fa` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 보고서 전용 원격 branch; PR·merge·main 없음 |
+| `E-20260925-BASE-DISK-01` | `KA-BASE-01` | `BLOCKED` | `LOCAL_ENV` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | C: 0 bytes·task-local ignored target 424,767,901 bytes·생성물 inventory | 해당 target만 영구 제거 후 382,906,368 bytes; 이후 여유 공간 재감소 | 2026-09-25 | 남은 ignored 생성물 27.490 GiB; 추가 삭제는 active-worktree 확인과 명시적 승인 필요 |
 | `E-20260924-DOC-03` | `KA-A03` | `UNKNOWN` | `INDEPENDENT_REVIEW` | 문서가 uncommitted라 Git SHA 없음 | C30·C93 checkbox·후보 상태·evidence ID·SHA·finding 수·권한 문구 일관성 | P1 0 / P2 0 | 2026-09-24 | 로컬 작업판 갱신은 승인 가능; authoritative `PASS`는 commit 후 재검증 필요 |
 
 ---
@@ -760,6 +766,22 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - checkbox 판정: workflow 연결·로컬 정책 검증은 완료했지만 completion target의 원격 PS7 결과가 없어 `KA-C93-CI-01`은 `[ ]`
 - 다음 안전 단계: GitHub 인증/과금 상태 복구 후 exact-SHA Actions 확인 또는 `KA-BASE-01` 계약에 따른 canonical 전체 회귀
 
+### 2026-09-25 — KA-BASE-01 부분 회귀·디스크 차단 체크포인트
+
+- task: `KA-BASE-01`; checkbox: `[ ]`; state: `BLOCKED`; blocker: `LOCAL_DISK_SPACE`
+- source: `codex/firstvibe-collab-001-100-baseline@d9c66661db7d7b66f6453e94e467c424107cba66`
+- report branch / SHA: `codex/firstvibe-base-regression-20260925-01@196cb273793054751314dbefd742a869ce5733fa`
+- PASS: 첫 repository Secret scan, verifier 내부 Secret scan, `cargo fmt`, workspace Clippy
+- BLOCKED: workspace default tests exit 101, Windows error 112 / no space on device
+- NOT_RUN: probe tests, doctests, default·synthetic WASM, Web test/typecheck/build, post-build Secret scan
+- 안전 정리: 이번 실행이 만든 ignored `target` 424,767,901 bytes만 exact path·일반 디렉터리·무실행 cargo/rustc 확인 후 영구 제거; 소스·cache·다른 worktree 미삭제
+- inventory: 남은 ignored 생성물 39개 / 27.490 GiB, 그중 17개 `target` / 26.628 GiB; 추가 정리 없음
+- 독립 보고 리뷰: P1 0 / P2 0 / P3 0
+- 실제 Secret 사용: NO, `REAL_SECRET_GATE=CLOSED`
+- Git: 보고서 비강제 push 후 local HEAD=upstream, clean; PR·merge·main·배포 없음
+- 계약 한계: 시작 당시 shared board가 `WAITING_ASSIGNMENT`였으므로 사전 assignment contract 완료로 소급하지 않음
+- 다음 안전 단계: active worktree 사용 여부를 확인한 bounded 생성물 정리 승인 또는 다른 충분한 volume 확보 후, 정식 계약과 함께 처음부터 재실행
+
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
 
@@ -771,6 +793,7 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - [ ] 기본 3개/선택 최대 5개 복구 수단 정책
 - [ ] Google/Kakao/Naver·Cloud·DB·email·결제·Play 계정과 MFA
 - [ ] GitHub Actions 계정/과금 차단 확인과 exact-SHA 재실행 승인
+- [ ] active worktree 사용 여부 확인 후 추가 ignored `target` 정리 또는 충분한 build volume 제공
 - [ ] Free/Pro 가격·무료 한도·환불·지원 범위
 - [ ] 서비스 국가·사업 주체·법률·개인정보 처리 범위
 - [ ] 독립 보안 감사·침투 테스트·법률 검토 업체와 예산
@@ -788,7 +811,7 @@ Manager를 사용한다.
 현재 제품 단계: 합성 alpha / security-core prototype
 canonical 협업 baseline: d9c6666
 1~100 task branches: RESERVED가 기본
-9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 PASS; 모두 전용 원격 branch만 있고 PR·통합 미완료
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 PASS; KA-BASE-01은 source `d9c6666`에서 Clippy까지 PASS 후 disk error 112로 BLOCKED, 보고 `196cb27`; 모두 PR·통합 미완료
 원격 CI: BLOCKED/UNKNOWN (`gh` token invalid, exact-SHA PASS 증거 없음)
 main 통합: 미완료
 실제 Secret 입력: 금지
