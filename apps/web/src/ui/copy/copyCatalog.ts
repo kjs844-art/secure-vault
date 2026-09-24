@@ -89,6 +89,16 @@ const ko = {
     noRealKeys: "실제 키 입력 금지",
     lostAccessWarning: "마스터 비밀번호와 켜 둔 복구 수단을 모두 잃으면 금고를 열 수 없습니다.",
   },
+  viewState: {
+    loadingTitle: "불러오는 중",
+    emptyTitle: "표시할 항목이 없습니다",
+    emptyBody: "항목을 추가하면 여기에 표시됩니다.",
+    offlineTitle: "네트워크에 연결되어 있지 않습니다",
+    offlineBody: "네트워크가 필요한 작업은 연결이 돌아온 뒤 다시 시도하세요.",
+    errorTitle: "작업을 끝내지 못했습니다",
+    errorBody: "잠시 뒤 다시 시도하세요.",
+    errorReference: "참조 코드 {code}",
+  },
 } as const satisfies CopyTree;
 
 export type CopyCatalog = Widen<typeof ko>;
@@ -153,6 +163,16 @@ const en: CopyCatalog = {
     syntheticOnlyBody: "This screen uses practice data only. Do not enter real passwords or API keys.",
     noRealKeys: "No real keys",
     lostAccessWarning: "If you lose your master password and every recovery method you turned on, the vault cannot be opened.",
+  },
+  viewState: {
+    loadingTitle: "Loading",
+    emptyTitle: "Nothing to show yet",
+    emptyBody: "Items you add will appear here.",
+    offlineTitle: "You are offline",
+    offlineBody: "Try actions that need the network again once you are back online.",
+    errorTitle: "Something went wrong",
+    errorBody: "Please try again in a moment.",
+    errorReference: "Reference code {code}",
   },
 };
 
