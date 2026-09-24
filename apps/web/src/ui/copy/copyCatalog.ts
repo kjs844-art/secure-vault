@@ -109,6 +109,9 @@ const ko = {
     discard: "변경 사항 버리기",
     keepEditing: "계속 편집",
   },
+  shell: {
+    primaryNavigation: "주요 메뉴",
+  },
 } as const satisfies CopyTree;
 
 export type CopyCatalog = Widen<typeof ko>;
@@ -193,6 +196,9 @@ const en: CopyCatalog = {
     discardConfirm: "Discard your unsaved changes?",
     discard: "Discard changes",
     keepEditing: "Keep editing",
+  },
+  shell: {
+    primaryNavigation: "Main menu",
   },
 };
 
