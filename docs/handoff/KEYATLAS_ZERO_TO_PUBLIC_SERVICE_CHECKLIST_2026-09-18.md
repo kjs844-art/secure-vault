@@ -59,7 +59,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 | 2026-09-22 협업 baseline | ○ 원격 기록 있음 | `d9c6666`; 1~100 작업표·branch manifest·공통 프롬프트가 추가됨 |
 | 1~100 협업 branch | ○ 예약됨 / ✕ 작업 완료 아님 | 원격 branch가 baseline을 가리키는 것은 작업 공간 예약일 뿐 구현·테스트·PR·merge 증거가 아님 |
 | #30 provider metadata | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
-| #58 evidence labels | ⚠ 로컬 후보 | `6803eb5`; 상태 증거 용어 문서 1개, 아직 baseline 통합·push·PR 미확인 |
+| #58 evidence labels | ⚠ 원격 보완 후보 | 전용 branch `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·Secret scan·독립 P1/P2/P3 0, PR·통합·remote CI 미완료 |
 | #93 release manifest | ⚠ 로컬 후보 | `f1a98b5`; 로컬 SHA-256 manifest 스크립트·테스트가 있으나 CI 연결·통합·원격 검증 미확인 |
 | main | ✕ 최신 통합 아님 | 기능·협업 tip을 main에 병합했다는 증거가 없음 |
 | 실제 Secret 사용 | ✕ 금지 | 외부 감사·복구·동기화·플랫폼·운영 gate가 닫혀 있음 |
@@ -67,7 +67,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 
 `commit 존재 → push → PR → 검증 → review → merge → 배포`는 각각 별도 상태다.
 #30 보완 tip은 전용 원격 branch에 백업됐지만 세 후보 모두 **통합 완료로 표기하지 않는다.**
-#58·#93 원본 후보는 아직 local ref에만 있다.
+#58 보완 tip은 전용 원격 branch에 백업됐고 #93 원본 후보는 아직 local ref에만 있다.
 
 ### 0.4 한눈에 보는 완료·부분완료·남은 일
 
@@ -86,7 +86,7 @@ KeyAtlas는 다음 네 기능이 연결되는 **개인 디지털 보안·프라�
 - [ ] [부분] 실제 브라우저 다중 탭·저장공간·업그레이드·파일 backup/restore 검증
 - [ ] [부분] Windows actual-handle/VFS 또는 승인된 broker 저장 경계 결정
 - [ ] [부분] recovery slot·device roster·key epoch·Android 정책 ADR을 Accepted 상태로 전환
-- [ ] [부분] #30은 exact Release WASM 전체 로컬 회귀를 마쳤고, #58·#93은 수정·재검증한 뒤 세 후보를 작은 PR 단위로 통합
+- [ ] [부분] #30은 exact Release WASM 전체 로컬 회귀, #58은 문서 의미 수정·재검토를 마쳤고, #93 수정 후 세 후보를 작은 PR 단위로 통합
 - [ ] [부분] GitHub Actions의 계정/과금 외부 차단을 사용자 확인 후 exact SHA에서 재실행
 
 #### 아직 구현하지 않은 핵심 제품 기능
@@ -275,7 +275,7 @@ Google·Naver·Kakao 로그인이나 개인정보 하나로 모든 가입 사이
 | 최신 원격 CI | ? BLOCKED/UNKNOWN | 저장소 기록상 payment/spending-limit로 step 0개 종료; 2026-09-24 `gh` 조회도 404여서 PASS/FAIL로 판정하지 않음 |
 | `main` 통합 | ✕ 미완료 | `d9c6666` 및 9월 24일 로컬 후보가 main에 병합됐다는 증거 없음 |
 | 1~100 협업 작업 | ◐ 예약만 됨 | 원격 branch 생성은 완료가 아니며 초기 상태는 모두 baseline `d9c6666` |
-| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c`는 전용 branch push·독립 P1/P2 0·Release WASM 전체 로컬 회귀 PASS; #58·#93은 local-only, 셋 모두 PR·remote CI·baseline 통합·main merge 미확인 |
+| #30/#58/#93 후보 | ◐ 통합 전 | #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 문서 DoD·독립 P1/P2/P3 0·push 완료, #93은 local-only; 셋 모두 PR·remote CI·baseline 통합·main merge 미완료 |
 | Spring Boot API | ✕ 미완료 | `services/api`는 placeholder 수준 |
 | PostgreSQL 운영 DB | ✕ 미완료 | schema·migration·운영 인스턴스 없음 |
 | Google/passkey 로그인 | ✕ 미완료 | 설계만 있고 실제 OAuth client·서버 흐름 없음 |
@@ -1320,7 +1320,7 @@ AI만으로 완료라고 말할 수 없는 것:
 | 2026-09-24 확인 작업 | 로컬 tip | 원격 상태 | 판정 |
 |---|---|---|---|
 | #30 provider public metadata | `534b37c` | 전용 원격 fix ref도 `534b37c` | push·독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS; UI·PR·통합 필요 |
-| #58 evidence state labels | `6803eb5` | 원격 ref는 `d9c6666` | 문서 후보·제품 기능 아님 |
+| #58 evidence state labels | `090c731` | 전용 원격 fix ref도 `090c731` | 의미 수정 4건·Secret scan·독립 P1/P2/P3 0; 문서 DoD 완료, 제품 기능·통합은 아님 |
 | #93 release artifact manifest | `f1a98b5` | 원격 ref는 `d9c6666` | 로컬 도구 후보·CI 미연결·실행 증거 재확인 필요 |
 
 Privacy addendum P01~P12는 기존 1~100 범위를 조용히 변경하지 않고, 통합 기준 SHA가
@@ -1468,6 +1468,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 - [ ] 전체 Secret/Rust/WASM/Web 검증을 exact SHA에서 실행하고 각 exit code를 남긴다.
 - [x] #30 `2390b55`, #58 `6803eb5`, #93 `f1a98b5`의 읽기 전용 독립 검토를 완료한다.
 - [x] #30 보완 tip `534b37c`를 exact Release WASM 환경에서 typecheck·전체 test 1554/1554·build·Secret scan으로 재검증했다.
+- [x] #58 보완 tip `090c731`에서 evidence-state 의미 수정 4건·문서 검사·Secret scan·독립 재검토 P1/P2/P3 0을 확인했다.
 - [ ] 필요한 결과만 작은 통합 branch에서 적용하고 전체 회귀를 다시 실행한다.
 - [ ] commit·push·Draft PR·remote CI·main merge를 각각 별도 승인·상태로 기록한다.
 - [ ] GitHub Actions 계정/과금 차단은 사용자가 설정을 확인하기 전 `BLOCKED`로 유지한다.
@@ -1486,7 +1487,7 @@ provider별 연동·파괴적 작업 승인·법률 경계·사건 운영이 추
 
 ### 그 다음 순서
 
-1. 최신 통합 기준선 회귀와 #30 전체 회귀, #58·#93 수정 검증을 마친 뒤 선별 통합
+1. 최신 통합 기준선 회귀와 남은 #93 수정 검증을 마친 뒤 #30·#58·#93을 선별 통합
 2. P01~P06 합성 Identity Map·Consent·Cleanup 상태기계와 UI
 3. 실제 브라우저 두 탭 등록·편집·회전 경합 E2E
 4. 실제 파일 backup download→새 profile restore roundtrip
@@ -1570,7 +1571,7 @@ production 배포 ≠ 실제 사용자가 안전하게 쓸 수 있음
 ```text
 현재 제품 단계: 합성 alpha / security-core prototype
 원격 최신 협업 baseline: d9c6666 기록됨
-9월 24일 후보: #30 `534b37c`는 전용 branch push·독립 리뷰·Release WASM 전체 로컬 회귀 PASS, #58·#93은 local 수정 필요; 모두 PR·통합 미완료
+9월 24~25일 후보: #30 `534b37c`는 원격 branch·독립 리뷰·Release WASM 전체 로컬 회귀 PASS, #58 `090c731`은 원격 branch·문서 DoD 완료, #93은 local 수정 필요; 모두 PR·통합 미완료
 최신 전체 CI: BLOCKED/UNKNOWN (코드 PASS/FAIL 판정 금지)
 main 통합: 미완료
 실제 Secret 입력: 금지
