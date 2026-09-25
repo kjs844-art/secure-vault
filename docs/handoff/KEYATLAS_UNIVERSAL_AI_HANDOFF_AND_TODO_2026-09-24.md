@@ -297,6 +297,65 @@ main_merge_approved: "NO"
 - 단순히 시간이 지났다는 이유로 다른 AI의 소유권을 빼앗지 않는다. 종료·중단 증거 또는
   사용자의 재배정이 있어야 한다.
 
+### KA-PRI-P01 작업 계약 — 2026-09-25
+
+```yaml
+task_id: "KA-PRI-P01"
+task_title: "Privacy Cleanup Center PRD 초안"
+task_state: "IN_PROGRESS"
+readiness: "READY_IMPLEMENT"
+collab_stage: "PUSHED"
+completion_target: "VERIFIED"
+assignee: "Codex root, 2026-09-25 P01 세션"
+integration_owner: "Codex root"
+reviewer: "독립 Codex reviewer; PRD 문서 읽기 전용 제품·보안 경계 검토"
+session_id: "20260925T153415+0900-codex-root-p01"
+claim_id: "20260925T153415+0900-codex-root-KA-PRI-P01"
+claimed_at: "2026-09-25T15:34:15+09:00"
+last_heartbeat_at: "2026-09-25T15:52:52+09:00"
+
+repository: "https://github.com/kjs844-art/secure-vault"
+worktree: "C:\\Users\\USER\\Documents\\ChatGPT\\KeyAtlas\\agent-staging\\keyatlas-privacy-prd-p01"
+branch: "codex/firstvibe-privacy-prd-p01-20260925"
+base_branch: "codex/firstvibe-collab-001-100-baseline"
+base_sha: "d9c66661db7d7b66f6453e94e467c424107cba66"
+head_before_work: "d9c66661db7d7b66f6453e94e467c424107cba66"
+draft_sha: "b3cf622e1aac92a823e24909786524a759b2d9f4"
+
+allowed_paths:
+  - "docs/product/privacy-cleanup-center-prd.md"
+  - "docs/handoff/task-reports/KA-PRI-P01/2026-09-25-codex-root.md"
+forbidden_paths:
+  - ".github/**"
+  - "crates/vault-crypto/**"
+  - "contracts/**"
+  - "apps/**"
+  - "services/**"
+  - "docs/handoff/KEYATLAS_UNIVERSAL_AI_HANDOFF_AND_TODO_2026-09-24.md"
+
+predecessors: "NONE; 2026-09-25 공용 작업판의 제품 방향을 입력으로 사용"
+definition_of_done:
+  - "사용자 여정, 비목표, 과장 금지, 증거 상태, 외부 변경 승인 경계를 초안에 명시"
+  - "합성 사례로 검증할 수 있는 수용 기준과 사용자 결정 사항을 분리"
+  - "독립 리뷰 후 사용자 승인 여부를 기록; 승인 전 task checkbox는 [ ]"
+required_checks:
+  - "git diff --check"
+  - "UTF-8, Markdown fence 및 상대 링크 검사"
+  - "합성 예시와 고신뢰 Secret 형태 검사"
+  - "독립 제품·보안 경계 검토"
+
+real_secret_gate: "CLOSED"
+file_write_approved: "YES; 사용자의 다음 작업 요청"
+commit_approved: "YES; KeyAtlas 작업의 Git 백업 요청"
+push_approved: "YES; KeyAtlas 작업의 Git 백업 요청"
+pr_approved: "NO"
+main_merge_approved: "NO"
+```
+
+이 계약은 P01 문서 초안의 소유권만 부여한다. `b3cf622` 초안은 독립 리뷰와
+P01 worktree의 문서·저장소 Secret 검사 후 전용 원격 branch에 push했다. 사용자 승인 전 `KA-PRI-P01`은 `[ ]`이며,
+P02 이후 구현 계약의 승인된 선행 SHA로 사용하지 않는다.
+
 ---
 
 ## 4. 다음 배정 후보와 즉시 가능한 읽기 전용 검토
@@ -318,7 +377,7 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 |---|---|---|---:|
 | `KA-BASE-01` | canonical exact SHA 전체 회귀 | 부분 보고 `196cb27` push; 사전 계약·충분한 공간·전체 재실행이 남음 | 공간 확보 후 |
 | `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | 연결 코드는 `c9a1d63`에 push 완료; PS7 runner exact-SHA 결과·PR·통합이 남음 | 원격 상태 |
-| `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | task branch·허용 파일·reviewer·completion target | 2~4일 |
+| `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | 초안 `b3cf622` push·독립 리뷰 P1/P2/P3 0; 사용자 승인 남음 | 2~4일 |
 | `KA-PRI-P02` | domain contract | P01 final SHA·task branch·허용 파일·검사 | 4~8일 |
 | `KA-QA-01` | 브라우저 다중탭 E2E 계획 | task branch·browser fixture·산출물 경로·검사 | 1~2일 |
 
@@ -404,7 +463,7 @@ Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 �
 
 | 완료 | ID | 상태·준비도 | 작업 | 담당 | 예상 | 완료 증거 |
 |---|---|---|---|---|---:|---|
-| [ ] | `KA-PRI-P01` | `WAITING_ASSIGNMENT` | Privacy PRD·비목표·과장 금지 | 미배정 | 2~4일 | 사용자 여정·수용 기준 승인 |
+| [ ] | `KA-PRI-P01` | `PUSHED / READY_IMPLEMENT` | Privacy PRD·비목표·과장 금지 | Codex root | 사용자 승인 후 | 초안 `b3cf622`·독립 리뷰 P1/P2/P3 0; 사용자 여정·수용 기준 승인 전이므로 `[ ]` |
 | [ ] | `KA-PRI-P02` | `WAITING_PREDECESSOR` | CleanupCase·Action·Evidence contract | 미배정 | 4~8일 | 상태·검증·future-version tests |
 | [ ] | `KA-PRI-P03` | `BACKLOG` | 암호화 로컬 저장·검색 projection | 미배정 | 1~2주 | 잠금 시 조회 불가·평문 marker 0 |
 | [ ] | `KA-PRI-P04` | `BACKLOG` | 합성 정리센터 목록·상세·timeline UI | 미배정 | 1~2주 | empty/error/locked/100건·접근성 tests |
@@ -556,6 +615,9 @@ stage: LOCAL_DONE
 | `E-20260925-BASE-PUSH-01` | `KA-BASE-01` | `PASS` | `REMOTE_REF` | `196cb273793054751314dbefd742a869ce5733fa` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 보고서 전용 원격 branch; PR·merge·main 없음 |
 | `E-20260925-BASE-DISK-01` | `KA-BASE-01` | `BLOCKED` | `LOCAL_ENV` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | C: 0 bytes·task-local ignored target 424,767,901 bytes·생성물 inventory | 해당 target만 영구 제거 후 382,906,368 bytes; 이후 여유 공간 재감소 | 2026-09-25 | 남은 ignored 생성물 27.490 GiB; 추가 삭제는 active-worktree 확인과 명시적 승인 필요 |
 | `E-20260924-DOC-03` | `KA-A03` | `UNKNOWN` | `INDEPENDENT_REVIEW` | 문서가 uncommitted라 Git SHA 없음 | C30·C93 checkbox·후보 상태·evidence ID·SHA·finding 수·권한 문구 일관성 | P1 0 / P2 0 | 2026-09-24 | 로컬 작업판 갱신은 승인 가능; authoritative `PASS`는 commit 후 재검증 필요 |
+| `E-20260925-PRI-P01-LOCAL-01` | `KA-PRI-P01` | `PASS` | `LOCAL` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | P01 worktree에서 baseline 대비 diff 공백·PRD 상대 링크·해당 저장소 Secret scan | diff exit 0 / link 1 file exit 0 / scanner exit 0, `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED` | 2026-09-25 | docs-only라 Rust·Web·browser 검사는 NOT_RUN; release-support worktree 교차 scanner 판정과 별개 |
+| `E-20260925-PRI-P01-REVIEW-01` | `KA-PRI-P01` | `PASS` | `INDEPENDENT_REVIEW` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 최종 클릭·접수 불확실·재시도·완료 근거·최소 증거·합성 수용 기준, Git blob 동일성 | P1 0 / P2 0 / P3 0; blob `4dae59b6ee9fd936a67af4d52b43b88c4c4f871f` 일치 | 2026-09-25 | 초안 품질 검토이며 사용자 PRD 승인·구현 완료 아님 |
+| `E-20260925-PRI-P01-PUSH-01` | `KA-PRI-P01` | `PASS` | `REMOTE_REF` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 전용 branch 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | `codex/firstvibe-privacy-prd-p01-20260925`; PR·merge·main 없음 |
 
 ---
 
@@ -784,6 +846,20 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - 계약 한계: 시작 당시 shared board가 `WAITING_ASSIGNMENT`였으므로 사전 assignment contract 완료로 소급하지 않음
 - 다음 안전 단계: active worktree 사용 여부를 확인한 bounded 생성물 정리 승인 또는 다른 충분한 volume 확보 후, 정식 계약과 함께 처음부터 재실행
 
+### 2026-09-25 — `KA-PRI-P01` Privacy PRD 초안·독립 리뷰·원격 백업
+
+- worktree/branch: `agent-staging/keyatlas-privacy-prd-p01` / `codex/firstvibe-privacy-prd-p01-20260925`
+- exact PRD commit/upstream: `b3cf622e1aac92a823e24909786524a759b2d9f4`; base `d9c66661db7d7b66f6453e94e467c424107cba66`
+- 변경 범위: `docs/product/privacy-cleanup-center-prd.md` 신규 문서 1개
+- 초안: 여정 6개, 발견 출처·접수·완료 근거 구분, 사용자 최종 클릭, 접수 불확실 시 자동 재시도 금지, 합성 수용 기준, 사용자 미결정 사항
+- P01 worktree 검사: `git diff <base> HEAD --check` exit 0, Markdown 상대 링크 1파일 exit 0, 해당 저장소 Secret scan exit 0 / `SECRET_SCAN_PASSED` / `REAL_SECRET_GATE=CLOSED`
+- 공용 작업판 자체 검사: `git diff --check` exit 0, 상대 링크 1파일 exit 0, strict UTF-8·fence·evidence ID 36개 고유·변경 문서 고신뢰 Secret 형태 0; 다른 worktree의 scanner를 이 branch에 적용한 교차 검사는 setup 실패로 `NOT_VERIFIED`
+- 독립 리뷰: 최초 P2 4건·P3 1건을 수정; 최종 exact SHA P1 0 / P2 0 / P3 0, Git blob 일치 확인
+- 실제 Secret 사용: NO; Rust·Web·browser·실제 제공자 검사는 docs-only라 NOT_RUN
+- Git: 전용 branch 비강제 push 후 local HEAD=upstream, clean; PR·merge·main·배포 없음
+- checkbox 판정: completion target=`VERIFIED`; 사용자 여정·수용 기준 승인 전이므로 `KA-PRI-P01` `[ ]` 유지
+- 다음 한 단계: 사용자에게 P01 초안의 범위와 미결정 사항을 보여 주고 승인 또는 수정 의견을 받는다.
+
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
 
@@ -819,7 +895,7 @@ main 통합: 미완료
 실제 Secret 입력: 금지
 Identity Map: 관계 코어 일부 / 제품 UX·발견 미완료
 Consent Center: 미구현
-Privacy Cleanup Center: 미구현
+Privacy Cleanup Center: P01 PRD 초안 `b3cf622` push·독립 리뷰 PASS, 사용자 승인 대기 / 기능 미구현
 Backend/API/DB: 미구현
 Android/생체 인증: 미구현
 결제·공개 배포·법률·외부 감사: 미완료
