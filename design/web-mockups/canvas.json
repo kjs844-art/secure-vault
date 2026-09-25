@@ -1,0 +1,31 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "랜딩 + 연결 지도" },
+    { "id": "page-2", "name": "금고 내부 (모션 절제)" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",       "x": 0,    "y": 0, "w": 1440, "h": 960, "page": "page-1", "title": "랜딩 — 흩어진 나" },
+    { "file": "Graph.dc.html",      "x": 1560, "y": 0, "w": 1440, "h": 960, "page": "page-1", "title": "연결 지도 — 전체" },
+    { "file": "GraphFocus.dc.html", "x": 3120, "y": 0, "w": 1440, "h": 960, "page": "page-1", "title": "연결 지도 — 노드 선택" },
+    { "file": "Login.dc.html",      "x": 0,    "y": 0, "w": 1440, "h": 960, "page": "page-2", "title": "계정 로그인" }
+  ],
+  "annotations": [
+    {
+      "id": "zone-3d",
+      "page": "page-1",
+      "x": -360,
+      "y": 0,
+      "w": 300,
+      "text": "3D가 사는 구역\n\n랜딩: 풀 연출 허용. 한 번 보고 감탄하면 끝나는 화면.\n\n연결 지도: 3D가 장식이 아니라 정보 그 자체. 노드 47개를 2D로 그리면 엉킨 실뭉치가 되고, 3D로 돌리면 읽힌다.\n\n주의: 이 캔버스는 외부 CDN 차단 정책 때문에 CSS 3D + SVG로 근사한 것. 실제 apps/web에서는 React Three Fiber로 구현."
+    },
+    {
+      "id": "zone-quiet",
+      "page": "page-2",
+      "x": -360,
+      "y": 0,
+      "w": 300,
+      "text": "3D가 금지된 구역\n\n금고 내부는 노동 공간이다. API 키 하나 찾는 데 0.4초 트랜지션이 끼면 매일 쓰는 도구가 아니라 전시물이 된다.\n\n모션 150ms 이하, 3D 없음.\n\n랜딩의 화려함과 여기의 조용함, 그 대비 자체가 설계 주장이다."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

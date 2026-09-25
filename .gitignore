@@ -69,3 +69,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# design canvas build output (seeded editor payload, ~2MB)
+design/web-mockups/*.html
+!design/web-mockups/*.dc.html
