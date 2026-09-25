@@ -142,14 +142,35 @@ worktree에서 파일이 안 보인다는 이유만으로 삭제됐다고 판단
 | 2026-09-22 협업 baseline | `PUSHED` | `d9c66661db7d7b66f6453e94e467c424107cba66` |
 | 2026-09-24 C30 회귀 기록 직전 범용 작업판 snapshot | `PUSHED` | `codex/firstvibe-luna-release-support@eb0127eb10c6e123866320a89e02358e0ce8192e` |
 | 1~100 원격 task branch | `RESERVED` | branch 존재는 구현 완료가 아님 |
-| #30 provider metadata | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, UI·PR·통합·remote CI 미완료 |
-| #58 evidence labels | `PUSHED_LOCAL_DONE` | `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·문서/Secret 검사·독립 재검토 P1/P2/P3 0, PR·통합·remote CI 미완료 |
-| #93 release manifest | `PUSHED_LOCAL_SECURITY_FIX_DONE_CI_WIRED` | 코어 `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d`; CI 연결 `codex/firstvibe-collab-93-ci-fix-01@c9a1d63`; PS5.1 manifest 10/10·workflow 정책 12/12·Secret scan·독립 리뷰 P1/P2/P3 0, PS7 원격 실행·PR·통합 미완료 |
-| canonical 전체 회귀 | `BLOCKED` | source `d9c6666`; 보고 `codex/firstvibe-base-regression-20260925-01@196cb27`; Secret scan·fmt·Clippy PASS 후 default tests가 disk error 112/exit 101로 중단, 나머지 NOT_RUN |
-| 원격 CI | `BLOCKED/UNKNOWN` | 기록상 계정/과금 차단; 2026-09-25 `gh` 토큰 무효로 Actions 조회 404, exact-SHA PASS 증거 없음 |
+| #30 provider metadata | `DRAFT_PR / REMOTE_CI_FAILURE` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c`; fail-closed 보완·독립 리뷰 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan 로컬 PASS; Draft PR #8, UI·통합 미완료 |
+| #58 evidence labels | `DRAFT_PR / LOCAL_DONE / REMOTE_CI_FAILURE` | `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731`; 의미 수정 4건·문서/Secret 검사·독립 재검토 P1/P2/P3 0; Draft PR #7, 통합 미완료 |
+| #93 release manifest | `DRAFT_PR / CI_WIRED / REMOTE_CI_FAILURE` | 코어 `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d` Draft PR #9; CI 연결 `codex/firstvibe-collab-93-ci-fix-01@c9a1d63` stacked Draft PR #10; PS5.1 manifest 10/10·workflow 정책 12/12·Secret scan·독립 리뷰는 로컬 PASS, PS7 원격 실행·통합 미완료 |
+| canonical 전체 회귀 | `BLOCKED / DRAFT_PR` | source `d9c6666`; 보고 `codex/firstvibe-base-regression-20260925-01@196cb27` Draft PR #12; Secret scan·fmt·Clippy PASS 후 default tests가 disk error 112/exit 101로 중단, 나머지 NOT_RUN |
+| Privacy Cleanup PRD | `DRAFT_PR / USER_APPROVAL_PENDING` | `codex/firstvibe-privacy-prd-p01-20260925@b3cf622` Draft PR #11; 독립 문서 리뷰 PASS, 사용자 여정·수용 기준 승인·통합 미완료 |
+| release-support 문서 | `DRAFT_PR` | PR 생성 시 `codex/firstvibe-luna-release-support@7423698` Draft PR #13; 문서 검토용이며 통합·배포 준비 증거 아님 |
+| 원격 CI | `FAIL / CAUSE_UNKNOWN` | 새 Draft PR #7~#13 각 head의 `Security gates`가 `completed/failure`; job steps는 빈 배열이고 로그 다운로드는 `BlobNotFound`(404)라 원인 미확인. 위 로컬 PASS와 별개이며 exact-SHA 원격 PASS 증거 없음 |
 | main 통합 | `NOT_DONE` | 최신 baseline·로컬 후보가 main에 반영됐다는 증거 없음 |
 | 실제 Secret | `FORBIDDEN` | 독립 감사·복구·동기화·운영 gate 미충족 |
 | Privacy Cleanup | `NOT_STARTED` | 제품 방향·요구·TODO만 있고 코드 없음 |
+
+### 2026-09-25 Draft PR 현황 — GitHub 라이브 재조회
+
+아래 7개는 모두 `open/Draft`다. base/head와 URL은 GitHub 라이브 조회로 확인했다.
+PR 생성은 코드 검증·PRD 승인·merge·배포 승인이 아니다. `REAL_SECRET_GATE=CLOSED`를 유지한다.
+
+| PR | 작업 | base | head (PR 생성 시 SHA) | URL |
+|---|---|---|---|---|
+| #7 | `KA-C58-FIX-01` | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-collab-58-evidence-labels-fix-01@090c731` | [Draft PR #7](https://github.com/kjs844-art/secure-vault/pull/7) |
+| #8 | `KA-C30-FIX-01` | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-collab-30-provider-metadata-fix-01@534b37c` | [Draft PR #8](https://github.com/kjs844-art/secure-vault/pull/8) |
+| #9 | `KA-C93-FIX-01` | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d` | [Draft PR #9](https://github.com/kjs844-art/secure-vault/pull/9) |
+| #10 | `KA-C93-CI-01` | `codex/firstvibe-collab-93-release-artifact-manifest-fix-01@594824d` | `codex/firstvibe-collab-93-ci-fix-01@c9a1d63` | [Draft PR #10](https://github.com/kjs844-art/secure-vault/pull/10) |
+| #11 | `KA-PRI-P01` | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-privacy-prd-p01-20260925@b3cf622` | [Draft PR #11](https://github.com/kjs844-art/secure-vault/pull/11) |
+| #12 | `KA-BASE-01` 실패 보고 | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-base-regression-20260925-01@196cb27` | [Draft PR #12](https://github.com/kjs844-art/secure-vault/pull/12) |
+| #13 | `KA-A03` release-support 문서 | `codex/firstvibe-collab-001-100-baseline` | `codex/firstvibe-luna-release-support@7423698` | [Draft PR #13](https://github.com/kjs844-art/secure-vault/pull/13) |
+
+각 PR 생성 시 head의 `Security gates`는 `completed/failure`다. job steps가 빈 배열이고
+로그 다운로드는 `BlobNotFound`(404)라 실패 원인은 확인되지 않았다. #13은 이 문서의 후속
+commit/push가 있을 경우 head SHA와 CI 상태를 새로 확인해야 한다. 표의 SHA는 PR 생성 시점의 값이다.
 
 ### 기능 상태
 
@@ -198,7 +219,7 @@ check_result: PASS | FAIL | BLOCKED | NOT_RUN | UNKNOWN
 | `IMPLEMENTING` | 승인된 파일에서 작업 중 |
 | `LOCAL_DONE` | 로컬 산출물과 관련 검사가 있으나 push/PR/통합 전 |
 | `PUSHED` | task branch 원격 SHA와 로컬 HEAD가 일치 |
-| `DRAFT_PR` | baseline 대상 검토용 PR이 열림, 병합 승인 아님 |
+| `DRAFT_PR` | 승인된 대상 branch로 검토용 PR이 열림, 병합 승인 아님 (#93 CI는 코어 fix branch 대상) |
 | `VERIFIED` | 동일 SHA 필수 검사와 독립 리뷰 통과 |
 | `MERGED` | 승인된 대상 branch에 반영됨 |
 
@@ -304,7 +325,7 @@ task_id: "KA-PRI-P01"
 task_title: "Privacy Cleanup Center PRD 초안"
 task_state: "IN_PROGRESS"
 readiness: "READY_IMPLEMENT"
-collab_stage: "PUSHED"
+collab_stage: "DRAFT_PR"
 completion_target: "VERIFIED"
 assignee: "Codex root, 2026-09-25 P01 세션"
 integration_owner: "Codex root"
@@ -348,12 +369,13 @@ real_secret_gate: "CLOSED"
 file_write_approved: "YES; 사용자의 다음 작업 요청"
 commit_approved: "YES; KeyAtlas 작업의 Git 백업 요청"
 push_approved: "YES; KeyAtlas 작업의 Git 백업 요청"
-pr_approved: "NO"
+pr_approved: "YES; 2026-09-25 사용자 PR 생성 요청, Draft로만 생성"
 main_merge_approved: "NO"
 ```
 
 이 계약은 P01 문서 초안의 소유권만 부여한다. `b3cf622` 초안은 독립 리뷰와
-P01 worktree의 문서·저장소 Secret 검사 후 전용 원격 branch에 push했다. 사용자 승인 전 `KA-PRI-P01`은 `[ ]`이며,
+P01 worktree의 문서·저장소 Secret 검사 후 전용 원격 branch에 push했고, 이후 Draft PR #11로 열었다.
+PRD 내용에 대한 사용자 승인 전 `KA-PRI-P01`은 `[ ]`이며,
 P02 이후 구현 계약의 승인된 선행 SHA로 사용하지 않는다.
 
 ---
@@ -375,9 +397,9 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 
 | ID | 작업 | 현재 상태·계약 또는 남은 값 | 예상 |
 |---|---|---|---:|
-| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 부분 보고 `196cb27` push; 사전 계약·충분한 공간·전체 재실행이 남음 | 공간 확보 후 |
-| `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | 연결 코드는 `c9a1d63`에 push 완료; PS7 runner exact-SHA 결과·PR·통합이 남음 | 원격 상태 |
-| `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | 초안 `b3cf622` push·독립 리뷰 P1/P2/P3 0; 사용자 승인 남음 | 2~4일 |
+| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 부분 보고 `196cb27` Draft PR #12; disk error 112 차단·사전 계약·충분한 공간·전체 재실행이 남음 | 공간 확보 후 |
+| `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | 연결 코드 `c9a1d63` stacked Draft PR #10; 원격 `Security gates` 실패 원인·PS7 runner exact-SHA PASS·통합이 남음 | 원격 상태 |
+| `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | 초안 `b3cf622` Draft PR #11·독립 리뷰 P1/P2/P3 0; 사용자 PRD 승인 남음 | 2~4일 |
 | `KA-PRI-P02` | domain contract | P01 final SHA·task branch·허용 파일·검사 | 4~8일 |
 | `KA-QA-01` | 브라우저 다중탭 E2E 계획 | task branch·browser fixture·산출물 경로·검사 | 1~2일 |
 
@@ -385,13 +407,13 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 
 ```text
 완료: KA-C30-01·KA-C58-01·KA-C93-01 읽기 전용 리뷰
-부분 완료: KA-C30-FIX-01 pushed commit 534b37c·focused 87/87·독립 리뷰 P1/P2 0·
-          Release WASM·typecheck·전체 test 1554/1554·build·Secret scan PASS; PR·통합·remote CI는 미완료
-완료: KA-C58-FIX-01 pushed commit 090c731·의미 수정 4건·Secret scan·독립 리뷰 P1/P2/P3 0
-완료: KA-C93-FIX-01 pushed commit 594824d·PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
-부분 완료: KA-C93-CI-01 pushed commit c9a1d63·workflow 연결·runner step timeout·PS5.1 10/10·정책 12/12·독립 리뷰 P1/P2/P3 0
-남음: KA-C93-CI-01 PS7 runner exact-SHA PASS, PR·통합·remote CI 확인
-차단: KA-BASE-01 source d9c6666에서 Secret scan·fmt·Clippy PASS, default tests는 disk error 112/exit 101; 보고 196cb27 push
+부분 완료: KA-C30-FIX-01 534b37c Draft PR #8·focused 87/87·독립 리뷰 P1/P2 0·
+          Release WASM·typecheck·전체 test 1554/1554·build·Secret scan 로컬 PASS; 통합·원격 CI PASS 미완료
+완료(기존 LOCAL_DONE 목표): KA-C58-FIX-01 090c731 Draft PR #7·의미 수정 4건·Secret scan·독립 리뷰 P1/P2/P3 0
+완료(기존 LOCAL_SECURITY_FIX_DONE 목표): KA-C93-FIX-01 594824d Draft PR #9·PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
+부분 완료: KA-C93-CI-01 c9a1d63 stacked Draft PR #10·workflow 연결·runner step timeout·PS5.1 10/10·정책 12/12·독립 리뷰 P1/P2/P3 0
+남음: KA-C93-CI-01 PS7 runner exact-SHA PASS·통합, Draft PR #7~#13의 원격 Security gates 실패 원인 확인
+차단: KA-BASE-01 source d9c6666에서 Secret scan·fmt·Clippy PASS, default tests는 disk error 112/exit 101; 보고 196cb27 Draft PR #12
 Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
 ```
 
@@ -413,17 +435,17 @@ Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 �
 |---|---|---|---|---|---:|---|
 | [x] | `KA-A01` | `PUSHED` | 2026-09-19 통합 체크포인트 기록 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-integration-20260919@41eeed0492e5325816e0797bbefa727408574e3c` |
 | [x] | `KA-A02` | `PUSHED` | 1~100 협업 baseline·manifest 작성 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-collab-001-100-baseline@d9c66661db7d7b66f6453e94e467c424107cba66` |
-| [ ] | `KA-A03` | `LOCAL_DONE` | 전체 설계·현황·TODO 문서 2026-09-24 갱신 | Codex root | 완료 | 로컬 문서 완료; 검증·원격 통합 증거는 이 세션 로그 참조 |
-| [ ] | `KA-BASE-01` | `BLOCKED` | canonical exact SHA 전체 로컬 회귀 | Codex root | 공간 확보 후 | 원격 보고 `196cb27`; source `d9c6666`; Secret scan·fmt·Clippy PASS, default tests disk error 112/exit 101, 이후 Rust·WASM·Web NOT_RUN; 사전 assignment contract 미완료 |
-| [ ] | `KA-A05` | `BLOCKED` | exact SHA 원격 CI | 사용자+AI | 외부 상태 | runner 실제 실행·동일 SHA 결과 |
+| [ ] | `KA-A03` | `DRAFT_PR` | 전체 설계·현황·TODO 문서 2026-09-24 갱신 | Codex root | 검토 중 | PR 생성 시 문서 branch `7423698` Draft PR #13; 원격 Security gates 실패 원인·승인·통합 미완료 |
+| [ ] | `KA-BASE-01` | `BLOCKED / DRAFT_PR` | canonical exact SHA 전체 로컬 회귀 | Codex root | 공간 확보 후 | 보고 `196cb27` Draft PR #12; source `d9c6666`; Secret scan·fmt·Clippy PASS, default tests disk error 112/exit 101, 이후 Rust·WASM·Web NOT_RUN; 사전 assignment contract 미완료 |
+| [ ] | `KA-A05` | `REMOTE_CI_FAILURE_CAUSE_UNKNOWN` | exact SHA 원격 CI | 사용자+AI | 원인 확인 후 | Draft PR #7~#13 head의 Security gates completed/failure; job steps 빈 배열·로그 BlobNotFound(404), 원격 PASS 없음 |
 | [ ] | `KA-A06` | `BACKLOG_HIGH_RISK` | main 보존 통합·충돌 해결 | primary | 2~5일 | 독립 리뷰·전체 회귀·사용자 승인 |
 | [x] | `KA-C30-01` | `READ_ONLY_REPORT_DONE` | provider metadata 후보 통합 판단 | Codex root | 완료 | `E-20260924-C30-GIT-01`, `E-20260924-C30-REVIEW-01`; 후보는 통합 비권장 |
-| [ ] | `KA-C30-FIX-01` | `PUSHED_LOCAL_REGRESSION_PASS_REMOTE_CI_UNKNOWN` | #30 fail-closed 입력 경계·날짜 증거·회귀 보완 | Claude 구현+Codex 검증 | 통합 전 | 원격 `534b37c`; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan PASS, PR·통합·remote CI 미완료 |
+| [ ] | `KA-C30-FIX-01` | `DRAFT_PR / REMOTE_CI_FAILURE` | #30 fail-closed 입력 경계·날짜 증거·회귀 보완 | Claude 구현+Codex 검증 | 통합 전 | 원격 `534b37c` Draft PR #8; 독립 P1/P2 0·Release WASM·typecheck·47/47 files/1554 tests·build·Secret scan 로컬 PASS, 원격 Security gates 실패 원인·통합 미완료 |
 | [x] | `KA-C58-01` | `READ_ONLY_REPORT_DONE` | evidence label 후보 통합 판단 | Codex root | 완료 | `E-20260924-C58-GIT-01`, `E-20260924-C58-REVIEW-01`; 후보는 통합 비권장 |
-| [x] | `KA-C58-FIX-01` | `PUSHED_LOCAL_DONE` | #58 의미상 수정점 4개 보완·재검토 | Codex+독립 reviewer | 완료 | target=`LOCAL_DONE`; 원격 `090c731`; 한 문서만 변경·Secret scan PASS·독립 P1/P2/P3 0 |
+| [x] | `KA-C58-FIX-01` | `DRAFT_PR / LOCAL_DONE` | #58 의미상 수정점 4개 보완·재검토 | Codex+독립 reviewer | 기존 목표 완료 | target=`LOCAL_DONE`; 원격 `090c731` Draft PR #7; 한 문서만 변경·Secret scan 로컬 PASS·독립 P1/P2/P3 0, 원격 Security gates 실패 원인·통합 미완료 |
 | [x] | `KA-C93-01` | `READ_ONLY_REPORT_DONE` | release manifest 후보 통합 판단 | Codex root | 완료 | `E-20260924-C93-GIT-01`, `E-20260924-C93-REVIEW-01`; 후보는 통합 비권장 |
-| [x] | `KA-C93-FIX-01` | `PUSHED_LOCAL_SECURITY_FIX_DONE` | #93 stable snapshot·fail-closed 출력·strict schema·resource bound 보완 | Codex+독립 reviewer 2명 | 완료 | target=`LOCAL_SECURITY_FIX_DONE`; 원격 `594824d`; PS5.1 10/10·scanner 102/102·Secret scan PASS·P1/P2/P3 0 |
-| [ ] | `KA-C93-CI-01` | `PUSHED_LOCAL_POLICY_PASS_REMOTE_CI_UNKNOWN` | #93 manifest test의 PS7·workflow·hard timeout 연결 | integration owner | 원격 상태 | 원격 `c9a1d63`; PS5.1 manifest 10/10·workflow 정책 12/12·Secret scan·독립 P1/P2/P3 0; PS7 exact-SHA PASS·PR·통합은 별도 |
+| [x] | `KA-C93-FIX-01` | `DRAFT_PR / LOCAL_SECURITY_FIX_DONE` | #93 stable snapshot·fail-closed 출력·strict schema·resource bound 보완 | Codex+독립 reviewer 2명 | 기존 목표 완료 | target=`LOCAL_SECURITY_FIX_DONE`; 원격 `594824d` Draft PR #9; PS5.1 10/10·scanner 102/102·Secret scan 로컬 PASS·P1/P2/P3 0, 원격 Security gates 실패 원인·통합 미완료 |
+| [ ] | `KA-C93-CI-01` | `DRAFT_PR / REMOTE_CI_FAILURE` | #93 manifest test의 PS7·workflow·hard timeout 연결 | integration owner | 원격 상태 | 원격 `c9a1d63` stacked Draft PR #10 (base #9 head); PS5.1 manifest 10/10·workflow 정책 12/12·Secret scan 로컬 PASS·독립 P1/P2/P3 0; PS7 exact-SHA PASS·원격 실패 원인·통합 미완료 |
 
 ### B. Secure Vault·저장·복구
 
@@ -463,7 +485,7 @@ Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 �
 
 | 완료 | ID | 상태·준비도 | 작업 | 담당 | 예상 | 완료 증거 |
 |---|---|---|---|---|---:|---|
-| [ ] | `KA-PRI-P01` | `PUSHED / READY_IMPLEMENT` | Privacy PRD·비목표·과장 금지 | Codex root | 사용자 승인 후 | 초안 `b3cf622`·독립 리뷰 P1/P2/P3 0; 사용자 여정·수용 기준 승인 전이므로 `[ ]` |
+| [ ] | `KA-PRI-P01` | `DRAFT_PR / USER_APPROVAL_PENDING` | Privacy PRD·비목표·과장 금지 | Codex root | 사용자 승인 후 | 초안 `b3cf622` Draft PR #11·독립 리뷰 P1/P2/P3 0; 원격 Security gates 실패 원인·사용자 여정·수용 기준 승인 전이므로 `[ ]` |
 | [ ] | `KA-PRI-P02` | `WAITING_PREDECESSOR` | CleanupCase·Action·Evidence contract | 미배정 | 4~8일 | 상태·검증·future-version tests |
 | [ ] | `KA-PRI-P03` | `BACKLOG` | 암호화 로컬 저장·검색 projection | 미배정 | 1~2주 | 잠금 시 조회 불가·평문 marker 0 |
 | [ ] | `KA-PRI-P04` | `BACKLOG` | 합성 정리센터 목록·상세·timeline UI | 미배정 | 1~2주 | empty/error/locked/100건·접근성 tests |
@@ -588,36 +610,36 @@ stage: LOCAL_DONE
 | `E-20260924-C58-REVIEW-01` | `KA-C58-01` | `FAIL` | `INDEPENDENT_REVIEW` | `6803eb5c4c5d002f247daae49b8b4cd024e3ef80` | PASS/FAIL·CI 단계·보고 형식·합성 REMOTE_CI 화면 문구 일관성 | 중요 수정점 4개 | 2026-09-24 | review deliverable은 완료; 후보는 `VERIFIED`·통합 승인 아님 |
 | `E-20260925-C58-FIX-GIT-01` | `KA-C58-FIX-01` | `PASS` | `LOCAL` | `090c7313a4ec0b6bd181d9889d7282f1ae7c1caf` | base `6803eb5` 계보·허용 문서 1개·diff 공백·UTF-8/fence·필수 의미 문구·저장소 Secret scan | exit 0 / Secret scan passed / `REAL_SECRET_GATE=CLOSED` | 2026-09-25 | runtime test는 docs-only라 NOT_RUN |
 | `E-20260925-C58-FIX-REVIEW-01` | `KA-C58-FIX-01` | `PASS` | `INDEPENDENT_REVIEW` | `090c7313a4ec0b6bd181d9889d7282f1ae7c1caf` | PASS/FAIL·Low/Medium·REMOTE_CI 단계·보고 예시·합성 화면 문구 일관성 | P1 0 / P2 0 / P3 0 | 2026-09-25 | 최초 재검토 P2 1/P3 1을 수정 후 finding 0; 통합 승인은 아님 |
-| `E-20260925-C58-FIX-PUSH-01` | `KA-C58-FIX-01` | `PASS` | `REMOTE_REF` | `090c7313a4ec0b6bd181d9889d7282f1ae7c1caf` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 전용 원격 branch 백업; PR·merge·main·remote CI 없음 |
+| `E-20260925-C58-FIX-PUSH-01` | `KA-C58-FIX-01` | `PASS` | `REMOTE_REF` | `090c7313a4ec0b6bd181d9889d7282f1ae7c1caf` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 전용 원격 branch 백업; PR·merge·main·remote CI 없음 |
 | `E-20260924-C30-GIT-01` | `KA-C30-01` | `PASS` | `LOCAL` | `2390b55684f5f46c28bc6870b61915b949dd494f` | baseline 직접 부모·2파일 diff·공백·계보·고신뢰 Secret 형태 | exit 0 / 377줄 / Secret 형태 0 | 2026-09-24 | local task ref만 후보 포함; remote-tracking ref는 baseline |
 | `E-20260924-C30-REVIEW-01` | `KA-C30-01` | `FAIL` | `INDEPENDENT_REVIEW` | `2390b55684f5f46c28bc6870b61915b949dd494f` | untrusted runtime shape·링크 증거 날짜·UI 연결 경계 | P1 0 / P2 1 / P3 1 | 2026-09-24 | 실행 검증은 계약상 `NOT_RUN`; 후보 통합 비권장 |
-| `E-20260924-C30-FIX-GIT-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | base `2390b55` 계보·허용 2파일·diff 공백·저장소 Secret scan | exit 0 / Secret scan passed | 2026-09-24 | local 2-commit fix tip; push·PR·merge 안 함 |
+| `E-20260924-C30-FIX-GIT-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | base `2390b55` 계보·허용 2파일·diff 공백·저장소 Secret scan | exit 0 / Secret scan passed | 2026-09-24 | 당시 local 2-commit fix tip; push·PR·merge 안 함 |
 | `E-20260924-C30-FIX-FOCUSED-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | provider metadata focused Vitest | 1 file / 87 tests passed | 2026-09-24 | 동일 package-lock의 기존 node_modules를 임시 junction으로 연결 후 제거 |
 | `E-20260924-C30-FIX-REVIEW-01` | `KA-C30-FIX-01` | `PASS` | `INDEPENDENT_REVIEW` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | malformed JSON-compatible 입력·UTC 날짜·exact own-key allowlist·허용 범위 | P1 0 / P2 0 | 2026-09-24 | 의미 검토 통과; 전체 회귀 통과나 통합 승인은 아님 |
 | `E-20260924-C30-FIX-REGRESSION-01` | `KA-C30-FIX-01` | `BLOCKED` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | typecheck·전체 web test·production build | typecheck/build exit 1; 40/47 files·1509 tests pass, 7 WASM suites load fail | 2026-09-24 | `src/generated/vault-wasm-demo` 부재; 생성·재검증 전 `VERIFIED` 금지 |
-| `E-20260924-C30-FIX-PUSH-01` | `KA-C30-FIX-01` | `PASS` | `REMOTE_REF` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | 비강제 push 후 `git ls-remote`와 local/upstream divergence | remote SHA 일치 / 0·0 | 2026-09-24 | 전용 원격 branch 백업 완료; PR·merge·통합·CI PASS 아님 |
+| `E-20260924-C30-FIX-PUSH-01` | `KA-C30-FIX-01` | `PASS` | `REMOTE_REF` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | 비강제 push 후 `git ls-remote`와 local/upstream divergence | remote SHA 일치 / 0·0 | 2026-09-24 | push 당시 전용 원격 branch 백업 완료; PR·merge·통합·CI PASS 아님 |
 | `E-20260924-C30-FIX-WASM-01` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | 고정 Rust 1.95.0·wasm-bindgen 0.2.128·`build-wasm.ps1 -SyntheticDemo -Release`·`node scripts/test-wasm.mjs --demo` | exit 0 / `WASM_BUILD_OK` / actual runtime 1735 checks | 2026-09-24 | ignore된 합성 Release 산출물; 실제 Secret 없음 |
 | `E-20260924-C30-FIX-REGRESSION-02` | `KA-C30-FIX-01` | `PASS` | `LOCAL` | `534b37c18582ea120e2d9303cfe73635ad16dcf3` | Release WASM 기준 typecheck·전체 web test·production build·저장소 Secret scan | exit 0 / 47 files·1554 tests / build exit 0 / Secret scan passed | 2026-09-24 | debug WASM 실행은 timeout 10건으로 exit 1; CI와 같은 Release 기준 재실행 PASS, remote CI는 UNKNOWN |
-| `E-20260924-DOC-PUSH-01` | `KA-A03` | `PASS` | `REMOTE_REF` | `eb0127eb10c6e123866320a89e02358e0ce8192e` | C30 회귀 기록 직전 범용 작업판+서비스 체크리스트 snapshot 커밋·비강제 push·원격 SHA 확인 | remote SHA 일치 / 0·0 | 2026-09-24 | `codex/firstvibe-luna-release-support`; PR·merge 안 함 |
+| `E-20260924-DOC-PUSH-01` | `KA-A03` | `PASS` | `REMOTE_REF` | `eb0127eb10c6e123866320a89e02358e0ce8192e` | C30 회귀 기록 직전 범용 작업판+서비스 체크리스트 snapshot 커밋·비강제 push·원격 SHA 확인 | remote SHA 일치 / 0·0 | 2026-09-24 | 당시 `codex/firstvibe-luna-release-support`; PR·merge 안 함 |
 | `E-20260924-DOC-04` | `KA-A03` | `PASS` | `INDEPENDENT_REVIEW` | base `eb0127eb10c6e123866320a89e02358e0ce8192e` + 당시 uncommitted 2-file diff | C30 상태·checkbox·고유 evidence ID·과거 BLOCKED 보존·권한 문구 | P1 0 / P2 0 / P3 0; links·UTF-8·공백·fence·diff checks pass; 고신뢰 Secret 형태 0 | 2026-09-24 | 검토 당시 갱신은 아직 commit·push 전이었음; 다른 worktree scanner 교차 실행은 setup 실패로 별도 제한 기록 |
 | `E-20260924-C93-GIT-01` | `KA-C93-01` | `PASS` | `LOCAL` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | baseline 직접 부모·2파일 diff·PowerShell parse·계보·고신뢰 Secret 형태 | exit 0 / parser error 0 / Secret 형태 0 | 2026-09-24 | local task ref만 후보 포함; remote-tracking ref는 baseline |
 | `E-20260924-C93-REVIEW-01` | `KA-C93-01` | `FAIL` | `INDEPENDENT_REVIEW` | `f1a98b5acc0d24e591dba87ca60ae3f25f88344f` | snapshot·출력 경로·strict schema·resource bound·CI·Secret gate 경계 | P1 2 / P2 4 / P3 1 | 2026-09-24 | 실행 검증은 계약상 `NOT_RUN`; 무결성 목록 도구로만 한정 |
 | `E-20260925-C93-FIX-LOCAL-01` | `KA-C93-FIX-01` | `PASS` | `LOCAL` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | base `f1a98b5` 계보·허용 2파일·PowerShell parse·PS5.1 manifest 회귀·scanner 회귀·저장소 Secret scan·diff 검사 | parse 2/2·manifest 10/10·scanner 102/102·exit 0·`REAL_SECRET_GATE=CLOSED` | 2026-09-25 | 실제 Secret 없음; manifest는 Secret scanner 대체가 아님 |
 | `E-20260925-C93-FIX-REVIEW-01` | `KA-C93-FIX-01` | `PASS` | `INDEPENDENT_REVIEW` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | same-handle snapshot·2-pass tree·strict JSON·resource bound·temp/output race·cleanup identity·cooperative timeout 문구 | reviewer 2명 모두 P1 0 / P2 0 / P3 0 | 2026-09-25 | 최초 P1/P2 공격 재현 후 exact-byte pre/post publish 검사와 불확실 temp 보존으로 수정 |
-| `E-20260925-C93-FIX-PUSH-01` | `KA-C93-FIX-01` | `PASS` | `REMOTE_REF` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 전용 원격 branch 백업; PR·merge·main·remote CI 없음 |
+| `E-20260925-C93-FIX-PUSH-01` | `KA-C93-FIX-01` | `PASS` | `REMOTE_REF` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 전용 원격 branch 백업; PR·merge·main·remote CI 없음 |
 | `E-20260925-C93-FIX-PS7-01` | `KA-C93-CI-01` | `BLOCKED` | `LOCAL_ENV` | `594824ddb9a55bd736d8dd93fd26f60f7ca58a2c` | `pwsh.exe --version`과 PS7 재실행 시도 | Windows access block / NOT_RUN | 2026-09-25 | 보안 정책을 우회하지 않음; PS5.1 실제 실행은 PASS |
 | `E-20260925-C93-CI-LOCAL-01` | `KA-C93-CI-01` | `PASS` | `LOCAL` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 허용 2파일·workflow 정책·PS5.1 manifest 회귀·저장소 Secret scan·diff 검사 | policy 12/12·manifest 10/10·exit 0·`REAL_SECRET_GATE=CLOSED` | 2026-09-25 | 로컬 Pester 3.4 사용; dependency 설치 없음; PS7 실행 증거 아님 |
 | `E-20260925-C93-CI-REVIEW-01` | `KA-C93-CI-01` | `PASS` | `INDEPENDENT_REVIEW` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 같은 job의 두 engine step·외부 step timeout·exit/marker fail-closed·순서·mutation 거부·권한/의존성 비확장 | P1 0 / P2 0 / P3 0 | 2026-09-25 | 실제 10분 hang 유도와 원격 PS7 실행은 별도 미검증 |
-| `E-20260925-C93-CI-PUSH-01` | `KA-C93-CI-01` | `PASS` | `REMOTE_REF` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 전용 원격 branch 백업; PR·merge·main 없음 |
+| `E-20260925-C93-CI-PUSH-01` | `KA-C93-CI-01` | `PASS` | `REMOTE_REF` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 전용 원격 branch 백업; PR·merge·main 없음 |
 | `E-20260925-C93-CI-REMOTE-01` | `KA-C93-CI-01` | `UNKNOWN` | `REMOTE_CI` | `c9a1d638ccc28aae08adae71c77b813654ad2cda` | `gh run list`와 `gh auth status` | Actions 404 / GitHub CLI token invalid | 2026-09-25 | git push 성공과 Actions PASS는 별개; 재인증 전 원격 결과를 추정하지 않음 |
 | `E-20260925-BASE-LOCAL-01` | `KA-BASE-01` | `BLOCKED` | `LOCAL` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | 첫 Secret scan·Workspace verifier | Secret PASS·fmt 0·Clippy 0·default tests 101 / Windows error 112 | 2026-09-25 | probe/doctest/WASM/Web/post-build scan은 NOT_RUN; actual Secret 없음 |
 | `E-20260925-BASE-REVIEW-01` | `KA-BASE-01` | `PASS` | `INDEPENDENT_REVIEW` | report `196cb273793054751314dbefd742a869ce5733fa` | SHA·exit code·NOT_RUN·디스크·삭제·체크박스 과장 여부 | P1 0 / P2 0 / P3 0 | 2026-09-25 | 문서 증거 리뷰만 PASS; 전체 회귀는 계속 BLOCKED |
-| `E-20260925-BASE-PUSH-01` | `KA-BASE-01` | `PASS` | `REMOTE_REF` | `196cb273793054751314dbefd742a869ce5733fa` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | 보고서 전용 원격 branch; PR·merge·main 없음 |
+| `E-20260925-BASE-PUSH-01` | `KA-BASE-01` | `PASS` | `REMOTE_REF` | `196cb273793054751314dbefd742a869ce5733fa` | 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 보고서 전용 원격 branch; PR·merge·main 없음 |
 | `E-20260925-BASE-DISK-01` | `KA-BASE-01` | `BLOCKED` | `LOCAL_ENV` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | C: 0 bytes·task-local ignored target 424,767,901 bytes·생성물 inventory | 해당 target만 영구 제거 후 382,906,368 bytes; 이후 여유 공간 재감소 | 2026-09-25 | 남은 ignored 생성물 27.490 GiB; 추가 삭제는 active-worktree 확인과 명시적 승인 필요 |
 | `E-20260924-DOC-03` | `KA-A03` | `UNKNOWN` | `INDEPENDENT_REVIEW` | 문서가 uncommitted라 Git SHA 없음 | C30·C93 checkbox·후보 상태·evidence ID·SHA·finding 수·권한 문구 일관성 | P1 0 / P2 0 | 2026-09-24 | 로컬 작업판 갱신은 승인 가능; authoritative `PASS`는 commit 후 재검증 필요 |
 | `E-20260925-PRI-P01-LOCAL-01` | `KA-PRI-P01` | `PASS` | `LOCAL` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | P01 worktree에서 baseline 대비 diff 공백·PRD 상대 링크·해당 저장소 Secret scan | diff exit 0 / link 1 file exit 0 / scanner exit 0, `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED` | 2026-09-25 | docs-only라 Rust·Web·browser 검사는 NOT_RUN; release-support worktree 교차 scanner 판정과 별개 |
 | `E-20260925-PRI-P01-REVIEW-01` | `KA-PRI-P01` | `PASS` | `INDEPENDENT_REVIEW` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 최종 클릭·접수 불확실·재시도·완료 근거·최소 증거·합성 수용 기준, Git blob 동일성 | P1 0 / P2 0 / P3 0; blob `4dae59b6ee9fd936a67af4d52b43b88c4c4f871f` 일치 | 2026-09-25 | 초안 품질 검토이며 사용자 PRD 승인·구현 완료 아님 |
-| `E-20260925-PRI-P01-PUSH-01` | `KA-PRI-P01` | `PASS` | `REMOTE_REF` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 전용 branch 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | `codex/firstvibe-privacy-prd-p01-20260925`; PR·merge·main 없음 |
+| `E-20260925-PRI-P01-PUSH-01` | `KA-PRI-P01` | `PASS` | `REMOTE_REF` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 전용 branch 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 `codex/firstvibe-privacy-prd-p01-20260925`; PR·merge·main 없음 |
 
 ---
 
@@ -860,6 +882,17 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - checkbox 판정: completion target=`VERIFIED`; 사용자 여정·수용 기준 승인 전이므로 `KA-PRI-P01` `[ ]` 유지
 - 다음 한 단계: 사용자에게 P01 초안의 범위와 미결정 사항을 보여 주고 승인 또는 수정 의견을 받는다.
 
+### 2026-09-25 — 7개 Draft PR 생성과 원격 CI 조회
+
+- 사용자 요청으로 #58 [PR #7](https://github.com/kjs844-art/secure-vault/pull/7), #30 [PR #8](https://github.com/kjs844-art/secure-vault/pull/8), #93 코어 [PR #9](https://github.com/kjs844-art/secure-vault/pull/9), #93 CI [PR #10](https://github.com/kjs844-art/secure-vault/pull/10), Privacy PRD [PR #11](https://github.com/kjs844-art/secure-vault/pull/11), 차단된 회귀 보고 [PR #12](https://github.com/kjs844-art/secure-vault/pull/12), release-support 문서 [PR #13](https://github.com/kjs844-art/secure-vault/pull/13)을 열었다.
+- GitHub 라이브 재조회: 7개 모두 `open/Draft`; 위 Draft PR 표의 base/head가 일치한다. #10만 #9의 head branch가 base인 stacked PR이다.
+- PR 생성 시 각 head의 원격 `Security gates`: 모두 `completed/failure`; job steps 빈 배열, 로그 다운로드 `BlobNotFound`(404)로 실패 원인은 `UNKNOWN`. 로컬 검사 PASS를 원격 CI PASS로 바꾸지 않는다.
+- 별도 읽기 전용 triage에서 baseline·C58·C30·C93 코어·C93 CI·P01·회귀 보고 branch의 저장소 Secret scanner는 각각 exit 0(`SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED`)이었다. 오래된 release-support branch에는 해당 scanner 파일이 없어 같은 로컬 검사는 `NOT_RUN`; 이 결과만으로 원격 실패 원인을 특정하지 않는다.
+- #12는 부분 회귀의 `BLOCKED` 보고이지 완료된 테스트 증거가 아니다. #11은 PRD 초안으로 사용자 내용 승인 전이다.
+- 기존 push/검토 로그의 "PR 미생성"은 그 시각의 사실이다. 현재 상태는 위 Draft PR 표가 우선한다.
+- 이 기록 시점의 #13 head는 `742369827303671cd83f15008ce0c95720b01922`; 후속 commit/push가 있다면 그 새 head의 CI 결과를 별도로 확인해야 한다.
+- 승인·통합·main merge·배포: 모두 미완료. 실제 Secret 사용: NO, `REAL_SECRET_GATE=CLOSED`.
+
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
 
@@ -870,12 +903,12 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - [ ] 최종 제품명·상표·도메인
 - [ ] 기본 3개/선택 최대 5개 복구 수단 정책
 - [ ] Google/Kakao/Naver·Cloud·DB·email·결제·Play 계정과 MFA
-- [ ] GitHub Actions 계정/과금 차단 확인과 exact-SHA 재실행 승인
+- [ ] Draft PR #7~#13의 `Security gates` 실패 원인 확인과 exact-SHA PASS 증거 확보
 - [ ] active worktree 사용 여부 확인 후 추가 ignored `target` 정리 또는 충분한 build volume 제공
 - [ ] Free/Pro 가격·무료 한도·환불·지원 범위
 - [ ] 서비스 국가·사업 주체·법률·개인정보 처리 범위
 - [ ] 독립 보안 감사·침투 테스트·법률 검토 업체와 예산
-- [ ] commit·push·PR·main merge·배포·실제 Secret beta의 단계별 승인
+- [ ] Draft PR #7~#13 이후의 내용 승인·main merge·배포·실제 Secret beta의 단계별 별도 승인
 
 사용자는 API 키 원문, master password, recovery key, 카드 정보, production `.env`, 신분증을
 AI 채팅이나 GitHub에 붙이지 않는다. 실제 연동 시 공급자의 보안 입력창이나 승인된 Secret
@@ -889,13 +922,14 @@ Manager를 사용한다.
 현재 제품 단계: 합성 alpha / security-core prototype
 canonical 협업 baseline: d9c6666
 1~100 task branches: RESERVED가 기본
-9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 PASS; KA-BASE-01은 source `d9c6666`에서 Clippy까지 PASS 후 disk error 112로 BLOCKED, 보고 `196cb27`; 모두 PR·통합 미완료
-원격 CI: BLOCKED/UNKNOWN (`gh` token invalid, exact-SHA PASS 증거 없음)
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 로컬 PASS; KA-BASE-01은 source `d9c6666`에서 Clippy까지 PASS 후 disk error 112로 BLOCKED, 보고 `196cb27`
+Draft PR: #7 C58, #8 C30, #9 C93 코어, #10 C93 CI(base=#9 head), #11 Privacy PRD, #12 차단된 회귀 보고, #13 release-support 문서; 모두 open/Draft, 승인·통합 미완료
+원격 CI: 새 Draft PR #7~#13 head의 Security gates completed/failure, job steps 빈 배열·로그 BlobNotFound(404)로 원인 UNKNOWN; exact-SHA 원격 PASS 증거 없음
 main 통합: 미완료
 실제 Secret 입력: 금지
 Identity Map: 관계 코어 일부 / 제품 UX·발견 미완료
 Consent Center: 미구현
-Privacy Cleanup Center: P01 PRD 초안 `b3cf622` push·독립 리뷰 PASS, 사용자 승인 대기 / 기능 미구현
+Privacy Cleanup Center: P01 PRD 초안 `b3cf622` Draft PR #11·독립 리뷰 PASS, 사용자 내용 승인 대기 / 기능 미구현
 Backend/API/DB: 미구현
 Android/생체 인증: 미구현
 결제·공개 배포·법률·외부 감사: 미완료
