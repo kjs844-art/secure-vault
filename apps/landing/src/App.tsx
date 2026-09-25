@@ -65,22 +65,23 @@ export default function App() {
 
         <header className="bar">
           <span className="mark">KEYATLAS</span>
+          {/* 링크는 이 페이지에 실제로 있는 곳만 건다. 금고 화면은 아직 없어서 넣지 않는다. */}
           <nav className="bar-nav">
+            <a href="#security">어떻게 잠기는가</a>
             <a href="#map">연결 지도</a>
-            <a href="#vault">금고</a>
-            <a href="#security">보안 설계</a>
           </nav>
           <a className="btn btn-ghost btn-sm" href="#start">시작하기</a>
         </header>
       </div>
 
-      {/* 첫 화면: 열쇠뿐. */}
-      <section className="opener" aria-label="KeyAtlas">
+      {/* 첫 화면: 열쇠뿐. 이야기가 여기서 시작하므로 #start가 여기다. */}
+      <section className="opener" id="start" aria-label="KeyAtlas">
         <div className="cue" aria-hidden="true"><span className="cue-line" /><span>SCROLL</span></div>
       </section>
 
-      {/* 이야기: 꽂고, 돌리고, 모이고, 잠긴다. 자막은 한 장에 한 줄. */}
-      <section className="story" aria-label="어떻게 잠기는가">
+      {/* 이야기: 꽂고, 돌리고, 모이고, 잠긴다. 자막은 한 장에 한 줄.
+          잠기는 과정을 보여주는 대목이라 #security가 여기다. */}
+      <section className="story" id="security" aria-label="어떻게 잠기는가">
         <div className="slot" /><div className="slot" /><div className="slot" /><div className="slot" />
       </section>
       <div className="captions" aria-live="polite">

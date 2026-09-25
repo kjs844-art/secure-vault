@@ -81,7 +81,9 @@ a:hover { color: var(--ink); }
 }
 .btn:hover { transform: translateY(-1px); border-color: rgba(212, 176, 106, 0.4); background: rgba(212, 176, 106, 0.06); }
 .btn-solid { background: var(--gold); color: #141108; border-color: var(--gold); }
-.btn-solid:hover { background: var(--gold-hi); border-color: var(--gold-hi); }
+/* color를 다시 못박아야 한다. 전역 a:hover가 .btn-solid보다 구체적이어서, 안 적으면
+   배경이 밝아지는 동시에 글자가 흰색(--ink)으로 바뀌어 대비가 1.2:1로 무너진다. */
+.btn-solid:hover { background: var(--gold-hi); color: #141108; border-color: var(--gold-hi); }
 .btn-sm { height: 40px; padding: 0 18px; font-size: 13px; }
 
 /* ---------- 첫 화면: 열쇠뿐 ---------- */
@@ -168,6 +170,9 @@ h1 {
   .caption { font-size: 16.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .alpha, .bar, .cue, .caption, .chapter-inner > * { transition: none; opacity: 1; transform: none; }
+  .alpha, .bar, .cue, .chapter-inner > * { transition: none; opacity: 1; transform: none; }
+  /* 자막은 opacity를 켜면 안 된다. 넷이 같은 자리에 겹쳐 있고 .on 하나만 보여야 하는데,
+     전부 1로 만들면 네 줄이 내내 포개져 아무것도 못 읽는다. 움직임만 끈다. */
+  .caption { transition: none; transform: none; }
   .cue-line::after { animation: none; }
 }
