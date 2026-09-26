@@ -33,14 +33,15 @@
   유니코드 합성값을 엄격한 BOM 없는 UTF-8로 기록·왕복 확인하도록 테스트 한 파일만 수정했다.
   `codex/firstvibe-ps51-scanner-fixture@b33b18b`는 [Draft PR #14](https://github.com/kjs844-art/secure-vault/pull/14)로
   푸시됐다. 로컬 PS5.1/PS7 스캐너 회귀는 각각 102/102, 저장소 Secret scan은 PASS다.
-  GitHub의 #14 실행 두 건도 문제였던 PS5.1 단계를 통과했고 전체 Rust/WASM/Web job은 진행 중이었다.
-  **PS5.1 단계 PASS를 전체 CI PASS로 읽지 않는다.** 스캐너 본체와 실제 Secret 허용은 바꾸지 않았다.
+  GitHub의 #14 Security gates 두 실행도 Windows PowerShell 5.1을 포함해 최종 `SUCCESS`다.
+  이 결과는 #14 exact head의 CI이지 다른 PR·baseline·main의 통과가 아니다.
+  스캐너 본체와 실제 Secret 허용은 바꾸지 않았다.
 - [x] 합성 UI 안내·검색어 입력 한도 변경 8개 파일은
   `codex/firstvibe-synthetic-ui-safety@3fced52`의 [Draft PR #15](https://github.com/kjs844-art/secure-vault/pull/15)로
   분리해 푸시했다. 전체 Web 49파일/1,487개 테스트, typecheck, production build, Secret scan,
   독립 P1/P2 리뷰가 로컬 PASS다. 격리 브라우저에서 합성 금고 열기, 한글 129/128바이트 차단,
   정상 검색 결과 2개, 잠금 후 검색 화면 제거를 확인했다. 사람의 한글 IME·모바일은 미검증이다.
-- [ ] #14 전체 원격 CI 종료·재검토와 #15의 공통 기반 CI 차단 해소는 미완료다.
+- [ ] #14의 공유 baseline 반영과 #15의 공통 기반 CI 차단 해소는 미완료다.
   물리적 source checkout은 지금 UI 기능 브랜치이며, 협업 baseline Git ref는 여전히 `d9c66661`이다.
   기존 미추적 `AGENTS.md`는 #15에 넣지 않았다. PR·브랜치 생성은 baseline/main 병합이 아니다.
   `REAL_SECRET_GATE=CLOSED`.
