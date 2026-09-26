@@ -7,6 +7,7 @@
 > 이 문서의 역할: **세부 작업 이력·증거 원문**. 어떤 AI·새 세션·다른 기기도 청사진부터 읽고 필요할 때 이 문서를 연다.
 > 2026-09-26 델타: canonical `d9c66661` 합성 Rust/WASM/Web 로컬 회귀와 PS7/PS5.1 scanner 102/102 PASS. B04 same-origin 두 탭 동시 복원은 한쪽 성공·한쪽 기존 금고 보존 거부, 양쪽 읽기 SHA 동일을 확인했고 fake IndexedDB 경합 회귀 180/180·동일 경합 테스트 재실행 10/10·전체 Web 46 files / 1,468 tests·Web typecheck/build도 PASS. B05 메모리 File API 복원과 다운로드 링크의 3,892-byte Blob/고정 파일명, 개발 시나리오 네트워크 174건 localhost-only도 부분 PASS(실제 저장은 의도적으로 가로채지 않음); production preview에서도 합성 backup link까지 열렸지만 `/favicon.ico` 404 1건은 미해결. backup session/file/auto-lock 단위 테스트 80/80 PASS. 로컬 exact workflow 도구는 Node 24.19.0(workflow 24.8.0), Pester 3.4.0(required 5.7.1 없음), wasm32 target 미설치라 해당 단계와 원격 CI는 미검증. 아래 9월 24~25일 기록은 당시 스냅샷으로 보존한다.
 > 2026-09-27 최신 델타: 보안 검사 PS5.1 유니코드 픽스처를 수정한 `b33b18b`는 Draft PR #14, 합성 UI 안내·UTF-8 검색 한도 `3fced52`는 Draft PR #15로 각각 푸시됐다. #14의 원격 Security gates 두 실행은 Windows PowerShell 5.1을 포함해 최종 `SUCCESS`다. 이 결과는 #14 exact head만의 증거이며 baseline·다른 PR의 CI 통과가 아니다. #15는 로컬 Web 49파일/1,487개 테스트·typecheck·build·Secret scan·독립 리뷰가 PASS이며 격리 브라우저에서 한글 129/128 차단·정상 검색·잠금을 확인했다. 두 PR 모두 baseline/main 미병합, 실제 Secret 입력 금지. 물리적 source checkout은 현재 `codex/firstvibe-synthetic-ui-safety@3fced52`이고 baseline ref는 `d9c66661`로 유지된다. 아래 이전 스냅샷의 미커밋·CI 원인 미확인 표시는 당시 기록이다.
+> 2026-09-27 후속 델타: 실제 저장소 기여 가이드 `AGENTS.md`를 391단어로 검토·검증해 별도 커밋 `34b43e1`로 #15에 푸시했다. source checkout의 현재 head도 `34b43e1`이며 깨끗하다. #15 새 head의 원격 CI는 진행 중이므로 PASS로 표기하지 않는다. 바로 앞 델타의 `3fced52`는 직전 커밋의 정확한 이력이다.
 > 이전 전체 제품 설명: [0부터 공개 서비스까지 전체 체크리스트](KEYATLAS_ZERO_TO_PUBLIC_SERVICE_CHECKLIST_2026-09-18.md)
 > 실제 Secret 허용 상태: **`REAL_SECRET_GATE=CLOSED`**
 
@@ -961,7 +962,7 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - [ ] 최종 제품명·상표·도메인
 - [ ] 기본 3개/선택 최대 5개 복구 수단 정책
 - [ ] Google/Kakao/Naver·Cloud·DB·email·결제·Play 계정과 MFA
-- [ ] Draft PR #7~#13의 `Security gates` 실패 원인 확인과 exact-SHA PASS 증거 확보
+- [ ] PS5.1 픽스처 수정 #14의 공유 baseline 반영 승인 후 PR #7~#13·#15의 각 exact-SHA `Security gates` 재검증 (#14 자체 두 실행은 SUCCESS)
 - [ ] active worktree 사용 여부 확인 후 추가 ignored `target` 정리 또는 충분한 build volume 제공
 - [ ] Free/Pro 가격·무료 한도·환불·지원 범위
 - [ ] 서비스 국가·사업 주체·법률·개인정보 처리 범위
