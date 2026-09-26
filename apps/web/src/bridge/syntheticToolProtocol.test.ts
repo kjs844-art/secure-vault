@@ -1,7 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { parseSyntheticToolAction, SYNTHETIC_TOOL_FILTERS_V1 } from "./syntheticToolProtocol";
+import {
+  getSyntheticToolQueryUtf8Length,
+  isSyntheticToolQueryWithinLimit,
+  isSyntheticToolQueryWellFormed,
+  parseSyntheticToolAction,
+  SYNTHETIC_TOOL_FILTERS_V1,
+} from "./syntheticToolProtocol";
 
 describe("synthetic local tool input contract", () => {
+  it.each([
+    ["ASCII", "x".repeat(128), 128],
+    ["Korean", "가".repeat(42), 126],
+    ["emoji", "😀".repeat(32), 128],
+  ])("counts %s in UTF-8 bytes", (_label, query, expectedBytes) => {
+    expect(getSyntheticToolQueryUtf8Length(query)).toBe(expectedBytes);
+  });
+
+  it.each([
+    ["ASCII at the limit", "x".repeat(128), true],
+    ["Korean below the byte limit", "가".repeat(42), true],
+    ["Korean above the byte limit", "가".repeat(43), false],
+    ["emoji at the byte limit", "😀".repeat(32), true],
+    ["emoji above the byte limit", "😀".repeat(33), false],
+  ])("applies the UTF-8 byte limit to %s", (_label, query, withinLimit) => {
+    expect(isSyntheticToolQueryWithinLimit(query)).toBe(withinLimit);
+  });
+
+  it.each([
+    ["empty", "", true],
+    ["Korean", "가나다", true],
+    ["emoji pair", "😀", true],
+    ["isolated high surrogate", "\ud800", false],
+    ["isolated low surrogate", "\udc00", false],
+    ["broken pair", "\ud800x", false],
+  ])("classifies %s Unicode input", (_label, query, wellFormed) => {
+    expect(isSyntheticToolQueryWellFormed(query)).toBe(wellFormed);
+  });
+
   it("snapshots an exact plain search action with a bounded default", () => {
     const input = { op: "search_catalog", query: "Example CLI" };
     const result = parseSyntheticToolAction(input);
