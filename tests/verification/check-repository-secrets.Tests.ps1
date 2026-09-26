@@ -221,7 +221,15 @@ try {
     $unicodeCaseFoldPath = Join-Path $temporaryRoot 'unicode-casefold-token.py'
     $unicodeCaseFoldValue = ('access_to' + [char]0x212A + 'en = ' + [char]34 + ('z' * 20) + [char]34)
     Set-Content -LiteralPath $fixture -Value 'synthetic metadata without credentials' -NoNewline
-    Set-Content -LiteralPath $unicodeCaseFoldPath -Value $unicodeCaseFoldValue -NoNewline
+    $unicodeCaseFoldEncoding = [Text.UTF8Encoding]::new($false, $true)
+    [IO.File]::WriteAllText($unicodeCaseFoldPath, $unicodeCaseFoldValue, $unicodeCaseFoldEncoding)
+    Assert-Condition (
+        [string]::Equals(
+            [IO.File]::ReadAllText($unicodeCaseFoldPath, $unicodeCaseFoldEncoding),
+            $unicodeCaseFoldValue,
+            [StringComparison]::Ordinal
+        )
+    ) 'The Unicode case-fold fixture must survive an exact UTF-8 round trip.'
     $unicodeCaseFoldExpected = [regex]::IsMatch(
         $unicodeCaseFoldValue,
         '(?m:^[\x20\t]*)(?i:access[_-]?token)[\x20\t]*=[\x20\t]*[\x22\x27][^\x22\x27\r\n]{8,}[\x22\x27]',
