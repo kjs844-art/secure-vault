@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   findProviderMetadataV1,
+  parseCuratedProviderMetadataJsonV1,
   PROVIDER_METADATA_V1,
+  PROVIDER_METADATA_JSON_MAX_BYTES_V1,
+  validateCuratedProviderMetadataCatalogV1,
   validateProviderMetadataCatalogV1,
   type ProviderMetadataIssueReportV1,
   type ProviderMetadataIssueV1,
@@ -27,6 +30,7 @@ function issuesFor(patch: Record<string, unknown>): ProviderMetadataIssueV1[] {
 describe("PROVIDER_METADATA_V1", () => {
   it("passes its own validator", () => {
     expect(validateProviderMetadataCatalogV1(PROVIDER_METADATA_V1)).toEqual([]);
+    expect(validateCuratedProviderMetadataCatalogV1(PROVIDER_METADATA_V1)).toEqual([]);
   });
 
   it("is deeply frozen", () => {
@@ -58,6 +62,93 @@ describe("PROVIDER_METADATA_V1", () => {
   });
 });
 
+describe("validateCuratedProviderMetadataCatalogV1", () => {
+  it("rejects an unreviewed provider even when its structure is valid", () => {
+    expect(validateProviderMetadataCatalogV1([VALID])).toEqual([]);
+    expect(validateCuratedProviderMetadataCatalogV1([VALID]))
+      .toEqual([{ index: 0, issue: "UNTRUSTED_PROVIDER" }]);
+  });
+
+  it("rejects a self-consistent forged GitHub host and documentation URL", () => {
+    const github = findProviderMetadataV1("github")!;
+    const forged = {
+      ...github,
+      officialHosts: ["attacker.test"],
+      docLinks: [{ kind: "credentials", url: "https://attacker.test/keys" }],
+    };
+    expect(validateProviderMetadataCatalogV1([forged])).toEqual([]);
+    expect(validateCuratedProviderMetadataCatalogV1([forged])).toEqual([
+      { index: 0, issue: "UNTRUSTED_HOSTS" },
+      { index: 0, issue: "DOC_LINK_OFF_HOST" },
+      { index: 0, issue: "UNTRUSTED_DOC_LINK" },
+      { index: 0, issue: "UNTRUSTED_METADATA" },
+    ]);
+  });
+
+  it("rejects a user-controlled path on an otherwise pinned official host", () => {
+    const github = findProviderMetadataV1("github")!;
+    const forged = {
+      ...github,
+      docLinks: [{ kind: "credentials", url: "https://github.com/attacker/keys" }],
+    };
+    expect(validateProviderMetadataCatalogV1([forged])).toEqual([]);
+    expect(validateCuratedProviderMetadataCatalogV1([forged]))
+      .toEqual([
+        { index: 0, issue: "UNTRUSTED_DOC_LINK" },
+        { index: 0, issue: "UNTRUSTED_METADATA" },
+      ]);
+  });
+
+  it("rejects an added host even if the documentation still uses the pinned host", () => {
+    const github = findProviderMetadataV1("github")!;
+    const forged = { ...github, officialHosts: ["github.com", "attacker.test"] };
+    expect(validateProviderMetadataCatalogV1([forged])).toEqual([]);
+    expect(validateCuratedProviderMetadataCatalogV1([forged]))
+      .toEqual([{ index: 0, issue: "UNTRUSTED_HOSTS" }]);
+  });
+
+  it("rejects altered provider labels, credential types, and link evidence", () => {
+    const github = findProviderMetadataV1("github")!;
+    for (const forged of [
+      { ...github, displayName: "GitHub Support" },
+      { ...github, credentialTypes: ["api_key"] },
+      { ...github, docLinks: [{ kind: "api_overview", url: github.docLinks[0]!.url }] },
+      { ...github, linkCheck: { result: "UNKNOWN", scope: "http_reachability", checkedOn: null }, docLinks: [] },
+    ]) {
+      expect(validateProviderMetadataCatalogV1([forged])).toEqual([]);
+      expect(validateCuratedProviderMetadataCatalogV1([forged]))
+        .toContainEqual({ index: 0, issue: "UNTRUSTED_METADATA" });
+    }
+  });
+});
+
+describe("parseCuratedProviderMetadataJsonV1", () => {
+  it("returns frozen code-owned entries after validating a bounded JSON snapshot", () => {
+    const parsed = parseCuratedProviderMetadataJsonV1(JSON.stringify(PROVIDER_METADATA_V1));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.entries).toHaveLength(PROVIDER_METADATA_V1.length);
+    expect(parsed.entries[0]).toBe(PROVIDER_METADATA_V1[0]);
+    expect(Object.isFrozen(parsed.entries)).toBe(true);
+  });
+
+  it("rejects malformed and over-limit JSON before trusting any entry", () => {
+    for (const raw of [null, "{", "x".repeat(PROVIDER_METADATA_JSON_MAX_BYTES_V1 + 1)]) {
+      expect(parseCuratedProviderMetadataJsonV1(raw)).toEqual({
+        ok: false, issues: [{ index: null, issue: "INVALID_CATALOG" }],
+      });
+    }
+  });
+
+  it("rejects a structurally valid forged provider snapshot", () => {
+    const github = findProviderMetadataV1("github")!;
+    const raw = JSON.stringify([{ ...github, displayName: "GitHub Support" }]);
+    expect(parseCuratedProviderMetadataJsonV1(raw)).toEqual({
+      ok: false, issues: [{ index: 0, issue: "UNTRUSTED_METADATA" }],
+    });
+  });
+});
+
 describe("validateProviderMetadataCatalogV1", () => {
   it("accepts a well-formed entry", () => {
     expect(issuesFor({})).toEqual([]);
@@ -66,6 +157,7 @@ describe("validateProviderMetadataCatalogV1", () => {
   it.each([
     ["uppercase id", { id: "Example" }, "INVALID_ID"],
     ["trailing hyphen id", { id: "example-" }, "INVALID_ID"],
+    ["overlong id", { id: "x".repeat(65) }, "INVALID_ID"],
     ["empty name", { displayName: "" }, "INVALID_DISPLAY_NAME"],
     ["padded name", { displayName: " Example" }, "INVALID_DISPLAY_NAME"],
     ["long name", { displayName: "x".repeat(65) }, "INVALID_DISPLAY_NAME"],
@@ -73,8 +165,14 @@ describe("validateProviderMetadataCatalogV1", () => {
     ["no hosts", { officialHosts: [] }, "INVALID_HOSTS"],
     ["host with scheme", { officialHosts: ["https://example.com"] }, "INVALID_HOSTS"],
     ["uppercase host", { officialHosts: ["Example.com"] }, "INVALID_HOSTS"],
+    ["overlong hostname", { officialHosts: [`${"a.".repeat(126)}com`] }, "INVALID_HOSTS"],
+    ["too many hosts", {
+      officialHosts: Array.from({ length: 33 }, (_value, index) => `h${index}.example.com`),
+    }, "INVALID_HOSTS"],
     ["duplicate host", { officialHosts: ["example.com", "example.com"] }, "INVALID_HOSTS"],
     ["no credential types", { credentialTypes: [] }, "INVALID_CREDENTIAL_TYPES"],
+    ["too many credential types", { credentialTypes: Array.from({ length: 33 }, () => "api_key") }, "INVALID_CREDENTIAL_TYPES"],
+    ["overlong credential type", { credentialTypes: ["x".repeat(10_000)] }, "INVALID_CREDENTIAL_TYPES"],
     ["unknown credential type", { credentialTypes: ["session_cookie"] }, "INVALID_CREDENTIAL_TYPES"],
     ["duplicate credential type", { credentialTypes: ["api_key", "api_key"] }, "INVALID_CREDENTIAL_TYPES"],
   ] as const)("rejects %s", (_name, patch, issue) => {
@@ -91,6 +189,16 @@ describe("validateProviderMetadataCatalogV1", () => {
     ["not a URL", "docs.example.com/keys"],
   ])("rejects a doc link with %s", (_name, url) => {
     expect(issuesFor({ docLinks: [{ kind: "credentials", url }] })).toContain("INVALID_DOC_LINK");
+  });
+
+  it("rejects documentation URLs over the bounded input size", () => {
+    const url = `https://example.com/${"x".repeat(4_097)}`;
+    expect(issuesFor({ docLinks: [{ kind: "credentials", url }] })).toContain("INVALID_DOC_LINK");
+  });
+
+  it("rejects more documentation links than the catalog supports", () => {
+    const link = { kind: "credentials", url: "https://example.com/keys" };
+    expect(issuesFor({ docLinks: [link, link, link] })).toEqual(["INVALID_DOC_LINK"]);
   });
 
   it("rejects doc links outside the official hosts, including lookalikes", () => {
@@ -113,6 +221,7 @@ describe("validateProviderMetadataCatalogV1", () => {
     ["PASS without links", { docLinks: [] }],
     ["PASS without date", { linkCheck: { result: "PASS", scope: "http_reachability", checkedOn: null } }],
     ["impossible date", { linkCheck: { result: "PASS", scope: "http_reachability", checkedOn: "2026-02-30" } }],
+    ["oversized date", { linkCheck: { result: "PASS", scope: "http_reachability", checkedOn: "x".repeat(4_097) } }],
     ["UNKNOWN with date", { linkCheck: { result: "UNKNOWN", scope: "http_reachability", checkedOn: "2026-09-24" } }],
     ["unknown result", { linkCheck: { result: "OK", scope: "http_reachability", checkedOn: "2026-09-24" } }],
     ["content scope", { linkCheck: { result: "PASS", scope: "content_review", checkedOn: "2026-09-24" } }],
@@ -180,6 +289,18 @@ describe("validateProviderMetadataCatalogV1 with untrusted runtime input", () =>
     expectReports(sparse, [{ index: 0, issue: "INVALID_ENTRY" }]);
   });
 
+  it("rejects catalogs above 2,048 entries without walking them", () => {
+    expectReports(new Array(2_049), [{ index: null, issue: "INVALID_CATALOG" }]);
+  });
+
+  it("accepts the 2,048-entry catalog limit", () => {
+    const atLimit = Array.from({ length: 2_048 }, (_value, index) => ({
+      ...VALID,
+      id: `provider-${String(index).padStart(4, "0")}`,
+    }));
+    expect(validateProviderMetadataCatalogV1(atLimit)).toEqual([]);
+  });
+
   it("keeps UNEXPECTED_FIELD for plain records with missing or extra fields", () => {
     const { linkCheck: _omitted, ...missing } = VALID;
     expectReports([missing], atZero("UNEXPECTED_FIELD"));
@@ -198,6 +319,12 @@ describe("validateProviderMetadataCatalogV1 with untrusted runtime input", () =>
 
     expectReports([symbolEntry], atZero("UNEXPECTED_FIELD"));
     expectReports([hiddenEntry], atZero("UNEXPECTED_FIELD"));
+  });
+
+  it("rejects a wide JSON object with unapproved fields", () => {
+    const wide = { ...VALID } as ProviderMetadataV1 & Record<string, unknown>;
+    for (let index = 0; index < 20_000; index += 1) wide[`extra${index}`] = index;
+    expectReports([wide], atZero("UNEXPECTED_FIELD"));
   });
 
   it("rejects symbol fields on nested exact-key records", () => {

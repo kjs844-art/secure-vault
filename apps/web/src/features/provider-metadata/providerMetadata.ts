@@ -50,14 +50,47 @@ const LINK_CHECK_KEYS = ["result", "scope", "checkedOn"] as const;
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HOST_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_CATALOG_ENTRIES = 2_048;
+const MAX_ID_LENGTH = 64;
 const MAX_DISPLAY_NAME_LENGTH = 64;
+const MAX_HOSTNAME_LENGTH = 253;
+const MAX_OFFICIAL_HOSTS = 32;
+const MAX_DOC_LINKS = PROVIDER_DOC_LINK_KINDS_V1.length;
+const MAX_DOC_LINK_URL_LENGTH = 4_096;
+const MAX_CREDENTIAL_TYPE_LENGTH = Math.max(...CATALOG_CREDENTIAL_TYPES_V1.map((type) => type.length));
+
+// Curated identity pins are independent of catalog entries. A catalog author
+// cannot make an arbitrary documentation host trusted by editing officialHosts.
+const PINNED_OFFICIAL_HOSTS_V1: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  anthropic: Object.freeze(["anthropic.com", "claude.com"]),
+  aws: Object.freeze(["aws.amazon.com"]),
+  github: Object.freeze(["github.com"]),
+  "google-cloud": Object.freeze(["cloud.google.com"]),
+  openai: Object.freeze(["openai.com"]),
+  slack: Object.freeze(["slack.com", "slack.dev"]),
+  stripe: Object.freeze(["stripe.com"]),
+});
+
+// Full documentation URLs are pinned separately too: an official site's
+// user-controlled path is not automatically reviewed product documentation.
+const PINNED_DOC_URLS_V1: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  anthropic: Object.freeze(["https://platform.claude.com/docs/en/api/overview"]),
+  aws: Object.freeze(["https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html"]),
+  github: Object.freeze(["https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"]),
+  "google-cloud": Object.freeze(["https://docs.cloud.google.com/docs/authentication/api-keys"]),
+  openai: Object.freeze([]),
+  slack: Object.freeze(["https://docs.slack.dev/authentication/tokens/"]),
+  stripe: Object.freeze(["https://docs.stripe.com/keys"]),
+});
 
 export type ProviderMetadataIssueV1 =
   | "INVALID_CATALOG" | "INVALID_ENTRY"
   | "DUPLICATE_ID" | "UNSORTED_IDS" | "INVALID_ID" | "INVALID_DISPLAY_NAME"
   | "INVALID_CATEGORY" | "INVALID_HOSTS" | "INVALID_CREDENTIAL_TYPES"
   | "INVALID_DOC_LINK" | "DOC_LINK_OFF_HOST" | "DUPLICATE_DOC_LINK_KIND"
-  | "INVALID_LINK_CHECK" | "UNEXPECTED_FIELD";
+  | "INVALID_LINK_CHECK" | "UNEXPECTED_FIELD"
+  | "UNTRUSTED_PROVIDER" | "UNTRUSTED_HOSTS" | "UNTRUSTED_DOC_LINK"
+  | "UNTRUSTED_METADATA";
 
 /**
  * `index`는 문제가 된 catalog 원소 위치다. catalog 자체가 배열이 아니면
@@ -83,15 +116,23 @@ function isPlainRecord(value: unknown): value is PlainRecord {
 }
 
 function hasExactKeys(value: PlainRecord, allowed: readonly string[]): boolean {
-  // Object.keys는 Symbol key와 non-enumerable own property를 숨기므로 exact allowlist에 쓸 수 없다.
+  // JSON.parse objects have enumerable fields. Reject oversized or unknown
+  // ones before Reflect.ownKeys allocates an array of every own property.
+  let enumerableCount = 0;
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) continue;
+    enumerableCount += 1;
+    if (enumerableCount > allowed.length || !allowed.includes(key)) return false;
+  }
+  // Keep Reflect for Symbol and non-enumerable own fields in non-JSON callers.
   const keys = Reflect.ownKeys(value);
   return keys.length === allowed.length &&
     keys.every((key) => typeof key === "string" && allowed.includes(key));
 }
 
-/** 모든 원소가 문자열인 배열이면 복사본을, 아니면 null을 돌려준다. */
-function readStringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
+/** 모든 원소가 문자열이고 길이 제한 이내인 배열이면 복사본을, 아니면 null을 돌려준다. */
+function readStringArray(value: unknown, maxLength: number): string[] | null {
+  if (!Array.isArray(value) || value.length > maxLength) return null;
   const strings: string[] = [];
   // for 루프로 돌아 sparse array의 빈 칸도 undefined로 검사한다.
   for (let i = 0; i < value.length; i += 1) {
@@ -118,7 +159,7 @@ function isValidDocLink(link: unknown): URL | null {
   if (!isPlainRecord(link) || !hasExactKeys(link, DOC_LINK_KEYS)) return null;
   if (!isOneOf(link.kind, PROVIDER_DOC_LINK_KINDS_V1)) return null;
   const raw = link.url;
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== "string" || raw.length > MAX_DOC_LINK_URL_LENGTH) return null;
   let url: URL;
   try {
     url = new URL(raw);
@@ -147,7 +188,7 @@ function isValidLinkCheck(check: unknown, linkCount: number, todayUtc: number | 
   if (check.result === "UNKNOWN") return check.checkedOn === null;
   if (check.result !== "PASS" || linkCount === 0) return false;
   const checkedOn = check.checkedOn;
-  if (typeof checkedOn !== "string" || !DATE_PATTERN.test(checkedOn)) return false;
+  if (typeof checkedOn !== "string" || checkedOn.length !== 10 || !DATE_PATTERN.test(checkedOn)) return false;
   const parsed = new Date(`${checkedOn}T00:00:00Z`);
   // 달력에 없는 날짜(2026-02-30 등)는 Date가 다음 달로 넘기므로 왕복 비교로 거부한다.
   if (Number.isNaN(parsed.getTime()) || !parsed.toISOString().startsWith(checkedOn)) return false;
@@ -158,6 +199,9 @@ function isValidLinkCheck(check: unknown, linkCount: number, todayUtc: number | 
 /**
  * 오류가 없으면 빈 배열을 돌려준다. 입력은 TypeScript 타입과 무관하게 신뢰하지 않는
  * `unknown`으로 다루며, 형태가 틀리면 예외 대신 fail-closed 오류 목록을 돌려준다.
+ * JSON parse 후 검사 비용은 catalog 2,048개 항목, 공식 호스트 32개, 문서 링크 종류 수,
+ * URL 문자열 4,096자, ID 64자로 제한한다. JSON.parse 자체의 입력 메모리 사용량은 이 함수의
+ * 보호 범위가 아니다.
  *
  * 보장 범위: JSON.parse 결과처럼 JSON-compatible한 값(plain object·array·string·number·
  * boolean·null)과 undefined에 한정한다. 접근 시 예외를 던지거나 값을 바꾸는 악의적인
@@ -170,7 +214,9 @@ export function validateProviderMetadataCatalogV1(
   catalog: unknown,
   options: ProviderMetadataValidationOptionsV1 = {},
 ): readonly ProviderMetadataIssueReportV1[] {
-  if (!Array.isArray(catalog)) return [{ index: null, issue: "INVALID_CATALOG" }];
+  if (!Array.isArray(catalog) || catalog.length > MAX_CATALOG_ENTRIES) {
+    return [{ index: null, issue: "INVALID_CATALOG" }];
+  }
 
   const issues: ProviderMetadataIssueReportV1[] = [];
   const report = (index: number, issue: ProviderMetadataIssueV1) => issues.push({ index, issue });
@@ -191,8 +237,10 @@ export function validateProviderMetadataCatalogV1(
     }
 
     const rawId = entry.id;
-    if (typeof rawId !== "string" || !ID_PATTERN.test(rawId)) report(index, "INVALID_ID");
-    if (typeof rawId === "string") {
+    if (typeof rawId !== "string" || rawId.length > MAX_ID_LENGTH) {
+      report(index, "INVALID_ID");
+    } else {
+      if (!ID_PATTERN.test(rawId)) report(index, "INVALID_ID");
       if (seenIds.has(rawId)) report(index, "DUPLICATE_ID");
       seenIds.add(rawId);
       if (previousId !== null && previousId >= rawId) report(index, "UNSORTED_IDS");
@@ -200,20 +248,22 @@ export function validateProviderMetadataCatalogV1(
     }
 
     const name = entry.displayName;
-    if (typeof name !== "string" || name.length === 0 || name.trim() !== name ||
-        name.length > MAX_DISPLAY_NAME_LENGTH) {
+    if (typeof name !== "string" || name.length === 0 || name.length > MAX_DISPLAY_NAME_LENGTH ||
+        name.trim() !== name) {
       report(index, "INVALID_DISPLAY_NAME");
     }
     if (!isOneOf(entry.category, PROVIDER_CATEGORIES_V1)) report(index, "INVALID_CATEGORY");
 
-    const hosts = readStringArray(entry.officialHosts);
-    if (hosts === null || hosts.length === 0 || !isUniqueStrings(hosts) ||
-        !hosts.every((host) => HOST_PATTERN.test(host))) {
+    const hosts = readStringArray(entry.officialHosts, MAX_OFFICIAL_HOSTS);
+    if (hosts === null || hosts.length === 0 ||
+        !hosts.every((host) => host.length <= MAX_HOSTNAME_LENGTH && HOST_PATTERN.test(host)) ||
+        !isUniqueStrings(hosts)) {
       report(index, "INVALID_HOSTS");
     }
-    const credentialTypes = readStringArray(entry.credentialTypes);
-    if (credentialTypes === null || credentialTypes.length === 0 || !isUniqueStrings(credentialTypes) ||
-        !credentialTypes.every((type) => isOneOf(type, CATALOG_CREDENTIAL_TYPES_V1))) {
+    const credentialTypes = readStringArray(entry.credentialTypes, CATALOG_CREDENTIAL_TYPES_V1.length);
+    if (credentialTypes === null || credentialTypes.length === 0 ||
+        !credentialTypes.every((type) => type.length <= MAX_CREDENTIAL_TYPE_LENGTH &&
+          isOneOf(type, CATALOG_CREDENTIAL_TYPES_V1)) || !isUniqueStrings(credentialTypes)) {
       report(index, "INVALID_CREDENTIAL_TYPES");
     }
 
@@ -223,21 +273,83 @@ export function validateProviderMetadataCatalogV1(
       report(index, "INVALID_DOC_LINK");
     } else {
       linkCount = docLinks.length;
-      const kinds: string[] = [];
-      for (let i = 0; i < docLinks.length; i += 1) {
-        const link: unknown = docLinks[i];
-        const url = isValidDocLink(link);
-        if (url === null) report(index, "INVALID_DOC_LINK");
-        // host 목록 자체가 문자열 배열이 아니면 대조할 기준이 없어 INVALID_HOSTS로만 보고한다.
-        else if (hosts !== null && !isOnOfficialHost(url.hostname, hosts)) report(index, "DOC_LINK_OFF_HOST");
-        if (isPlainRecord(link) && typeof link.kind === "string") kinds.push(link.kind);
+      if (docLinks.length > MAX_DOC_LINKS) {
+        report(index, "INVALID_DOC_LINK");
+      } else {
+        const kinds: string[] = [];
+        for (let i = 0; i < docLinks.length; i += 1) {
+          const link: unknown = docLinks[i];
+          const url = isValidDocLink(link);
+          if (url === null) report(index, "INVALID_DOC_LINK");
+          // host 목록 자체가 문자열 배열이 아니면 대조할 기준이 없어 INVALID_HOSTS로만 보고한다.
+          else if (hosts !== null && !isOnOfficialHost(url.hostname, hosts)) report(index, "DOC_LINK_OFF_HOST");
+          if (isPlainRecord(link) && typeof link.kind === "string") kinds.push(link.kind);
+        }
+        if (!isUniqueStrings(kinds)) report(index, "DUPLICATE_DOC_LINK_KIND");
       }
-      if (!isUniqueStrings(kinds)) report(index, "DUPLICATE_DOC_LINK_KIND");
     }
     // docLinks가 배열이 아니면 확인된 링크가 0개이므로 PASS 증거도 거부된다.
     if (!isValidLinkCheck(entry.linkCheck, linkCount, todayUtc)) report(index, "INVALID_LINK_CHECK");
   }
 
+  return issues;
+}
+
+/**
+ * Curated-only gate. The structural validator accepts arbitrary provider IDs
+ * for synthetic tests; this one matches every entry against reviewed code
+ * metadata, plus separately pinned hosts and exact documentation URLs.
+ * It does not fetch URLs or prove their content, and raw import bytes still need
+ * a separate size limit before JSON.parse.
+ */
+export function validateCuratedProviderMetadataCatalogV1(
+  catalog: unknown,
+  options: ProviderMetadataValidationOptionsV1 = {},
+): readonly ProviderMetadataIssueReportV1[] {
+  const structuralIssues = validateProviderMetadataCatalogV1(catalog, options);
+  if (structuralIssues.length > 0) return structuralIssues;
+
+  // An empty structural report establishes the shape within this function's
+  // documented JSON-compatible input boundary.
+  const entries = catalog as readonly ProviderMetadataV1[];
+  const issues: ProviderMetadataIssueReportV1[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (!Object.hasOwn(PINNED_OFFICIAL_HOSTS_V1, entry.id)) {
+      issues.push({ index, issue: "UNTRUSTED_PROVIDER" });
+      continue;
+    }
+    const pinned = PINNED_OFFICIAL_HOSTS_V1[entry.id]!;
+    const pinnedUrls = PINNED_DOC_URLS_V1[entry.id]!;
+    const reviewed = findProviderMetadataV1(entry.id);
+    if (reviewed === undefined) {
+      issues.push({ index, issue: "UNTRUSTED_PROVIDER" });
+      continue;
+    }
+    if (entry.officialHosts.length !== pinned.length ||
+        !entry.officialHosts.every((host) => pinned.includes(host))) {
+      issues.push({ index, issue: "UNTRUSTED_HOSTS" });
+    }
+    for (const link of entry.docLinks) {
+      if (!isOnOfficialHost(new URL(link.url).hostname, pinned)) {
+        issues.push({ index, issue: "DOC_LINK_OFF_HOST" });
+      }
+      if (!pinnedUrls.includes(link.url)) {
+        issues.push({ index, issue: "UNTRUSTED_DOC_LINK" });
+      }
+    }
+    if (entry.displayName !== reviewed.displayName || entry.category !== reviewed.category ||
+        entry.credentialTypes.length !== reviewed.credentialTypes.length ||
+        entry.credentialTypes.some((type, at) => type !== reviewed.credentialTypes[at]) ||
+        entry.docLinks.length !== reviewed.docLinks.length ||
+        entry.docLinks.some((link, at) => link.kind !== reviewed.docLinks[at]?.kind ||
+          link.url !== reviewed.docLinks[at]?.url) ||
+        entry.linkCheck.result !== reviewed.linkCheck.result ||
+        entry.linkCheck.scope !== reviewed.linkCheck.scope ||
+        entry.linkCheck.checkedOn !== reviewed.linkCheck.checkedOn) {
+      issues.push({ index, issue: "UNTRUSTED_METADATA" });
+    }
+  }
   return issues;
 }
 
@@ -330,4 +442,35 @@ export const PROVIDER_METADATA_V1: readonly ProviderMetadataV1[] = deepFreeze([
 
 export function findProviderMetadataV1(id: string): ProviderMetadataV1 | undefined {
   return PROVIDER_METADATA_V1.find((entry) => entry.id === id);
+}
+
+export const PROVIDER_METADATA_JSON_MAX_BYTES_V1 = 64 * 1_024;
+
+export type ParsedCuratedProviderMetadataV1 =
+  | { readonly ok: true; readonly entries: readonly ProviderMetadataV1[] }
+  | { readonly ok: false; readonly issues: readonly ProviderMetadataIssueReportV1[] };
+
+/**
+ * Bounded entry point for a future JSON import. Never return parsed objects to
+ * consumers: after exact curated validation, return only frozen code-owned
+ * entries selected by the input IDs. This does not enable network imports.
+ */
+export function parseCuratedProviderMetadataJsonV1(
+  raw: unknown,
+  options: ProviderMetadataValidationOptionsV1 = {},
+): ParsedCuratedProviderMetadataV1 {
+  const invalidCatalog = (): ParsedCuratedProviderMetadataV1 => ({
+    ok: false, issues: [{ index: null, issue: "INVALID_CATALOG" }],
+  });
+  if (typeof raw !== "string" || raw.length > PROVIDER_METADATA_JSON_MAX_BYTES_V1 ||
+      new TextEncoder().encode(raw).byteLength > PROVIDER_METADATA_JSON_MAX_BYTES_V1) {
+    return invalidCatalog();
+  }
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); }
+  catch { return invalidCatalog(); }
+  const issues = validateCuratedProviderMetadataCatalogV1(parsed, options);
+  if (issues.length > 0) return { ok: false, issues };
+  const ids = new Set((parsed as readonly ProviderMetadataV1[]).map((entry) => entry.id));
+  return { ok: true, entries: Object.freeze(PROVIDER_METADATA_V1.filter((entry) => ids.has(entry.id))) };
 }
