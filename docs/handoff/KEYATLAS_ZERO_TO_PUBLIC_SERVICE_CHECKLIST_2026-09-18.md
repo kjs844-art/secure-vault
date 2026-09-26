@@ -1,5 +1,7 @@
 # KeyAtlas: 0부터 공개 웹·Android 서비스까지 전체 체크리스트
 
+> **읽기 시작점 변경(2026-09-25):** 전체 그림과 현재 TODO는 [통합 마스터 청사진](KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md) 한 파일에서 먼저 확인한다. 이 문서는 세부 계획과 이전 판정의 원문으로 보존한다.
+
 > 최초 작성: **2026-09-18 KST** · 최신 갱신: **2026-09-25 KST** <br>
 > 제품명: **KeyAtlas (working title)** — 최종 이름·상표·도메인은 아직 확정하지 않음 <br>
 > GitHub: [kjs844-art/secure-vault](https://github.com/kjs844-art/secure-vault) <br>
@@ -19,7 +21,7 @@
 파일을 이동하거나 중복본을 삭제하지 않고 조사했다. 같은 이름의 문서가 여러 worktree에
 복사돼 있으므로, 아래 순서로 사실을 판단한다.
 
-1. **이 파일**: 제품 전체 설계·세부 TODO·예상 시간의 단일 종합 지도
+1. **[통합 마스터 청사진](KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md)**: 현재 전체 설계·핵심 TODO·조건부 일정의 단일 읽기 시작점. 이 파일은 세부 원문
 2. `docs/CURRENT_CHECKPOINT_2026-09-19.md`: 2026-09-19 통합 상태와 검증 경계
 3. `docs/handoff/KEYATLAS_COLLAB_TASKS_001_100.md`: 2026-09-22 협업 작업 배치표
 4. `docs/verification/`: exact SHA에서 실제로 실행한 검사와 제한 사항

@@ -3,8 +3,10 @@
 > 최초 작성: **2026-09-24 KST**
 > 제품명: **KeyAtlas (working title)**
 > 저장소: `https://github.com/kjs844-art/secure-vault`
-> 이 문서의 역할: **어떤 AI·새 세션·다른 기기에서도 가장 먼저 읽는 작업 진입점**
-> 전체 제품 설명: [0부터 공개 서비스까지 전체 체크리스트](KEYATLAS_ZERO_TO_PUBLIC_SERVICE_CHECKLIST_2026-09-18.md)
+> 현재 단일 읽기 시작점: [통합 마스터 청사진](KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md)
+> 이 문서의 역할: **세부 작업 이력·증거 원문**. 어떤 AI·새 세션·다른 기기도 청사진부터 읽고 필요할 때 이 문서를 연다.
+> 2026-09-26 델타: canonical `d9c66661` 합성 Rust/WASM/Web 로컬 회귀와 PS7/PS5.1 scanner 102/102 PASS. B04 same-origin 두 탭 동시 복원은 한쪽 성공·한쪽 기존 금고 보존 거부, 양쪽 읽기 SHA 동일을 확인했고 fake IndexedDB 경합 회귀 180/180·동일 경합 테스트 재실행 10/10·전체 Web 46 files / 1,468 tests·Web typecheck/build도 PASS. B05 메모리 File API 복원과 다운로드 링크의 3,892-byte Blob/고정 파일명, 개발 시나리오 네트워크 174건 localhost-only도 부분 PASS(실제 저장은 의도적으로 가로채지 않음); production preview에서도 합성 backup link까지 열렸지만 `/favicon.ico` 404 1건은 미해결. backup session/file/auto-lock 단위 테스트 80/80 PASS. 로컬 exact workflow 도구는 Node 24.19.0(workflow 24.8.0), Pester 3.4.0(required 5.7.1 없음), wasm32 target 미설치라 해당 단계와 원격 CI는 미검증. 아래 9월 24~25일 기록은 당시 스냅샷으로 보존한다.
+> 이전 전체 제품 설명: [0부터 공개 서비스까지 전체 체크리스트](KEYATLAS_ZERO_TO_PUBLIC_SERVICE_CHECKLIST_2026-09-18.md)
 > 실제 Secret 허용 상태: **`REAL_SECRET_GATE=CLOSED`**
 
 ```text
@@ -397,13 +399,13 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 
 | ID | 작업 | 현재 상태·계약 또는 남은 값 | 예상 |
 |---|---|---|---:|
-| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 부분 보고 `196cb27` Draft PR #12; disk error 112 차단·사전 계약·충분한 공간·전체 재실행이 남음 | 공간 확보 후 |
+| `KA-BASE-01` | canonical exact SHA 전체 회귀 | 9월 25일 부분 보고 `196cb27` Draft PR #12는 보존. 9월 26일 같은 SHA의 합성 Rust/WASM/Web 로컬 회귀와 PS7/PS5.1 scanner 102/102 PASS; Pester 정책·원격 CI는 별도 미검증 | CI 동등성 확인 후 |
 | `KA-C93-CI-01` | #93 manifest test를 hard process timeout과 함께 CI에 연결 | 연결 코드 `c9a1d63` stacked Draft PR #10; 원격 `Security gates` 실패 원인·PS7 runner exact-SHA PASS·통합이 남음 | 원격 상태 |
 | `KA-PRI-P01` | Privacy PRD·비목표·수용 기준 | 초안 `b3cf622` Draft PR #11·독립 리뷰 P1/P2/P3 0; 사용자 PRD 승인 남음 | 2~4일 |
 | `KA-PRI-P02` | domain contract | P01 final SHA·task branch·허용 파일·검사 | 4~8일 |
 | `KA-QA-01` | 브라우저 다중탭 E2E 계획 | task branch·browser fixture·산출물 경로·검사 | 1~2일 |
 
-현재 권장 병렬 배치:
+2026-09-25 당시 권장 병렬 배치(역사적 스냅샷; 최신 판정은 위 표와 통합 청사진 참조):
 
 ```text
 완료: KA-C30-01·KA-C58-01·KA-C93-01 읽기 전용 리뷰
@@ -413,8 +415,9 @@ branch나 허용 경로를 만들지 않으며, 이미 push된 항목도 남은 
 완료(기존 LOCAL_SECURITY_FIX_DONE 목표): KA-C93-FIX-01 594824d Draft PR #9·PS5.1 10/10·scanner 102/102·Secret scan·독립 리뷰 2건 P1/P2/P3 0
 부분 완료: KA-C93-CI-01 c9a1d63 stacked Draft PR #10·workflow 연결·runner step timeout·PS5.1 10/10·정책 12/12·독립 리뷰 P1/P2/P3 0
 남음: KA-C93-CI-01 PS7 runner exact-SHA PASS·통합, Draft PR #7~#13의 원격 Security gates 실패 원인 확인
-차단: KA-BASE-01 source d9c6666에서 Secret scan·fmt·Clippy PASS, default tests는 disk error 112/exit 101; 보고 196cb27 Draft PR #12
-Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 작성과 충돌 관리
+당시 차단: KA-BASE-01 source d9c6666에서 Secret scan·fmt·Clippy PASS, default tests는 disk error 112/exit 101; 보고 196cb27 Draft PR #12
+2026-09-26 갱신: 같은 source SHA의 합성 로컬 Rust/WASM/Web·scanner 회귀 PASS. Pester 정책·원격 CI·실제 브라우저 디스크 왕복은 별도 미검증
+Primary: KA-B05 실제 디스크 백업/복원과 quota 계약, KA-B04 quota/upgrade 검증, Pester/원격 CI 동등성, KA-PRI-P01 사용자 승인
 ```
 
 ---
@@ -436,7 +439,7 @@ Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 �
 | [x] | `KA-A01` | `PUSHED` | 2026-09-19 통합 체크포인트 기록 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-integration-20260919@41eeed0492e5325816e0797bbefa727408574e3c` |
 | [x] | `KA-A02` | `PUSHED` | 1~100 협업 baseline·manifest 작성 | 완료 | 완료 | target=`PUSHED`; 원격 `codex/firstvibe-collab-001-100-baseline@d9c66661db7d7b66f6453e94e467c424107cba66` |
 | [ ] | `KA-A03` | `DRAFT_PR` | 전체 설계·현황·TODO 문서 2026-09-24 갱신 | Codex root | 검토 중 | PR 생성 시 문서 branch `7423698` Draft PR #13; 원격 Security gates 실패 원인·승인·통합 미완료 |
-| [ ] | `KA-BASE-01` | `BLOCKED / DRAFT_PR` | canonical exact SHA 전체 로컬 회귀 | Codex root | 공간 확보 후 | 보고 `196cb27` Draft PR #12; source `d9c6666`; Secret scan·fmt·Clippy PASS, default tests disk error 112/exit 101, 이후 Rust·WASM·Web NOT_RUN; 사전 assignment contract 미완료 |
+| [ ] | `KA-BASE-01` | `LOCAL_SCOPE_PASS / CI_EQUIVALENCE_OPEN` | canonical exact SHA 전체 로컬 회귀 | Codex root | Pester·원격 확인 후 | 9월 25일 보고 `196cb27` Draft PR #12의 disk error 112는 역사적 기록. 9월 26일 source `d9c6666` 합성 Rust/WASM/Web·PS7/PS5.1 scanner 102/102 exit 0; Pester 5.7.1·고정 Node/CI 환경·원격 재검증 미완 |
 | [ ] | `KA-A05` | `REMOTE_CI_FAILURE_CAUSE_UNKNOWN` | exact SHA 원격 CI | 사용자+AI | 원인 확인 후 | Draft PR #7~#13 head의 Security gates completed/failure; job steps 빈 배열·로그 BlobNotFound(404), 원격 PASS 없음 |
 | [ ] | `KA-A06` | `BACKLOG_HIGH_RISK` | main 보존 통합·충돌 해결 | primary | 2~5일 | 독립 리뷰·전체 회귀·사용자 승인 |
 | [x] | `KA-C30-01` | `READ_ONLY_REPORT_DONE` | provider metadata 후보 통합 판단 | Codex root | 완료 | `E-20260924-C30-GIT-01`, `E-20260924-C30-REVIEW-01`; 후보는 통합 비권장 |
@@ -455,7 +458,7 @@ Primary: KA-BASE-01 공간·정식 계약 확보, KA-PRI-P01·KA-QA-01 계약 �
 | [x] | `KA-B02` | `MERGED` | 합성 SQLite revision·CAS·충돌·재시작 기반 | 완료 | 완료 | target=`MERGED`; `d9c66661db7d7b66f6453e94e467c424107cba66`; historical evidence `docs/verification/ciphertext-sqlite-local-store.md`; 전체 파일 암호화는 아님 |
 | [x] | `KA-B03` | `MERGED` | 합성 Web→Worker→WASM→IndexedDB 흐름 | 완료 | 완료 | target=`MERGED`; `d9c66661db7d7b66f6453e94e467c424107cba66`; historical evidence `docs/verification/2026-09-13-synthetic-local-vault.md`; current full regression은 `KA-BASE-01` |
 | [ ] | `KA-B04` | `WAITING_ASSIGNMENT` | 실제 브라우저 다중탭·quota·upgrade E2E | 미배정 | 2~5일 | Chrome/Edge 등 합성 E2E·미검증 브라우저 기록 |
-| [ ] | `KA-B05` | `BACKLOG` | 실제 파일 backup→새 profile restore drill | 미배정 | 2~5일 | 파일 hash·기존 값 보존·실패 경로 |
+| [ ] | `KA-B05` | `LOCAL_BROWSER_PARTIAL / DISK_PENDING` | 실제 파일 backup→새 profile restore drill | 미배정 | 2~5일 | 격리 Chrome 두 저장공간의 메모리 내 3,892바이트 전달→복원·3개 재열기·SHA-256 동일·기존 값 보존은 9월 26일 확인. 실제 디스크 다운로드·네이티브 파일 선택은 미검증 |
 | [ ] | `KA-B06` | `HIGH_RISK_REVIEW` | Windows actual-handle/VFS 또는 broker 경계 | 보안 담당 | 2~6주 | 권위 테스트·OS 정책 영향 분리 |
 | [ ] | `KA-B07` | `HIGH_RISK_DESIGN` | signed checkpoint·rollback/omission/fork 탐지 | 보안 담당 | 3~6주 | 상태기계·공격 fixture·독립 리뷰 |
 | [ ] | `KA-B08` | `HIGH_RISK_DESIGN` | recovery slot·신뢰 기기·key epoch | 보안 담당 | 4~8주 | 승인 ADR·복구/분실 훈련 |
@@ -640,6 +643,15 @@ stage: LOCAL_DONE
 | `E-20260925-PRI-P01-LOCAL-01` | `KA-PRI-P01` | `PASS` | `LOCAL` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | P01 worktree에서 baseline 대비 diff 공백·PRD 상대 링크·해당 저장소 Secret scan | diff exit 0 / link 1 file exit 0 / scanner exit 0, `SECRET_SCAN_PASSED`, `REAL_SECRET_GATE=CLOSED` | 2026-09-25 | docs-only라 Rust·Web·browser 검사는 NOT_RUN; release-support worktree 교차 scanner 판정과 별개 |
 | `E-20260925-PRI-P01-REVIEW-01` | `KA-PRI-P01` | `PASS` | `INDEPENDENT_REVIEW` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 최종 클릭·접수 불확실·재시도·완료 근거·최소 증거·합성 수용 기준, Git blob 동일성 | P1 0 / P2 0 / P3 0; blob `4dae59b6ee9fd936a67af4d52b43b88c4c4f871f` 일치 | 2026-09-25 | 초안 품질 검토이며 사용자 PRD 승인·구현 완료 아님 |
 | `E-20260925-PRI-P01-PUSH-01` | `KA-PRI-P01` | `PASS` | `REMOTE_REF` | `b3cf622e1aac92a823e24909786524a759b2d9f4` | 전용 branch 비강제 push 후 local HEAD와 upstream 비교 | SHA 일치 / clean | 2026-09-25 | push 당시 `codex/firstvibe-privacy-prd-p01-20260925`; PR·merge·main 없음 |
+| `E-20260926-BASE-SCANNER-01` | `KA-BASE-01` | `PASS` | `LOCAL` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | canonical checkout에서 `pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1` 및 `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\check-repository-secrets.Tests.ps1` | 각 exit 0 / `SECRET_SCANNER_TESTS_PASSED=102` | 2026-09-26 | 합성 scanner 회귀만 PASS; Pester 5.7.1 정책·원격 CI는 NOT_RUN, 실제 Secret 없음 |
+| `E-20260926-B05-BROWSER-01` | `KA-B05` | `PARTIAL` | `LOCAL_BROWSER` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | 격리된 Chrome DevTools 두 컨텍스트에서 localhost:5187 합성 금고 3건을 메모리 내 File API로 복원·재내보내기, 기존 금고 덮어쓰기 거부 확인 | 3,892 bytes / 재내보내기 SHA256 `59b5e5d9c61d4fe83414d8d7e654e15ec68b3d679783174d206a7928f2d163e7` 일치 | 2026-09-26 | 디스크 다운로드/OS 파일 선택·다중탭·quota·업그레이드·Edge/모바일 NOT_VERIFIED; 상세: `KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md` B04/B05 브라우저 부분 검증 절 |
+| `E-20260926-B04-RACE-01` | `KA-B04` | `PASS` | `LOCAL_BROWSER` | source `d9c66661db7d7b66f6453e94e467c424107cba66` | Chrome 153 격리 context의 같은-origin 두 페이지에서 빈 IndexedDB 확인 후 동일 3,892-byte 합성 File을 병렬 복원 | 한 탭 복원 완료·다른 탭 `EXISTS`; 두 페이지 readback과 source SHA-256 `641d5b144f089189a196014db5a45586746e39b0c6219f43c74bb9e7ff64a550` 일치; 승자 재열기 3항목 인증 | 2026-09-26 | 브라우저 UI race만 PASS; 실제 디스크 파일 선택·quota·upgrade·Edge/모바일 NOT_VERIFIED; 상세: `KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md` B04 2탭 복원 경쟁 절 |
+| `E-20260926-B04-IDB-TEST-01` | `KA-B04` | `PASS` | `LOCAL_TEST` | base `d9c66661` + uncommitted feature diff `codex/firstvibe-b04-idb-restore-race` | `npm test -- src/features/local-vault/SyntheticVaultBackup.test.ts`; 서로 다른 archive·store 두 개와 gated validation을 사용해 동시 restore race 검사 | 180/180 PASS; race 전용 테스트 10회 추가 재실행도 10/10 PASS; 전체 `npm test` 46 files / 1,468 tests PASS; 정확히 1 fulfilled·1 `EXISTS`; 두 store가 winner bytes를 readback. `npm run typecheck`, `npm run build`, repository Secret scan도 각 exit 0; scanner regression PS7·PS5.1 각 102/102 PASS | 2026-09-26 | fake IndexedDB only; typecheck/build/full web tests는 같은 baseline의 ignored WASM·node_modules 임시 junction 재사용 후 제거; 실제 browser file I/O·원격 CI NOT_VERIFIED, 실제 Secret 없음 |
+| `E-20260926-B05-SESSION-01` | `KA-B05` | `PASS` | `LOCAL_TEST` | base `d9c66661` + same uncommitted feature worktree | `npm test -- src/features/local-vault/SyntheticBackupSession.test.ts src/features/local-vault/SyntheticBackupFile.test.ts src/features/local-vault/bindVaultAutoLock.test.ts` | 3 test files / 80 tests PASS; file/session cleanup, explicit download-request wording, selected-file lifecycle and hidden/idle auto-lock regressions | 2026-09-26 | local unit tests only; actual browser download-to-disk/OS picker/restore not tested |
+| `E-20260926-B05-DOWNLOAD-LINK-01` | `KA-B05` | `PARTIAL` | `LOCAL_BROWSER` | canonical `d9c66661`; 격리 Chrome origin storage | 합성 금고 3건 생성→백업 화면 동의→준비; 다운로드 click은 capture listener에서 preventDefault해 페이지 안에서만 Blob 확인 | 파일명 `keyatlas-synthetic-v1.katldemo`; MIME `application/octet-stream`; 3,892 bytes; SHA-256 `136fea1c5811ee25c73ab317ca8e0efae4929254219c212f44b20a24b351b34c` | 2026-09-26 | 다운로드를 의도적으로 가로채 실제 파일을 저장하지 않음; 다운로드 기록·디스크 파일·OS 파일 선택·다른 프로필 복원 NOT_VERIFIED; 상세: `KEYATLAS_UNIFIED_MASTER_BLUEPRINT_2026-09-25.md` KA-B05 다운로드 링크 절 |
+| `E-20260926-B05-NETWORK-01` | `KA-B05` | `PARTIAL` | `LOCAL_BROWSER` | canonical `d9c66661`; same isolated Chrome synthetic run | 금고 생성→백업 준비 뒤 보존된 Network log URL 분류 및 console warn/error 확인 | 174 requests 모두 `127.0.0.1:5193`; 외부 URL 0; console warning/error 0 | 2026-09-26 | 관찰한 localhost 개발 경로 한정; 운영환경·다른 경로의 egress/telemetry 부재를 증명하지 않음 |
+| `E-20260926-CI-ENV-01` | `CI` | `BLOCKED` | `LOCAL_ENV` | current Windows host; read-only check | `node --version`, `Get-Module Pester -ListAvailable`, `rustup target list --installed` | Node `v24.19.0`; Pester `3.4.0` only, pinned `5.7.1` absent; installed Rust targets only `x86_64-pc-windows-msvc` | 2026-09-26 | No installs/network downloads, no paid Actions run; Pester policy test and release WASM generation NOT_RUN. This does not diagnose the GitHub billing failure itself |
+| `E-20260926-B05-PREVIEW-01` | `KA-B05` | `PARTIAL` | `LOCAL_PREVIEW` | base `d9c66661` + local feature bundle, `vite preview` on `127.0.0.1:5194` | production bundle open→synthetic vault unlock (3 entries)→backup prep→download link click intercepted before disk write | 3,892-byte Blob; name/type as expected; hash `ade915ac768e91f30a9b51e9b10d4541e6ee7ecf57945e389d175f9e394835be`; browser Network URLs localhost-only; one `/favicon.ico` 404 | 2026-09-26 | no real disk save or restore; favicon remains a low-priority design asset, not a vault failure; production deployment not verified |
 
 ---
 
@@ -893,6 +905,51 @@ commit/push/PR/merge 권한은 각각 다시 확인하세요.
 - 이 기록 시점의 #13 head는 `742369827303671cd83f15008ce0c95720b01922`; 후속 commit/push가 있다면 그 새 head의 CI 결과를 별도로 확인해야 한다.
 - 승인·통합·main merge·배포: 모두 미완료. 실제 Secret 사용: NO, `REAL_SECRET_GATE=CLOSED`.
 
+### 2026-09-26 — 로컬 도구 Unicode 경계·실브라우저 보강
+
+- source checkout/branch: `agent-staging/keyatlas-collab-001-100` /
+  `codex/firstvibe-collab-001-100-baseline`; 기준 HEAD `d9c66661db7d7b66f6453e94e467c424107cba66`.
+  기존 AI preview·UTF-8 관련 로컬 변경을 보존한 채 같은 범위에서 이어 작업했다.
+- 화면과 protocol이 공용 Unicode well-formed 검증을 사용하도록 보완해 고립 surrogate도 제출 전에
+  fail-closed했다. 한글 43자=129 bytes, 이모지 33개=132 bytes, 손상 입력의 비활성·오류 안내와
+  정상값 수정 뒤 재활성화를 interaction 회귀로 고정했다.
+- 최종 source 검증: Web 49 files / 1,487 tests PASS, typecheck PASS, `git diff --check` exit 0,
+  repository Secret scan `SECRET_SCAN_BASELINE_ALLOWED=4`, `SECRET_SCAN_PASSED`,
+  `REAL_SECRET_GATE=CLOSED`, exit 0.
+- 실제 Codex 격리 브라우저에서 합성 금고 3개를 열고 한글/이모지 초과의 정확한 byte count·
+  `aria-invalid=true`·버튼 비활성, 정상 검색 receipt와 합성 결과 3개, 잠금 뒤 패널/결과 제거를 확인했다.
+  자동화 `fill`/키보드 증거이며 사람 OS IME·모바일·screen reader 증거는 아니다.
+- B05 후속: 합성 백업 Blob과 다운로드 요청 상태까지 UI로 확인했으나 browser download event/media
+  저장은 timeout이고 새 OS `.katldemo` 파일은 없었다. 파일 선택·복원은 실행하지 않았으며 실제 파일
+  왕복은 계속 `NOT_VERIFIED`다.
+- production build는 C: free가 작업 중 2,750,889,984 bytes에서 약 1.09~1.28 GB대로 감소·변동했고
+  청사진의 5 GiB 안전 기준보다 낮아 최종 변경 뒤 새로 시작하지 않았다. 페이지 파일 사용은 확인했지만
+  감소 원인은 확정하지 않았고 파일 삭제·프로세스 종료도 하지 않았다. commit/push/PR/merge/배포 없음;
+  실제 Secret 사용 없음.
+- 별도 C30 metadata-bounds 독립 읽기 리뷰는 현재 고정 catalog 경로 P1/P2 0건이었다. 외부 import 전
+  원본 JSON bytes·객체 key 수 상한과 provider ID별 신뢰 official-host pinning을 필수 gate로 남겼다.
+
+### 2026-09-26 — C30 제한된 신뢰 경계 후속 (로컬)
+
+- 대상은 별도 clone `agent-staging/keyatlas-c30-metadata-bounds-20260926`, branch
+  `codex/firstvibe-c30-provider-metadata-bounds`, 기준 HEAD `534b37c18582ea120e2d9303cfe73635ad16dcf3`.
+  기존 미커밋 두 파일을 보존하며 그 안에서만 보완했다. 이 clone의 `origin`은 GitHub가 아닌 로컬 경로다.
+- 원본 JSON 64 KiB UTF-8 사전 제한, 검토된 제공자 ID/호스트/정확한 문서 URL·기타 metadata
+  snapshot 대조, 파싱 객체 대신 코드 소유 frozen 항목 반환을 추가했다. 동일 공식 호스트의
+  사용자 경로 및 변조된 표시 정보도 거부한다. 현재 앱의 외부 import 호출부는 없다.
+- focused Vitest 106/106 PASS, 해당 소스 strict 단독 typecheck PASS, `git diff --check` exit 0.
+  repository Secret scan도 기존 synthetic baseline 4와 `SECRET_SCAN_PASSED`, exit 0이었다.
+- 독립 리뷰는 기존 host-only 우회를 지적했고 정확한 URL pin·전체 metadata snapshot 대조로
+  보완했다. 최종 diff에서 새 P1/P2 문제는 발견되지 않았다. 두 파일만 커밋 `8f834d1`로
+  기존 draft PR #8에 비강제 push했고 GitHub head SHA 반영을 확인했다. `main` 병합 없음.
+  원격 CI 두 실행은 저장소 Secret scan과 PS7 scanner 회귀 102개를 통과한 뒤 PS5.1의
+  Unicode regex prefilter invariant 검사에서 실패하여 Rust/Web 단계까지 진행하지 못했다.
+  전체 Web/production build·실제 파일 왕복은 이 후속 변경에 대해 미검증이다.
+  `linkCheck: PASS`는 HTTP 수행 증거가 아니다.
+- C: 여유 공간은 약 1.09~12.48 GiB로 크게 변동했다. 원격 데스크톱 ETL·Rust target·pagefile의
+  크기를 읽기 전용으로 확인했지만 급변 원인은 특정하지 못했다. 5 GiB 미만에서는 production
+  build를 건너뛰었으며 파일 삭제·프로세스 종료·설정 변경을 하지 않았다.
+
 새 세션은 고유 완료 보고를 제출한다. integration owner만 보고를 확인해 이 아래에 새 항목을
 추가한다. 기존 로그를 덮어쓰거나 과거 증거를 현재 SHA의 증거로 바꾸지 않는다.
 
@@ -922,7 +979,8 @@ Manager를 사용한다.
 현재 제품 단계: 합성 alpha / security-core prototype
 canonical 협업 baseline: d9c6666
 1~100 task branches: RESERVED가 기본
-9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 로컬 PASS; KA-BASE-01은 source `d9c6666`에서 Clippy까지 PASS 후 disk error 112로 BLOCKED, 보고 `196cb27`
+9월 24~25일 후보: #30 `534b37c`는 Release WASM 전체 로컬 회귀 PASS; #58 `090c731`은 문서 DoD PASS; #93 코어 `594824d`와 CI 연결 `c9a1d63`은 PS5.1·workflow 정책·scanner·Secret scan·독립 리뷰 로컬 PASS; KA-BASE-01의 첫 source `d9c6666` 시도는 Clippy 뒤 disk error 112로 BLOCKED, 보고 `196cb27`
+9월 26일 추가 증거: 같은 source SHA 합성 Rust/WASM/Web 로컬 회귀 PASS, PS7/PS5.1 Secret scanner 각각 102/102 PASS. B05 격리 Chrome의 브라우저 내 복원·재열기·기존 값 보존은 부분 PASS. 실제 디스크 파일 왕복, Pester 5.7.1, 원격 CI는 미검증이며 실제 Secret gate는 CLOSED
 Draft PR: #7 C58, #8 C30, #9 C93 코어, #10 C93 CI(base=#9 head), #11 Privacy PRD, #12 차단된 회귀 보고, #13 release-support 문서; 모두 open/Draft, 승인·통합 미완료
 원격 CI: 새 Draft PR #7~#13 head의 Security gates completed/failure, job steps 빈 배열·로그 BlobNotFound(404)로 원인 UNKNOWN; exact-SHA 원격 PASS 증거 없음
 main 통합: 미완료
