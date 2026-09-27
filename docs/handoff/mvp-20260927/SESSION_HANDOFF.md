@@ -46,3 +46,9 @@ not verified / next action:
 
 위와 다른 최신 변경이 생기면 원격과 작업 폴더를 재확인한다.
 GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않는다.
+
+## 최신 원본 동결 결정
+
+사용자는 benefit-validator를 KeyAtlas에 통합하되 원본 Lovable 프로젝트/repo는 당분간
+그대로 두라고 명시했다. 기존 benefit 쪽 문서 브랜치 3개는 그 전 발행 기록이며 재사용하지 않는다.
+현재 유효한 6개 배정은 모두 private secure-vault에 있다. 이후 원본 repo에 추가 push는 하지 않는다.
