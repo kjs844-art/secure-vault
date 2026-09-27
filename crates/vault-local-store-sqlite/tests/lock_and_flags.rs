@@ -1,5 +1,8 @@
 use std::fs;
 
+#[cfg(windows)]
+use std::fs::OpenOptions;
+
 use tempfile::tempdir;
 use vault_crypto::{
     MasterPassword, PasswordEnvelopeStorageDispositionV1, create_vault_v0alpha1,
@@ -52,6 +55,87 @@ fn adjacent_lock_is_exclusive_and_reacquirable_after_drop() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn live_lock_pins_its_final_namespace_entry_against_writes_and_replacement() {
+    let directory = tempdir().unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
+    let location = policy.location("vault.sqlite3").unwrap();
+    let lock = StoreLockV1::try_acquire(&location).unwrap();
+
+    let reader = OpenOptions::new()
+        .read(true)
+        .open(location.lock_path())
+        .unwrap();
+    drop(reader);
+
+    assert!(
+        OpenOptions::new()
+            .write(true)
+            .open(location.lock_path())
+            .is_err(),
+        "live lock admitted another writer"
+    );
+    assert!(
+        fs::remove_file(location.lock_path()).is_err(),
+        "live lock was deleted"
+    );
+    let moved_path = directory.path().join("moved.lock");
+    assert!(
+        fs::rename(location.lock_path(), &moved_path).is_err(),
+        "live lock was renamed"
+    );
+    assert!(location.lock_path().is_file());
+
+    drop(lock);
+    fs::rename(location.lock_path(), &moved_path).unwrap();
+    assert!(moved_path.is_file());
+}
+
+#[cfg(windows)]
+#[test]
+fn lock_rejects_and_preserves_a_final_component_junction() {
+    use std::os::windows::fs::MetadataExt;
+    use std::process::{Command, Stdio};
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+
+    let directory = tempdir().unwrap();
+    let external = tempdir().unwrap();
+    let sentinel = external.path().join("sentinel.bin");
+    let sentinel_bytes = b"synthetic-external-sentinel";
+    fs::write(&sentinel, sentinel_bytes).unwrap();
+
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
+    let location = policy.location("vault.sqlite3").unwrap();
+    let status = Command::new("cmd")
+        .args(["/D", "/C", "mklink", "/J"])
+        .arg(location.lock_path())
+        .arg(external.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success(), "Windows junction fixture was unavailable");
+
+    let error = match StoreLockV1::try_acquire(&location) {
+        Ok(_) => panic!("final-component junction was accepted as a lock file"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        error.code(),
+        StorageErrorCode::Io | StorageErrorCode::CorruptStorage
+    ));
+    let metadata = fs::symlink_metadata(location.lock_path()).unwrap();
+    assert_ne!(metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT, 0);
+    assert_eq!(fs::read(&sentinel).unwrap(), sentinel_bytes);
+
+    fs::remove_dir(location.lock_path()).unwrap();
+    assert_eq!(fs::read(&sentinel).unwrap(), sentinel_bytes);
+}
+
 #[test]
 fn policy_rejects_relative_parent_repository_cloud_and_uri_locations() {
     let directory = tempdir().unwrap();
@@ -79,6 +163,54 @@ fn policy_rejects_relative_parent_repository_cloud_and_uri_locations() {
             Err(error) => error,
         };
     assert_eq!(relative_error.code(), StorageErrorCode::UnsupportedPlatform);
+}
+
+#[test]
+fn policy_rejects_windows_alias_and_device_components() {
+    let directory = tempdir().unwrap();
+    let trusted_root = TrustedLocalAppDataRootV1::for_current_user().unwrap();
+    let policy = StoreLocationPolicyV1::new(&trusted_root, directory.path()).unwrap();
+
+    for path in [
+        "vault.sqlite3.",
+        "vault.sqlite3 ",
+        "vault.sqlite3:alternate-stream",
+        "CON",
+        "con.sqlite3",
+        "PRN.txt",
+        "aux",
+        "NUL.data",
+        "CLOCK$",
+        "CONIN$",
+        "CONOUT$",
+        "COM1",
+        "com9.sqlite3",
+        "LPT1",
+        "lpt9.sqlite3",
+        "COM¹.txt",
+        "LPT³.txt",
+    ] {
+        let error = match policy.location(path) {
+            Ok(_) => panic!("Windows-ambiguous location was accepted: {path}"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.code(),
+            StorageErrorCode::UnsupportedPlatform,
+            "{path}"
+        );
+    }
+
+    for path in [
+        "vault.sqlite3",
+        "console.sqlite3",
+        "COM10.sqlite3",
+        "LPT0.sqlite3",
+    ] {
+        policy
+            .location(path)
+            .unwrap_or_else(|_| panic!("unambiguous location was rejected: {path}"));
+    }
 }
 
 #[test]
