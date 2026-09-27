@@ -86,6 +86,7 @@ for (const file of client) {
     "KEYATLAS_BENEFITS_MODE", "MODE_NOT_AVAILABLE", "INTEGRATION_NOT_CONNECTED",
     "MAIL_INPUT_INVALID", "MAIL_LIMIT_EXCEEDED", "CANDIDATE_INPUT_INVALID",
     "CANDIDATE_EVIDENCE_INVALID", "keyatlas.gmail-candidates.v1",
+    "keyatlas.gmail-review.v1", "keyatlas.mail-analysis-receipt.v1", "QUOTA_UNAVAILABLE",
     "SUPABASE_SERVICE_ROLE_KEY", "APP_USER_CONNECTION_KEY_SECRET",
     "APP_USER_CONNECTIONS_ENCRYPTION_KEY", "api.lovable.dev",
     "ai.gateway.lovable.dev", "connector-gateway.lovable.dev",

@@ -9,6 +9,10 @@ The Gmail migration now includes bounded pure FULL-message normalization and
 versioned candidate validation under `src/server/mail/`, tested on synthetic JSON.
 This is not a connected mailbox: no server route calls it yet. Every returned
 candidate remains pending review. See [the processing contract](MAIL_CONTRACT.md).
+The internal runner now sequences injected auth/consent/quota/mail/analyzer adapters
+and drops cancelled or stale-authority results. Only test fixtures implement those
+adapters so far; this is not working OAuth or a real database quota ledger.
+See [the authority and cancellation contract](MAIL_RUN_CONTRACT.md).
 
 ## Local execution
 

@@ -73,3 +73,22 @@ GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않
 - 기존 CI에는 apps/benefits-web 검사가 아직 연결되지 않았다. 후속 CI 작업에 포함한다.
 - M02 demo UI 예약 경로, 기존 vault 코드, 원본 benefit/Lovable/DB는 변경하지 않았다.
 - 실제 연결, B05, 운영 준비, 2주 목표 전체 완료가 아니다. main은 병합하지 않는다.
+
+## 2026-09-28 Gmail 실행 제어 체크포인트
+
+- 기준: `b7e4c0e655c2188c8af7a65ac3a57a27e5d502b8`, 시작 시 local/origin 일치·clean.
+- 대상은 계속 `keyatlas-mvp-01a-20260927` / `codex/firstvibe-mvp-01a-integration-20260927`다.
+- [실행 제어 검사 기록](../../verification/mvp-integration/2026-09-28-mail-run-control.md)과
+  [실행 계약](../../../apps/benefits-web/MAIL_RUN_CONTRACT.md)을 읽는다.
+- 새 내부 runner는 사용자/세션/메일 연결/수신자/정책/일회 동의를 결합한다.
+  quota 응답·권한 변경·취소·만료를 검사하며 실제 OAuth/DB/메일/AI 어댑터는 아직 없다.
+- 이번 로컬 앱 검사는 321/321, build/typecheck/bundle boundary/loopback SSR smoke exit 0.
+  독립 검토에서 발견한 타이머 지연 중 만료 후 dispatch 문제를 수정하고 회귀를 추가했다.
+- CI workflow에 benefits-web 설치/테스트/빌드/typecheck/boundary/smoke를 추가했다.
+  로컬 정책 본문 직접 검사는 PS7/PS5.1 각각 16/16이지만 Pester 5 실행 증거는 아니다.
+- 기준 SHA의 원격 run 36357247415는 PS5.1 fixture 검사를 통과했다. 기록 당시 Rust 단계 진행 중.
+  이번 후속 SHA의 전체 원격 CI 통과를 의미하지 않는다. 최신 run/SHA를 다시 조회한다.
+- 다음은 사용자 확인 전환과 사용자별 후보/혜택 소유권, 영속 저장·재시도·삭제 계약의 구현이다.
+  그 뒤 승인된 **KeyAtlas 전용 새 개발 환경**에 실제 어댑터를 연결하고 별도 검증한다.
+- 원본 Lovable 프로젝트/repo/DB는 계속 동결. M02 예약 UI, vault/B04/Luna는 건드리지 않는다.
+  `REAL_SECRET_GATE=CLOSED`. 도메인·클라우드 계정 생성·배포·main 병합은 하지 않았다.

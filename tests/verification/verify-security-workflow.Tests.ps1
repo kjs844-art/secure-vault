@@ -31,6 +31,66 @@ Describe 'KeyAtlas security-gates workflow policy' {
             $expected = 'rustup toolchain install 1.95.0 --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown'
             Assert-Condition ([string]::Equals($commands[0].Groups[1].Value.Trim(), $expected, [StringComparison]::Ordinal)) 'Rust provisioning must pin the toolchain and pass each component with its own option.'
         }
+
+        $script:BenefitsWebSteps = @(
+            @{ Name = 'Install locked benefits web dependencies without lifecycle scripts'; Command = 'npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org' }
+            @{ Name = 'Run benefits web unit tests'; Command = 'npm test' }
+            @{ Name = 'Build the benefits web app'; Command = 'npm run build' }
+            @{ Name = 'Type-check the benefits web app'; Command = 'npm run typecheck' }
+            @{ Name = 'Check benefits web server and client boundaries'; Command = 'npm run check:boundaries' }
+            @{ Name = 'Smoke-test the benefits web SSR server on loopback'; Command = 'npm run test:smoke' }
+        )
+
+        function Get-NamedWorkflowSteps {
+            param([string]$Workflow)
+            @([regex]::Matches($Workflow, '(?ms)^      - name: (?<name>[^\r\n]+)\r?\n(?<body>.*?)(?=^      - name: |\z)'))
+        }
+
+        function Assert-BenefitsWebVerification {
+            param([string]$Workflow)
+            $steps = @(Get-NamedWorkflowSteps $Workflow)
+            $webBuild = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Build the web app' })
+            Assert-Condition ($webBuild.Count -eq 1) 'Exactly one existing web build must precede benefits web verification.'
+            $previousIndex = $webBuild[0].Index
+
+            foreach ($definition in $script:BenefitsWebSteps) {
+                $matchingSteps = @($steps | Where-Object { $_.Groups['name'].Value -eq $definition.Name })
+                Assert-Condition ($matchingSteps.Count -eq 1) "Exactly one benefits web gate is required: $($definition.Name)"
+                $step = $matchingSteps[0]
+                Assert-Condition ($step.Index -gt $previousIndex) "Benefits web gates must retain their dependency order: $($definition.Name)"
+                $previousIndex = $step.Index
+
+                # Only these properties are allowed: no conditional skip, alternate
+                # shell, continued failure, environment override, or hidden command.
+                $actualBody = @($step.Groups['body'].Value -split '\r?\n' | Where-Object {
+                    -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '^\s*#'
+                }) -join "`n"
+                $expectedBody = @(
+                    '        shell: pwsh'
+                    '        working-directory: apps/benefits-web'
+                    "        run: $($definition.Command)"
+                ) -join "`n"
+                Assert-Condition ([string]::Equals($actualBody, $expectedBody, [StringComparison]::Ordinal)) "Benefits web gates must use the exact fail-closed command and working directory: $($definition.Name)"
+            }
+
+            $postBuild = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Re-scan repository and generated artifacts after both app builds' })
+            Assert-Condition ($postBuild.Count -eq 1) 'Exactly one post-build Secret scan is required.'
+            Assert-Condition ($postBuild[0].Index -gt $previousIndex) 'The post-build Secret scan must follow all benefits web gates.'
+            Assert-Condition ($postBuild[0].Index -eq $steps[-1].Index) 'The post-build Secret scan must remain the final workflow step.'
+        }
+
+        function Assert-BenefitsWebMutationRejected {
+            param([string]$Workflow, [string]$Reason)
+            Assert-Condition (-not [string]::Equals($Workflow, $script:Workflow, [StringComparison]::Ordinal)) "The policy mutation did not change the workflow: $Reason"
+            $rejected = $false
+            try {
+                Assert-BenefitsWebVerification $Workflow
+            }
+            catch {
+                $rejected = $true
+            }
+            Assert-Condition $rejected "An invalid benefits web workflow must be rejected: $Reason"
+        }
     }
 
     It 'uses only safe unprivileged triggers and least permissions' {
@@ -110,11 +170,14 @@ Describe 'KeyAtlas security-gates workflow policy' {
         Assert-Condition ($script:Scanner -match '\[TimeSpan\]::FromSeconds\(2\)') 'Regex execution must retain a finite timeout.'
     }
 
-    It 're-scans generated artifacts after the web build' {
+    It 're-scans generated artifacts after both app builds' {
         $buildIndex = $script:Workflow.IndexOf('- name: Build the web app', [StringComparison]::Ordinal)
-        $postBuildIndex = $script:Workflow.IndexOf('- name: Re-scan repository and generated artifacts after web build', [StringComparison]::Ordinal)
+        $benefitsBuildIndex = $script:Workflow.IndexOf('- name: Build the benefits web app', [StringComparison]::Ordinal)
+        $postBuildIndex = $script:Workflow.IndexOf('- name: Re-scan repository and generated artifacts after both app builds', [StringComparison]::Ordinal)
         Assert-Condition ($buildIndex -ge 0) 'The web build step is missing.'
+        Assert-Condition ($benefitsBuildIndex -ge 0) 'The benefits web build step is missing.'
         Assert-Condition ($postBuildIndex -gt $buildIndex) 'The generated-artifact scan must run after the web build.'
+        Assert-Condition ($postBuildIndex -gt $benefitsBuildIndex) 'The generated-artifact scan must run after the benefits web build.'
         Assert-Condition (([regex]::Matches($script:Workflow, '(?m)^\s*\$scanOutput = @\(& \.\\scripts\\check-repository-secrets\.ps1 -Root \$PWD\.Path 2>&1\)\s*$')).Count -eq 2) 'The workflow must run exactly one pre-dependency scan and one post-build scan.'
         Assert-Condition ($script:Workflow -match 'The post-build Secret scanner did not emit exactly one success marker\.') 'The post-build success marker must be checked.'
         Assert-Condition ($script:Workflow -match 'The post-build real-Secret boundary marker is missing or duplicated\.') 'The post-build closed-boundary marker must be checked.'
@@ -147,6 +210,63 @@ Describe 'KeyAtlas security-gates workflow policy' {
             $rejected = $true
         }
         Assert-Condition $rejected 'A bare rustfmt argument must be rejected.'
+    }
+
+    It 'runs every benefits web gate in order with its exact fail-closed command and directory' {
+        Assert-BenefitsWebVerification $script:Workflow
+    }
+
+    It 'rejects missing or duplicated benefits web gates even when the other web app has the same command' {
+        foreach ($definition in $script:BenefitsWebSteps) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -eq $definition.Name })[0]
+            Assert-BenefitsWebMutationRejected ($script:Workflow.Remove($step.Index, $step.Length)) "missing $($definition.Name)"
+            Assert-BenefitsWebMutationRejected ($script:Workflow.Insert($step.Index, $step.Value)) "duplicated $($definition.Name)"
+        }
+    }
+
+    It 'rejects a changed benefits web command or directory' {
+        foreach ($definition in $script:BenefitsWebSteps) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -eq $definition.Name })[0]
+            foreach ($invalidStep in @(
+                $step.Value.Replace('working-directory: apps/benefits-web', 'working-directory: apps/web')
+                $step.Value.Replace("run: $($definition.Command)", 'run: Write-Output skipped')
+                $step.Value.Replace('shell: pwsh', 'shell: cmd')
+            )) {
+                Assert-BenefitsWebMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) "changed command context for $($definition.Name)"
+            }
+        }
+    }
+
+    It 'rejects conditional skips or ignored failures in benefits web gates' {
+        foreach ($definition in $script:BenefitsWebSteps) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -eq $definition.Name })[0]
+            foreach ($bypass in @('if: false', 'continue-on-error: true')) {
+                $invalidStep = $step.Value.Replace('        shell: pwsh', "        $bypass`n        shell: pwsh")
+                Assert-BenefitsWebMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) "$bypass in $($definition.Name)"
+            }
+            $maskedExit = $step.Value.Replace("run: $($definition.Command)", "run: $($definition.Command); exit 0")
+            Assert-BenefitsWebMutationRejected ($script:Workflow.Replace($step.Value, $maskedExit)) "masked exit in $($definition.Name)"
+        }
+    }
+
+    It 'rejects benefits web gates reordered ahead of their prerequisites' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        for ($index = 1; $index -lt $script:BenefitsWebSteps.Count; $index++) {
+            $earlier = @($steps | Where-Object { $_.Groups['name'].Value -eq $script:BenefitsWebSteps[$index - 1].Name })[0]
+            $later = @($steps | Where-Object { $_.Groups['name'].Value -eq $script:BenefitsWebSteps[$index].Name })[0]
+            $invalidWorkflow = $script:Workflow.Remove($later.Index, $later.Length).Insert($earlier.Index, $later.Value)
+            Assert-BenefitsWebMutationRejected $invalidWorkflow "reordered $($script:BenefitsWebSteps[$index].Name)"
+        }
+    }
+
+    It 'rejects a post-build Secret scan before the last benefits web gate or followed by more commands' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        $lastGate = @($steps | Where-Object { $_.Groups['name'].Value -eq $script:BenefitsWebSteps[-1].Name })[0]
+        $scan = $steps[-1]
+        $earlyScan = $script:Workflow.Remove($scan.Index, $scan.Length).Insert($lastGate.Index, $scan.Value + "`n")
+        Assert-BenefitsWebMutationRejected $earlyScan 'post-build scan before the final benefits gate'
+        $lateCommand = $script:Workflow + "`n      - name: Unreviewed command after the final scan`n        shell: pwsh`n        run: Write-Output synthetic`n"
+        Assert-BenefitsWebMutationRejected $lateCommand 'command after the final Secret scan'
     }
 
     It 'cannot silently continue or upload repository contents' {

@@ -121,9 +121,40 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
+      - name: Install locked benefits web dependencies without lifecycle scripts
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org
+
+      - name: Run benefits web unit tests
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm test
+
+      # The build generates the route tree before its TypeScript check.
+      - name: Build the benefits web app
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm run build
+
+      - name: Type-check the benefits web app
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm run typecheck
+
+      - name: Check benefits web server and client boundaries
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm run check:boundaries
+
+      - name: Smoke-test the benefits web SSR server on loopback
+        shell: pwsh
+        working-directory: apps/benefits-web
+        run: npm run test:smoke
+
       # Generated bundles do not exist in a clean checkout. Scan them only
-      # after the release build, while retaining the same closed boundary.
-      - name: Re-scan repository and generated artifacts after web build
+      # after both app builds, while retaining the same closed boundary.
+      - name: Re-scan repository and generated artifacts after both app builds
         shell: pwsh
         run: |
           $scanOutput = @(& .\scripts\check-repository-secrets.ps1 -Root $PWD.Path 2>&1)
