@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -21,6 +22,23 @@ const COMMON_FLAGS: OpenFlags = OpenFlags::SQLITE_OPEN_NO_MUTEX
     .union(OpenFlags::SQLITE_OPEN_PRIVATE_CACHE)
     .union(OpenFlags::SQLITE_OPEN_NOFOLLOW)
     .union(OpenFlags::SQLITE_OPEN_EXRESCODE);
+
+const SECURITY_DB_CONFIGS: [(DbConfig, bool); 8] = [
+    (DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true),
+    (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, true),
+    (DbConfig::SQLITE_DBCONFIG_DQS_DML, false),
+    (DbConfig::SQLITE_DBCONFIG_DQS_DDL, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE, false),
+    (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE, false),
+];
+
+#[derive(Clone, Copy)]
+enum ConnectionAccess {
+    ReadOnly,
+    Writable,
+}
 
 pub enum InitializeStoreOutcomeV1 {
     Created(SyntheticWritableStoreV1),
@@ -311,12 +329,7 @@ pub(crate) fn open_read_only(path: &Path) -> Result<Connection, StorageError> {
     let connection =
         Connection::open_with_flags(path, crate::schema_contract::read_only_open_flags())
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    connection
-        .load_extension_disable()
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    harden_connection(&connection, ConnectionAccess::ReadOnly, None)?;
     Ok(connection)
 }
 
@@ -334,42 +347,24 @@ fn harden_writable(
     connection: &Connection,
     observer: &mut InitObserver,
 ) -> Result<(), StorageError> {
+    harden_connection(connection, ConnectionAccess::Writable, Some(observer))
+}
+
+fn harden_connection(
+    connection: &Connection,
+    access: ConnectionAccess,
+    mut observer: Option<&mut InitObserver>,
+) -> Result<(), StorageError> {
     connection
         .busy_timeout(Duration::from_secs(5))
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
     connection
         .load_extension_disable()
         .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
 
-    let journal_mode: String = connection
-        .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    if !journal_mode.eq_ignore_ascii_case("wal") {
-        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
-    }
-    observer.hardening_applied()?;
-    connection
-        .execute_batch("PRAGMA synchronous=FULL; PRAGMA recursive_triggers=ON;")
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-    if pragma_i64(connection, "synchronous")? != 2
-        || pragma_i64(connection, "recursive_triggers")? != 1
-    {
-        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
-    }
-    observer.hardening_applied()?;
-
-    for (config, expected) in [
-        (DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true),
-        (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, true),
-        (DbConfig::SQLITE_DBCONFIG_DQS_DML, false),
-        (DbConfig::SQLITE_DBCONFIG_DQS_DDL, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE, false),
-        (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE, false),
-    ] {
+    for (config, expected) in SECURITY_DB_CONFIGS {
         let applied = connection
             .set_db_config(config, expected)
             .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
@@ -379,19 +374,63 @@ fn harden_writable(
         if applied != expected || verified != expected {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
         }
-        observer.hardening_applied()?;
+        observe_hardening(&mut observer)?;
     }
 
-    if connection
+    if matches!(access, ConnectionAccess::Writable) {
+        let journal_mode: String = connection
+            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
+        }
+        observe_hardening(&mut observer)?;
+    }
+
+    let mode_pragmas = match access {
+        ConnectionAccess::ReadOnly => {
+            "PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA recursive_triggers=ON;"
+        }
+        ConnectionAccess::Writable => {
+            "PRAGMA synchronous=FULL; PRAGMA query_only=OFF; PRAGMA foreign_keys=ON; \
+             PRAGMA recursive_triggers=ON;"
+        }
+    };
+    connection
+        .execute_batch(mode_pragmas)
+        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    if pragma_i64(connection, "foreign_keys")? != 1
+        || pragma_i64(connection, "recursive_triggers")? != 1
+        || match access {
+            ConnectionAccess::ReadOnly => pragma_i64(connection, "query_only")? != 1,
+            ConnectionAccess::Writable => {
+                pragma_i64(connection, "query_only")? != 0
+                    || pragma_i64(connection, "synchronous")? != 2
+            }
+        }
+    {
+        return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
+    }
+    observe_hardening(&mut observer)?;
+
+    let main_is_read_only = connection
         .is_readonly("main")
-        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?
+        .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+    if main_is_read_only != matches!(access, ConnectionAccess::ReadOnly)
         || pragma_i64(connection, "foreign_keys")? != 1
         || pragma_i64(connection, "trusted_schema")? != 0
     {
         return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
     }
-    observer.hardening_applied()?;
+    observe_hardening(&mut observer)?;
     Ok(())
+}
+
+fn observe_hardening(observer: &mut Option<&mut InitObserver>) -> Result<(), StorageError> {
+    match observer.as_deref_mut() {
+        Some(observer) => observer.hardening_applied(),
+        None => Ok(()),
+    }
 }
 
 fn verify_identity_and_singleton(
@@ -456,6 +495,7 @@ fn pragma_i64(connection: &Connection, pragma: &str) -> Result<i64, StorageError
         "application_id" => "PRAGMA application_id",
         "user_version" => "PRAGMA user_version",
         "synchronous" => "PRAGMA synchronous",
+        "query_only" => "PRAGMA query_only",
         "recursive_triggers" => "PRAGMA recursive_triggers",
         "foreign_keys" => "PRAGMA foreign_keys",
         "trusted_schema" => "PRAGMA trusted_schema",
@@ -815,21 +855,25 @@ fn open_ownership_file(
 }
 
 fn sidecar_paths(database_path: &Path) -> [PathBuf; 3] {
-    let base = database_path.as_os_str().to_string_lossy();
     [
-        PathBuf::from(format!("{base}-wal")),
-        PathBuf::from(format!("{base}-shm")),
-        PathBuf::from(format!("{base}-journal")),
+        sidecar_path(database_path, "-wal"),
+        sidecar_path(database_path, "-shm"),
+        sidecar_path(database_path, "-journal"),
     ]
+}
+
+fn sidecar_path(database_path: &Path, suffix: &str) -> PathBuf {
+    let mut path = OsString::from(database_path.as_os_str());
+    path.push(suffix);
+    PathBuf::from(path)
 }
 
 fn ensure_initialization_sidecars_absent(database_path: &Path) -> Result<(), StorageError> {
     for path in sidecar_paths(database_path) {
-        if path
-            .try_exists()
-            .map_err(|_| StorageError::new(StorageErrorCode::Io))?
-        {
-            return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+        match fs::symlink_metadata(path) {
+            Ok(_) => return Err(StorageError::new(StorageErrorCode::CorruptStorage)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(StorageError::new(StorageErrorCode::Io)),
         }
     }
     Ok(())
@@ -1001,6 +1045,49 @@ mod tests {
         159, 89, 181, 82, 68, 79, 67, 166, 149, 154, 159, 148, 219, 0, 42, 88, 26, 45, 251, 183,
         191, 25, 101, 179, 127, 118, 36,
     ];
+
+    #[test]
+    fn all_security_db_configs_precede_sql_hardening_calls() {
+        let configured = SECURITY_DB_CONFIGS.map(|(config, expected)| (config as i32, expected));
+        let expected = [
+            (DbConfig::SQLITE_DBCONFIG_DEFENSIVE as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER as i32, true),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DML as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DDL as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE as i32, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE as i32, false),
+        ];
+        assert_eq!(configured, expected);
+
+        let source = include_str!("schema.rs");
+        let hardening_body = source
+            .split_once("fn harden_connection(")
+            .unwrap()
+            .1
+            .split_once("\nfn observe_hardening(")
+            .unwrap()
+            .0;
+        let final_db_config_readback = hardening_body.find(".db_config(config)").unwrap();
+        let first_sql_call = [
+            ".prepare(",
+            ".prepare_cached(",
+            ".execute(",
+            ".execute_batch(",
+            ".query_row(",
+            "pragma_i64(",
+        ]
+        .into_iter()
+        .filter_map(|marker| hardening_body.find(marker))
+        .min()
+        .unwrap();
+
+        assert!(
+            final_db_config_readback < first_sql_call,
+            "SQL hardening must not prepare or execute before all db_config settings are verified"
+        );
+    }
 
     fn bootstrap_bytes() -> Vec<u8> {
         SYNTHETIC_PASSWORD_ENVELOPE.to_vec()
@@ -1361,7 +1448,7 @@ mod tests {
     }
 
     fn inject_lingering_wal(database_path: &Path) {
-        let wal_path = PathBuf::from(format!("{}-wal", database_path.to_string_lossy()));
+        let wal_path = sidecar_path(database_path, "-wal");
         fs::write(wal_path, b"lingering-sidecar-must-survive").unwrap();
     }
 
@@ -1392,13 +1479,84 @@ mod tests {
             assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
         });
 
-        let wal_path = PathBuf::from(format!(
-            "{}-wal",
-            location.database_path().to_string_lossy()
-        ));
+        let wal_path = sidecar_path(location.database_path(), "-wal");
         assert_eq!(
             fs::read(wal_path).unwrap(),
             b"lingering-sidecar-must-survive"
         );
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn dangling_sidecar_namespace_entry_is_preserved_and_rejected() {
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("vault.sqlite3");
+        let missing_target = directory.path().join("missing-external-target");
+        let wal_path = sidecar_path(&database_path, "-wal");
+        fs::write(&database_path, []).unwrap();
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            use std::process::{Command, Stdio};
+
+            let status = Command::new("cmd")
+                .args(["/D", "/C", "mklink", "/J"])
+                .arg(&wal_path)
+                .arg(&missing_target)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success(), "Windows junction fixture was unavailable");
+            let metadata = fs::symlink_metadata(&wal_path).unwrap();
+            assert_ne!(metadata.file_attributes() & 0x0000_0400, 0);
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&missing_target, &wal_path).unwrap();
+
+        let error = ensure_initialization_sidecars_absent(&database_path).unwrap_err();
+        assert_eq!(error.code(), StorageErrorCode::CorruptStorage);
+        assert_eq!(fs::read(&database_path).unwrap(), b"");
+        assert!(fs::symlink_metadata(&wal_path).is_ok());
+        assert!(!missing_target.exists());
+
+        #[cfg(windows)]
+        fs::remove_dir(&wal_path).unwrap();
+        #[cfg(unix)]
+        fs::remove_file(&wal_path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sidecar_suffixes_preserve_the_exact_windows_os_string() {
+        use std::os::windows::ffi::OsStringExt;
+
+        let database_name = OsString::from_wide(&[
+            u16::from(b'v'),
+            u16::from(b'a'),
+            u16::from(b'u'),
+            u16::from(b'l'),
+            u16::from(b't'),
+            0xD800,
+        ]);
+        let database_path = PathBuf::from(&database_name);
+        let mut expected = database_name;
+        expected.push("-wal");
+
+        assert_eq!(sidecar_paths(&database_path)[0], PathBuf::from(expected));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sidecar_suffixes_preserve_the_exact_unix_os_string() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let database_name = OsString::from_vec(vec![b'v', b'a', b'u', b'l', b't', 0xFF]);
+        let database_path = PathBuf::from(&database_name);
+        let mut expected = database_name;
+        expected.push("-wal");
+
+        assert_eq!(sidecar_paths(&database_path)[0], PathBuf::from(expected));
     }
 }

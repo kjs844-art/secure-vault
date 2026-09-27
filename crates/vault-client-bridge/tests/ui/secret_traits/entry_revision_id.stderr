@@ -1,0 +1,5 @@
+error[E0599]: no method named `revision_id` found for reference `&ClientCatalogEntryViewV1<'_>` in the current scope
+ --> tests/ui/secret_traits/entry_revision_id.rs:4:19
+  |
+4 |     let _ = entry.revision_id();
+  |                   ^^^^^^^^^^^ method not found in `&ClientCatalogEntryViewV1<'_>`
