@@ -59,3 +59,17 @@ GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않
 [검사 기록](../../verification/mvp-integration/2026-09-28-benefits-scaffold.md)을 먼저 읽는다.
 다른 기존 worktree/B04/Luna의 미커밋 파일은 그대로다.
 다음은 Gmail 파싱·근거·동의/소유권의 순수 계약과 합성 테스트이며, 실메일/원본 DB를 연결하지 않는다.
+
+## 2026-09-28 Gmail 순수 처리 체크포인트
+
+- e28ee252dba8f0c6e42de9db0e4616b2f9699ad4 위에서 메일 정규화/후보 검증을 추가했다.
+- [새 검사 기록](../../verification/mvp-integration/2026-09-28-mail-contract.md)과
+  [입출력 계약](../../../apps/benefits-web/MAIL_CONTRACT.md)을 읽고 이어간다.
+- 로컬 앱 129/129, build/typecheck/bundle boundary/SSR smoke 통과.
+- 이전 CI run 36329827785는 PS5.1 Unicode fixture 검사 실패. 테스트 fixture를
+  UTF-8로 고치고 두 PowerShell 버전에서 102/102를 확인했다. 원격 결과와는 별개다.
+- 다음 코드: 인증 principal/메일 읽기 동의/외부 분석 동의/quota/취소를 주입하는
+  합성 orchestration → 소유권/확인 저장/재분석/삭제 → 승인된 새 개발 환경 연동.
+- 기존 CI에는 apps/benefits-web 검사가 아직 연결되지 않았다. 후속 CI 작업에 포함한다.
+- M02 demo UI 예약 경로, 기존 vault 코드, 원본 benefit/Lovable/DB는 변경하지 않았다.
+- 실제 연결, B05, 운영 준비, 2주 목표 전체 완료가 아니다. main은 병합하지 않는다.

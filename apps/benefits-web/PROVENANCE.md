@@ -15,6 +15,7 @@ were not modified. No .env file or real mail/key/DB content was read or imported
 | src/lib/export-format.ts | src/domain/export-format.ts | Existing format identifier retained; not an export implementation |
 | package.json + bun.lock | Independent package.json/package-lock.json | Exact direct runtime/tool versions from source; public npm registry lock regenerated |
 | vite.config.ts + src/server.ts | New explicit config/server boundary | No Lovable config, MCP plugin, install patch, error capture or provider integration |
+| src/lib/gmail.functions.ts | New src/server/mail pure contracts/parser/validator | Retains separate grant/balance/day concepts; replaces unbounded parsing, current-date fallback and immediate upsert with bounded ephemeral pending candidates |
 
 The new index page is a technical migration placeholder, **not** a replacement design
 or a claim that the original UI was fully ported. The demo data and original visual
@@ -35,3 +36,12 @@ Framework references consulted 2026-09-27:
 
 - [TanStack server entry](https://tanstack.com/start/latest/docs/framework/react/guide/server-entry-point)
 - [TanStack Nitro/Node hosting](https://tanstack.com/start/latest/docs/framework/react/guide/hosting)
+
+Gmail representation references consulted 2026-09-28:
+
+- [Message and FULL parsed payload](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages)
+- [MessagePartBody base64url data](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages.attachments)
+
+The new parser targets the API's already-parsed part representation, not raw MIME.
+It decodes the outer base64url once; original transfer-encoding headers do not
+trigger another decoding pass. No real Gmail response or account was accessed.

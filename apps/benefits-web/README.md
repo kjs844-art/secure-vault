@@ -5,6 +5,11 @@ Original Lovable/benefit-validator remains unchanged. This app has no provider S
 database connection, OAuth callback handler, mail reader, external AI or MCP tools.
 Those are pending integrations, not completed features.
 
+The Gmail migration now includes bounded pure FULL-message normalization and
+versioned candidate validation under `src/server/mail/`, tested on synthetic JSON.
+This is not a connected mailbox: no server route calls it yet. Every returned
+candidate remains pending review. See [the processing contract](MAIL_CONTRACT.md).
+
 ## Local execution
 
 Requires Node 22.12+ (verified version is recorded in the integration evidence).
@@ -29,6 +34,8 @@ It is not browser hydration or Gmail/DB E2E evidence.
 ## Boundaries
 
 - `src/domain/`: selected pure service/benefit rules from the existing web.
+- `src/server/mail/`: ephemeral mail parser and candidate validator. No automatic
+  account discovery, confirmed records, authentication or persistence is provided.
 - `src/router.tsx`, `src/routes/__root.tsx`: SSR app shell adapted from the original.
 - `src/start.ts`: preserves explicit framework CSRF protection for server functions.
 - `src/server.ts`, `src/server/runtime-policy.ts`: unconnected routes return 503;

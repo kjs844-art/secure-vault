@@ -2,6 +2,7 @@
 
 2026-09-27 최신 사용자 결정. 2026-09-28 상태: PARTIAL.
 독립 SSR scaffold와 순수 benefits domain을 선별 이식했다.
+Gmail FULL 정규화/AI 후보 검증도 순수 함수로 구현했으며, 모두 확인 전 후보를 반환한다.
 실제 화면 전체, 인증/Gmail/DB 연결 및 금고 간 연결은 아직 미구현/미검증이다.
 원본 benefit-validator@`954da8da0b12d55a342d187fab17abe57b93fbb0`.
 대상 secure-vault@`34b43e1a5d2f1d81eb2f6456d657fd04ca57332f`.
@@ -42,6 +43,8 @@ source 전체 디렉터리 복사나 unrelated Git histories 병합을 시작하
 첫 코드 범위 및 검사는
 [2026-09-28 체크포인트](../../verification/mvp-integration/2026-09-28-benefits-scaffold.md)를 참조한다.
 제공자 연결 없이 동작하는 서버 구조를 확인한 것이며 실사용 인증/메일 기능의 검증이 아니다.
+후속 [Gmail 계약 검사](../../verification/mvp-integration/2026-09-28-mail-contract.md)는
+합성 JSON 파싱/후보 검증 증거다. 실제 메일을 가져오거나 DB에 저장한 증거가 아니다.
 
 ## 메일과 금고
 
