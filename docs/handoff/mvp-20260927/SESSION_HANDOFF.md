@@ -52,3 +52,10 @@ GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않
 사용자는 benefit-validator를 KeyAtlas에 통합하되 원본 Lovable 프로젝트/repo는 당분간
 그대로 두라고 명시했다. 기존 benefit 쪽 문서 브랜치 3개는 그 전 발행 기록이며 재사용하지 않는다.
 현재 유효한 6개 배정은 모두 private secure-vault에 있다. 이후 원본 repo에 추가 push는 하지 않는다.
+
+## 2026-09-28 자율 개발 재개
+
+현재 주 담당은 `keyatlas-mvp-01a-20260927`에서 독립 SSR/domain 첫 이식을 구현했다.
+[검사 기록](../../verification/mvp-integration/2026-09-28-benefits-scaffold.md)을 먼저 읽는다.
+다른 기존 worktree/B04/Luna의 미커밋 파일은 그대로다.
+다음은 Gmail 파싱·근거·동의/소유권의 순수 계약과 합성 테스트이며, 실메일/원본 DB를 연결하지 않는다.

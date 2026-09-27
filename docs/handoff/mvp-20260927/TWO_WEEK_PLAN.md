@@ -5,6 +5,14 @@ KeyAtlas secure-vault에서만 개발한다. 9/27 시작 가정, 10/10까지 14�
 자동 상시 작업/예약 실행을 설정한 것은 아니다.
 [시작점](START_HERE.md) / [이식 경계](INTEGRATION_BOUNDARY.md).
 
+## 2026-09-28 진행 기록
+
+M01A에서 원본 의존성을 조사하고 `apps/benefits-web/` 독립 SSR scaffold,
+실제 연결 차단, 순수 서비스/혜택 domain 및 합성 회귀를 구현했다.
+[검사 및 미완료 범위](../../verification/mvp-integration/2026-09-28-benefits-scaffold.md).
+원본 DB/설정에는 접근하지 않았으며 최종 디자인/도메인/배포 결정은 사용자에게 남겼다.
+이 기록은 2주 목표 달성이나 로그인/Gmail 이식 완료를 뜻하지 않는다.
+
 ## 일정
 
 | 기간 | 할 일 | 담당/결과 |

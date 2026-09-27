@@ -1,6 +1,8 @@
 # KeyAtlas 통합 경계 — 원본 동결 / 단일 개발 repo
 
-2026-09-27 최신 사용자 결정. 상태: PROPOSED, 실제 코드 이식 전.
+2026-09-27 최신 사용자 결정. 2026-09-28 상태: PARTIAL.
+독립 SSR scaffold와 순수 benefits domain을 선별 이식했다.
+실제 화면 전체, 인증/Gmail/DB 연결 및 금고 간 연결은 아직 미구현/미검증이다.
 원본 benefit-validator@`954da8da0b12d55a342d187fab17abe57b93fbb0`.
 대상 secure-vault@`34b43e1a5d2f1d81eb2f6456d657fd04ca57332f`.
 
@@ -11,7 +13,7 @@
         │ 검토한 파일만 선택적 이식, 원본으로 push/DB 쓰기 없음
         ▼
 secure-vault (KeyAtlas 유일한 새 개발 repo)
-  ├─ apps/benefits-web/  계획: 공개 UI·서비스/혜택·Gmail 서버 경계
+  ├─ apps/benefits-web/  구현: 독립 SSR + 순수 domain; 화면/Gmail/DB 연결은 다음 단계
   └─ apps/web/ + crates/ 현재: 금고·Worker·Rust/WASM
          ↑ 명시적 사용자 선택 + 비밀 원문 없는 참조 계약
 ~~~
@@ -36,6 +38,10 @@ secure-vault (KeyAtlas 유일한 새 개발 repo)
 source 전체 디렉터리 복사나 unrelated Git histories 병합을 시작하지 않는다.
 키 값이 없어도 원본 환경으로 fallback하는 URL/프로젝트 설정이 있는지 검사한다.
 원본을 건드리지 않고 독립 테스트하는 것이 기본이다.
+
+첫 코드 범위 및 검사는
+[2026-09-28 체크포인트](../../verification/mvp-integration/2026-09-28-benefits-scaffold.md)를 참조한다.
+제공자 연결 없이 동작하는 서버 구조를 확인한 것이며 실사용 인증/메일 기능의 검증이 아니다.
 
 ## 메일과 금고
 
