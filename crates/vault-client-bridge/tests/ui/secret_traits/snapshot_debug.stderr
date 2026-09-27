@@ -1,0 +1,11 @@
+error[E0277]: `ClientCatalogSnapshotV1` doesn't implement `Debug`
+ --> tests/ui/secret_traits/snapshot_debug.rs:6:21
+  |
+6 |     require_debug::<ClientCatalogSnapshotV1>();
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `ClientCatalogSnapshotV1`
+  |
+note: required by a bound in `require_debug`
+ --> tests/ui/secret_traits/snapshot_debug.rs:3:21
+  |
+3 | fn require_debug<T: std::fmt::Debug>() {}
+  |                     ^^^^^^^^^^^^^^^ required by this bound in `require_debug`

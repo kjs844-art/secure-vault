@@ -28,7 +28,7 @@ fn zero_one_and_multiple_connection_fixtures_survive_reunlock() {
         else {
             panic!("current synthetic fixture unexpectedly requires upgrade");
         };
-        assert_eq!(opened.item_name(), "Example AI Workshop");
+        assert_eq!(opened.item_name(), "Example Workshop API Credential");
         assert_eq!(opened.provider_name(), "Example AI Workshop");
         assert_eq!(opened.connection_count(), *expected_connections);
         assert_eq!(opened.secret_field_count(), *expected_fields);
