@@ -85,6 +85,11 @@ HTTP smoke는 hydration·모바일 화면·실메일 E2E 검사가 아니다.
 각각 benefits 앱 검사 / 기존 web 앱 검사 중이었다. 원격 HEAD는 여전히 기준 SHA였다.
 이는 관찰 시점 기록이며 최종 원격 통과 또는 새 코드의 push 완료를 뜻하지 않는다.
 
+09:21 KST 최종 조회: 위 두 run 모두 `completed/success`, head SHA는 `492c63e`였다.
+이번 구현은 로컬 `94d29d55c41d1e7f5ec96ca0e8c806a3e4742e4f`에 commit했고 작업트리는 clean이었다.
+이후 같은 기능 브랜치에 비강제 push할 수 있는 체크포인트다. 기준 SHA의 CI 성공을
+새 구현 SHA의 CI 성공으로 대체하지 않으며, 새 원격 검사는 별도 확인해야 한다.
+
 남은 코드/검증은 후보 생성·조회/보관/계정 삭제 정책, 재분석 stable source 연결,
 기존 UI domain으로의 안전한 투영, 지연 응답 UI generation/revision fence,
 실제 auth/DB/provider 어댑터와 요청 보안·E2E, B05 실제 파일 새 프로필 복원 등이다.
