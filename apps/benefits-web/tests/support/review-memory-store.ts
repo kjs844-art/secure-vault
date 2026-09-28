@@ -7,6 +7,8 @@ import {
 import { STAGING_POLICY, type CandidateBatchRow, type CandidateInboxDependencies,
   type CandidateInboxTransaction, type CandidateStagingGrant } from "../../src/server/inbox/contracts.ts";
 import { MAIL_ANALYSIS_POLICY, type RunAuthority } from "../../src/server/mail/run-analysis.ts";
+import { DELETED_SERVICE_NAME, type CatalogDependencies, type CatalogOperation,
+  type CatalogServiceRow, type CatalogTransaction } from "../../src/server/catalog/contracts.ts";
 
 // SYNTHETIC TEST SUPPORT ONLY. A serialized in-memory snapshot is not a real DB,
 // durable persistence, transaction-isolation evidence, RLS, or verified auth.
@@ -74,10 +76,14 @@ export interface MemoryRows {
   batches: Map<string, CandidateBatchRow>;
   // Synthetic unique-index metadata survives candidate payload erasure.
   candidateSlots: Map<string, string>;
+  catalogOperations: Map<string, CatalogOperation>;
+  catalogRevisions: Map<string, number>;
 }
-type Method = keyof CandidateInboxTransaction;
+type MemoryTransaction = CandidateInboxTransaction & CatalogTransaction;
+type Method = keyof MemoryTransaction;
 type ConditionalMethod = "insertPreview" | "insertBenefit" | "insertOperation"
-  | "updateCandidate" | "updatePreview" | "updateBenefit" | "insertCandidate" | "insertCandidateBatch";
+  | "updateCandidate" | "updatePreview" | "updateBenefit" | "insertCandidate" | "insertCandidateBatch"
+  | "insertCatalogService" | "updateCatalogService" | "insertCatalogOperation" | "advanceCatalogRevision";
 export interface MemoryControls {
   authority: unknown;
   now: number;
@@ -102,6 +108,7 @@ export interface MemoryControls {
 }
 
 export const operationKey = (ownerId: string, operationId: string) => JSON.stringify([ownerId, operationId]);
+export const catalogRevisionKey = (ownerId: string, dataGeneration: number) => JSON.stringify([ownerId, dataGeneration]);
 const clone = <T>(value: T): T => structuredClone(value);
 
 export function createReviewMemoryStore() {
@@ -109,6 +116,7 @@ export function createReviewMemoryStore() {
     candidates: new Map([[CANDIDATE_ID, candidateRow()]]),
     services: new Map([[SERVICE_ID, serviceRow()]]), previews: new Map(), benefits: new Map(), operations: new Map(),
     batches: new Map(), candidateSlots: new Map(),
+    catalogOperations: new Map(), catalogRevisions: new Map(),
   };
   const controls: MemoryControls = { authority: reviewAuthority(), now: REVIEW_NOW,
     authorityReads: 0, transactions: 0, commits: 0, rollbacks: 0, trace: [],
@@ -150,8 +158,15 @@ export function createReviewMemoryStore() {
   interface CommitRequirements {
     notAfter: number;
     staging: Array<{ analysis: RunAuthority; grant: CandidateStagingGrant }>;
+    services: Array<{ id: string; revision: number }>;
+    noLiveBenefits: string[];
   }
-  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: CommitRequirements): CandidateInboxTransaction {
+  function assertService(data: MemoryRows, authority: ReviewAuthority, id: string, revision: number) {
+    const row = data.services.get(id);
+    if (!row || row.ownerId !== authority.ownerId || row.dataGeneration !== authority.dataGeneration
+      || row.state !== "live" || row.revision !== revision) throw new Error(SYNTHETIC_PRIVATE);
+  }
+  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: CommitRequirements): MemoryTransaction {
     async function operation<T>(method: Method, action: () => T): Promise<T> {
       controls.trace.push(method);
       await controls.beforeMethod?.(method);
@@ -202,10 +217,62 @@ export function createReviewMemoryStore() {
         const after = row as unknown as ReviewedBenefitRow;
         if (before.state === "deleted" && (after.state !== "deleted" || after.content !== null)) return false;
       }
+      if (method === "updateCatalogService") {
+        const before = existing as unknown as CatalogServiceRow;
+        const after = row as unknown as CatalogServiceRow;
+        if (before.state === "deleted" || before.createdAt !== after.createdAt || after.updatedAt < before.updatedAt
+          || (after.state === "deleted" ? after.profile !== null || after.name !== DELETED_SERVICE_NAME
+            : after.profile === null || after.name !== after.profile.name)) return false;
+        if (after.state === "deleted" && [...snapshot.benefits.values()].some((benefit) => allowed(benefit)
+          && benefit.state === "live" && benefit.content?.serviceId === after.id)) return false;
+      }
       map.set(row.id, clone(row));
       return true;
     }
     return {
+      requireServiceVersion: (id, revision) => {
+        controls.trace.push("requireServiceVersion");
+        assertService(snapshot, authority, id, revision);
+        deadline.services.push({ id, revision });
+      },
+      getCatalogService: (id) => operation("getCatalogService", () => scoped(snapshot.services.get(id)) as CatalogServiceRow | null),
+      listCatalogServices: (afterId, take) => operation("listCatalogServices", () => [...snapshot.services.values()]
+        .filter((row) => allowed(row) && row.state === "live" && (afterId === null || row.id > afterId))
+        .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+        .slice(0, take).map((row) => clone(row) as CatalogServiceRow)),
+      getCatalogRevision: () => operation("getCatalogRevision", () =>
+        snapshot.catalogRevisions.get(catalogRevisionKey(authority.ownerId, authority.dataGeneration)) ?? 1),
+      advanceCatalogRevision: (expected) => operation("advanceCatalogRevision", () => {
+        const key = catalogRevisionKey(authority.ownerId, authority.dataGeneration);
+        if (controls.falseMethod === "advanceCatalogRevision" || !Number.isSafeInteger(expected)
+          || expected < 1 || expected >= Number.MAX_SAFE_INTEGER || (snapshot.catalogRevisions.get(key) ?? 1) !== expected) return false;
+        snapshot.catalogRevisions.set(key, expected + 1);
+        return true;
+      }),
+      insertCatalogService: (row) => operation("insertCatalogService", () => insert("insertCatalogService", snapshot.services, row)),
+      updateCatalogService: (row, revision) => operation("updateCatalogService", () =>
+        update("updateCatalogService", snapshot.services, row, revision)),
+      getCatalogOperation: (id) => operation("getCatalogOperation", () => scoped(snapshot.catalogOperations.get(operationKey(authority.ownerId, id)))),
+      insertCatalogOperation: (row) => operation("insertCatalogOperation", () => {
+        const key = operationKey(row.ownerId, row.operationId);
+        if (controls.falseMethod === "insertCatalogOperation" || !allowed(row) || snapshot.catalogOperations.has(key)) return false;
+        snapshot.catalogOperations.set(key, clone(row));
+        return true;
+      }),
+      hasLiveServiceBenefits: (id) => operation("hasLiveServiceBenefits", () => {
+        const found = [...snapshot.benefits.values()].some((row) => allowed(row) && row.state === "live" && row.content?.serviceId === id);
+        if (!found) deadline.noLiveBenefits.push(id);
+        return found;
+      }),
+      eraseServicePreviews: (id, scope) => operation("eraseServicePreviews", () => {
+        for (const [previewId, row] of snapshot.previews) {
+          if (allowed(row) && row.content?.serviceId === id && (scope === "all" || row.state === "pending")) {
+            if (!Number.isSafeInteger(row.revision) || row.revision < 1 || row.revision >= Number.MAX_SAFE_INTEGER) throw new Error(SYNTHETIC_PRIVATE);
+            snapshot.previews.set(previewId, { ...row, state: scope === "pending" ? "revoked" : "deleted",
+              content: null, revision: row.revision + 1 });
+          }
+        }
+      }),
       requireCandidateStaging: (analysis, grant) => {
         controls.trace.push("requireCandidateStaging");
         assertStaging(authority, analysis, grant);
@@ -245,6 +312,10 @@ export function createReviewMemoryStore() {
       getOperation: (id) => operation("getOperation", () => scoped(snapshot.operations.get(operationKey(authority.ownerId, id)))),
       insertPreview: (row) => operation("insertPreview", () => insert("insertPreview", snapshot.previews, row)),
       insertBenefit: (row) => operation("insertBenefit", () => {
+        const serviceId = row.content?.serviceId;
+        const required = deadline.services.find((service) => service.id === serviceId);
+        if (!required) return false;
+        assertService(snapshot, authority, required.id, required.revision);
         if ([...snapshot.benefits.values()].some((existing) => existing.ownerId === authority.ownerId
           && existing.candidateId === row.candidateId)) return false;
         return insert("insertBenefit", snapshot.benefits, row);
@@ -276,34 +347,43 @@ export function createReviewMemoryStore() {
     controls.trace.push("readAuthority");
     return clone(controls.readAuthority ? await controls.readAuthority(controls.authorityReads) : controls.authority);
   };
-  const transaction = async <T>(authority: ReviewAuthority, action: (tx: CandidateInboxTransaction) => Promise<T>): Promise<T> => {
-      let release!: () => void;
-      const previous = serial;
-      serial = new Promise<void>((resolve) => { release = resolve; });
-      await previous;
-      controls.transactions++;
-      let committed = false;
-      try {
-        await controls.beforeEntry?.();
-        assertAuthority(authority);
-        const snapshot = clone(rows);
-        const deadline: CommitRequirements = { notAfter: authority.expiresAt, staging: [] };
-        const result = await action(transactionView(snapshot, authority, deadline));
-        await controls.beforeCommit?.();
-        assertAuthority(authority);
-        if (controls.now >= deadline.notAfter) throw new Error(SYNTHETIC_PRIVATE);
-        for (const expected of deadline.staging) assertStaging(authority, expected.analysis, expected.grant);
-        rows = snapshot;
-        controls.commits++;
-        committed = true;
-        await controls.afterCommit?.();
-        return result;
-      } catch (error) {
-        if (!committed) controls.rollbacks++;
-        throw error;
-      } finally {
-        release();
+  const transaction = async <T>(authority: ReviewAuthority, action: (tx: MemoryTransaction) => Promise<T>): Promise<T> => {
+    let release!: () => void;
+    const previous = serial;
+    serial = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    controls.transactions++;
+    let committed = false;
+    try {
+      await controls.beforeEntry?.();
+      assertAuthority(authority);
+      const snapshot = clone(rows);
+      const deadline: CommitRequirements = { notAfter: authority.expiresAt, staging: [], services: [], noLiveBenefits: [] };
+      const result = await action(transactionView(snapshot, authority, deadline));
+      await controls.beforeCommit?.();
+      assertAuthority(authority);
+      if (controls.now >= deadline.notAfter) throw new Error(SYNTHETIC_PRIVATE);
+      for (const expected of deadline.staging) assertStaging(authority, expected.analysis, expected.grant);
+      for (const service of deadline.services) {
+        assertService(rows, authority, service.id, service.revision);
       }
+      for (const serviceId of deadline.noLiveBenefits) {
+        if ([...rows.benefits.values()].some((row) => row.ownerId === authority.ownerId
+          && row.dataGeneration === authority.dataGeneration && row.state === "live" && row.content?.serviceId === serviceId)) {
+          throw new Error(SYNTHETIC_PRIVATE);
+        }
+      }
+      rows = snapshot;
+      controls.commits++;
+      committed = true;
+      await controls.afterCommit?.();
+      return result;
+    } catch (error) {
+      if (!committed) controls.rollbacks++;
+      throw error;
+    } finally {
+      release();
+    }
   };
   const common = { readAuthority, now: () => controls.now, newId: () => `synthetic-generated-${++idSequence}` };
   const dependencies: ReviewDependencies = { ...common, transaction };
@@ -319,5 +399,6 @@ export function createReviewMemoryStore() {
       return clone(controls.readStagingGrant ? await controls.readStagingGrant(expected, controls.stagingGrantReads) : controls.stagingGrant);
     },
   };
-  return { dependencies, inboxDependencies, controls, get rows() { return rows; }, snapshot: () => clone(rows) };
+  const catalogDependencies: CatalogDependencies = { ...common, transaction };
+  return { dependencies, inboxDependencies, catalogDependencies, controls, get rows() { return rows; }, snapshot: () => clone(rows) };
 }

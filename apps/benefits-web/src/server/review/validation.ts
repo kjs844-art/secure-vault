@@ -86,7 +86,7 @@ export function parseAuthority(value: unknown, now: number): ReviewAuthority {
   }
 }
 
-function label(value: unknown, maximum: number): string {
+export function label(value: unknown, maximum: number): string {
   if (typeof value !== "string" || !value || value.trim() !== value || value.length > maximum
     || /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(value)
     // Unicode mode matches lone surrogate code points but preserves valid emoji pairs.
@@ -108,7 +108,7 @@ function days(value: unknown): number {
 }
 
 /** Preserve stated day precision and explicit offsets; never infer an unstated zone. */
-function recordedDate(value: unknown): string {
+export function recordedDate(value: unknown): string {
   if (typeof value !== "string" || value.trim() !== value || value.length > 40) return failReview();
   const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2}))?$/.exec(value);
   if (!match) return failReview();

@@ -139,3 +139,21 @@ GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않
   같은 handle 종료 확인 전 새 push로 취소하지 않는다. 현재 inbox 코드의 CI 성공이 아니다.
 - 다음 작업은 owned 서비스 생성·조회 및 화면용 안전한 projection/응답 순서 제어다.
   실제 DB·도메인·배포 보류, 원본 Lovable/benefit/DB 동결, M02 예약 UI/vault 불변을 유지한다.
+
+## 2026-09-28 서비스 카탈로그·화면 데이터 체크포인트
+
+- 시작 로컬 `24d47e17`(inbox 검증 commit), 실제 원격 `3c25df6`, clean 확인.
+- [검사 기록](../../verification/mvp-integration/2026-09-28-service-catalog.md) /
+  [카탈로그·화면 데이터 계약](../../../apps/benefits-web/CATALOG_CONTRACT.md).
+- 서비스 create/update/remove/get/list, user-reported 메타데이터, current-row replay,
+  service/collection revision, live-benefit 참조와 confirm의 직렬화 조건을 구현했다.
+- 화면 투영은 private ID/원문을 제외하고 날짜/null/proof를 보존한다. reducer는 요청 당시 scope,
+  generation/revision으로 늦은 응답과 삭제 후 부활을 막는다. 실제 UI/auth에는 아직 연결하지 않았다.
+- catalog 188 + DTO 20 포함 전체 앱 969/969; build/typecheck/boundary(25/4)/HTTP smoke exit 0.
+  상세 명령과 한계는 검사 기록에 있다. 합성 메모리 모델은 실제 DB/RLS/내구성 증거가 아니다.
+- 이전 원격 `3c25df6` run 36362044099/36362040475는 둘 다 completed/success 확인.
+  이전 inbox commit과 이번 catalog commit을 검증 후 비강제 push한다. 새 SHA CI 통과는 별개다.
+- 다음은 실제 provider 설정 없이 가능한 bounded 요청/응답 adapter와 UI 연결 준비다.
+  M02 예약 경로를 무단 점유하지 않고, UI/auth wiring·실 E2E 미완료를 유지한다.
+- DB/도메인/배포는 사용자 재개 전까지 계속 보류. 날짜만으로 재개하지 않는다.
+  원본 Lovable/benefit/DB, vault/Rust, 다른 worktree는 그대로다. REAL_SECRET_GATE=CLOSED.

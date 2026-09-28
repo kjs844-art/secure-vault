@@ -214,6 +214,7 @@ export function createReviewService(deps: ReviewDependencies) {
       return failReview("REVIEW_CONFLICT");
     }
     tx.limitCommitTime(candidate.expiresAt);
+    tx.requireServiceVersion(service.id, service.revision);
     return { candidate, service };
   }
   function pendingPreview(preview: PreviewRow, auth: ReviewAuthority, now: number) {

@@ -21,6 +21,10 @@ The internal inbox now accepts only an original successful analysis object bound
 to its captured principal, checks separate staging consent, and stages/lists/discards
 bounded batches. It uses the same test-only memory store as review, not a real DB.
 See [the inbox and staging contract](INBOX_CONTRACT.md).
+Owned service organization now has internal create/update/delete/get/list controllers.
+Reviewed benefits have a separate browser-safe projection/decoder and scoped response
+reducer. Neither is connected to UI, real authentication, or a database yet.
+See [the catalog and presentation contract](CATALOG_CONTRACT.md).
 
 ## Local execution
 

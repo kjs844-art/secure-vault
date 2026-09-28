@@ -550,7 +550,7 @@ for (const action of ["preview", "confirm", "reject", "remove"] as const) {
   }
 }
 
-type WriteMethod = Exclude<keyof ReviewTransaction, "limitCommitTime" | "getCandidate" | "getService"
+type WriteMethod = Exclude<keyof ReviewTransaction, "limitCommitTime" | "requireServiceVersion" | "getCandidate" | "getService"
   | "getPreview" | "getBenefit" | "getOperation">;
 const writeCases: Array<[Action, WriteMethod]> = [
   ["preview", "insertPreview"], ["confirm", "updateCandidate"], ["confirm", "updatePreview"],

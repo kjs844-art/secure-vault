@@ -21,6 +21,11 @@
 [후보 수신함 연결 검사](../../verification/mvp-integration/2026-09-28-candidate-inbox.md).
 실제 인증·메일·DB·화면 연결, 자동 물리 삭제나 운영 배포 완료를 뜻하지 않는다.
 
+다음 체크포인트: owned 서비스 CRUD/list와 검토된 혜택의 화면용 DTO/응답 순서 제어를 추가했다.
+로컬 앱 969/969 및 build/typecheck/boundary/HTTP smoke 통과.
+[카탈로그·화면 데이터 검사](../../verification/mvp-integration/2026-09-28-service-catalog.md).
+실제 UI/auth/DB wiring은 미완료이고 원본 환경 동결/DB·도메인·배포 보류는 유지한다.
+
 ## 기준과 목표
 
 - 유일한 새 개발 대상: https://github.com/kjs844-art/secure-vault (private).

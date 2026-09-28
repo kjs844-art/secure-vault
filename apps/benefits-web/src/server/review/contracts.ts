@@ -120,6 +120,12 @@ export interface ReviewOperation {
 export interface ReviewTransaction {
   // Tighten the adapter's commit deadline; a commit at/after it must not succeed.
   limitCommitTime(notAfter: number): void;
+  // Register a live-service pre-write/base revision predicate until commit.
+  // Prevent EXTERNAL changes; the transaction's own catalog edit/delete may
+  // advance that version or state. Do not test its modified row against the old one.
+  // Share the same serializable lock/predicate boundary with catalog edits/deletion and their
+  // live-benefit reference check; a read followed by an unchecked insert is unsafe.
+  requireServiceVersion(serviceId: string, expectedRevision: number): void;
   getCandidate(id: string): Promise<CandidateRow | null>;
   getService(id: string): Promise<ReviewServiceRow | null>;
   getPreview(id: string): Promise<PreviewRow | null>;

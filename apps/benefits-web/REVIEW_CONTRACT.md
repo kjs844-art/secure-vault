@@ -21,7 +21,8 @@
 미리보기 생성과 저장 확인은 별도 동작이다. preview를 만들었다고 혜택이 저장되지는 않는다.
 코드에는 auth/DB 어댑터를 신뢰 경계로 두되, 실제 구현이 완료됐다고 가정하는 fallback이 없다.
 후보 생성·batch 조회·미확인 후보 폐기는 [수신함 연결 코드](INBOX_CONTRACT.md)에 있다.
-서비스 생성, 로그인, 실제 사용자 확인 화면과 공개 API wiring은 후속 작업이다.
+서비스 생성/조회 내부 코드는 [카탈로그 계약](CATALOG_CONTRACT.md)에 추가했다.
+로그인, 실제 사용자 확인 화면과 공개 API wiring은 후속 작업이다.
 
 ## 명령과 상태
 
@@ -85,6 +86,9 @@ AI의 high confidence도 이 상태를 바꾸지 않는다.
 6. pending preview 내용을 변경하지 않는다. 종료 상태/삭제 표식을 다시 pending/live로 돌리지 않는다.
 7. 삭제 때 관련 preview 내용을 빠짐없이 제거한다. 동시 preview 생성과의 phantom/격리 문제도 막는다.
 8. commit이 완료된 뒤에만 callback 결과를 반환한다. 실제 DB 격리/RLS/내구성/프로세스 실패 검증은 별도다.
+9. `requireServiceVersion`의 변경 전 live/revision 조건을 commit까지 등록한다.
+   catalog 수정/삭제와 같은 직렬화 경계에서 검사하여 삭제 뒤 혜택이 늦게 생성되는 경쟁을 막는다.
+   자기 transaction의 catalog 변경 결과가 old revision이어야 한다는 뜻은 아니다.
 
 이 의무를 메모리 모델로 시험한 결과는 실제 DB transaction/동시성/RLS/영속 삭제의 증거가 아니다.
 어댑터 자체 timeout, 장애 대조, 인증/CSRF/rate limit, JSON 역직렬화 전 HTTP body 크기 제한,
@@ -107,8 +111,10 @@ commit 후 결과를 기다리는 동안 세션이 바뀌어도 최종 guard가 
 표식을 지우면 과거 요청의 재생 방지 성질이 바뀌므로 무조건 purge했다고 하지 않는다.
 
 이전에 반환한 응답·브라우저 메모리·캐시·로그·백업까지 회수/소거한 것은 아니다.
-향후 UI는 receipt의 `dataGeneration + benefitRevision`으로 이미 본 삭제보다 오래된 saved 응답을
-무시해야 한다. 이를 연결하지 않고 “늦은 응답에도 절대 재등장하지 않는다”고 주장하지 않는다.
+화면용 projection/decoder/reducer는 [카탈로그·화면 계약](CATALOG_CONTRACT.md)에 추가했다.
+향후 UI는 요청 시작 시의 인증 문맥 scope를 먼저 검사하고, 이어 generation/revision으로
+이미 본 삭제보다 오래된 saved 응답을 무시해야 한다. generation만으로 두 계정을 구분하지 않는다.
+실제 UI/auth에 연결하지 않고 “늦은 응답에도 절대 재등장하지 않는다”고 주장하지 않는다.
 
 ## 현재 상태
 
