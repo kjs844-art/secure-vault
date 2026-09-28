@@ -17,6 +17,10 @@ The provider-independent review controller now separates an immutable preview
 from confirmation, applies owned revision checks, and keeps deletion/replay fences.
 It has only a synthetic in-memory adapter, not connected authentication or DB storage.
 See [the confirmation and deletion contract](REVIEW_CONTRACT.md).
+The internal inbox now accepts only an original successful analysis object bound
+to its captured principal, checks separate staging consent, and stages/lists/discards
+bounded batches. It uses the same test-only memory store as review, not a real DB.
+See [the inbox and staging contract](INBOX_CONTRACT.md).
 
 ## Local execution
 

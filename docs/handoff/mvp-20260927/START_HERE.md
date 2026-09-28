@@ -16,6 +16,11 @@
 합성 어댑터 검증이며 실제 로그인/DB/메일/화면에 연결한 상태는 아니다.
 [최신 확인 제어 검사 기록](../../verification/mvp-integration/2026-09-28-review-control.md).
 
+추가: 분석 당시 소유권과 별도 보관 동의에 결합된 stage/listBatch/discard를 확인 코드와 연결했다.
+로컬 앱 합성 테스트 761/761 및 빌드/타입/경계/HTTP smoke 통과.
+[후보 수신함 연결 검사](../../verification/mvp-integration/2026-09-28-candidate-inbox.md).
+실제 인증·메일·DB·화면 연결, 자동 물리 삭제나 운영 배포 완료를 뜻하지 않는다.
+
 ## 기준과 목표
 
 - 유일한 새 개발 대상: https://github.com/kjs844-art/secure-vault (private).

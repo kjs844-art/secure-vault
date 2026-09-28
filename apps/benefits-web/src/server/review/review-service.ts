@@ -53,11 +53,12 @@ function owned<T extends { id: string; ownerId: string; dataGeneration: number; 
 function candidateSnapshot(row: CandidateRow): CandidateRow {
   return persisted(() => {
     if (!["pending", "accepted", "deleted"].includes(row.state)
+      || !Number.isSafeInteger(row.expiresAt) || row.expiresAt < 0 || row.expiresAt > 253402300799999
       || (row.state === "deleted" ? row.content !== null : row.content === null)) {
       return failReview("REVIEW_STORE_UNAVAILABLE");
     }
     return freeze({ id: row.id, ownerId: row.ownerId, dataGeneration: row.dataGeneration,
-      revision: row.revision, state: row.state,
+      revision: row.revision, expiresAt: row.expiresAt, state: row.state,
       content: row.content === null ? null : parseCandidateContent(row.content) });
   });
 }
@@ -144,7 +145,8 @@ function receipt(row: ReviewedBenefitRow, operationId: string, replayed: boolean
 export function createReviewService(deps: ReviewDependencies) {
   async function execute<Input, Output>(input: unknown, parse: (value: unknown) => Input,
     act: (tx: ReviewTransaction, auth: ReviewAuthority, request: Input, clock: () => number,
-      guard: () => Promise<void>) => Promise<Output>): Promise<ReviewResult<Output>> {
+      guard: () => Promise<void>) => Promise<Output>,
+    finalize: (value: Output, now: number) => Output = (value) => value): Promise<ReviewResult<Output>> {
     try {
       // Parse and copy before the first await: callers cannot mutate a reviewed command.
       const request = parse(input);
@@ -174,7 +176,7 @@ export function createReviewService(deps: ReviewDependencies) {
       // Commit acknowledgement can be delayed too. Do not return a payload to
       // authority revoked while awaiting it; failure is NOT proof of rollback.
       await guard();
-      return result;
+      return freeze({ ok: true as const, value: finalize(result.value, clock()) });
     } catch (error) {
       // A commit may have happened before an adapter failure. Never claim rollback.
       return freeze({ ok: false, code: error instanceof ReviewFailure ? error.code : "REVIEW_STORE_UNAVAILABLE" });
@@ -204,13 +206,14 @@ export function createReviewService(deps: ReviewDependencies) {
     const benefitId = persisted(() => parseId(existing.benefitId));
     return receipt(await loadBenefit(tx, auth, benefitId), operationId, true);
   }
-  async function requirePending(tx: ReviewTransaction, auth: ReviewAuthority, draft: ReviewDraft) {
+  async function requirePending(tx: ReviewTransaction, auth: ReviewAuthority, draft: ReviewDraft, now: number) {
     const candidate = await loadCandidate(tx, auth, draft.candidateId);
     const service = await loadService(tx, auth, draft.serviceId);
-    if (candidate.state !== "pending" || service.state !== "live"
+    if (candidate.state !== "pending" || candidate.expiresAt <= now || service.state !== "live"
       || candidate.revision !== draft.candidateRevision || service.revision !== draft.serviceRevision) {
       return failReview("REVIEW_CONFLICT");
     }
+    tx.limitCommitTime(candidate.expiresAt);
     return { candidate, service };
   }
   function pendingPreview(preview: PreviewRow, auth: ReviewAuthority, now: number) {
@@ -226,18 +229,21 @@ export function createReviewService(deps: ReviewDependencies) {
   return Object.freeze({
     preview(input: unknown): Promise<ReviewResult<PreviewView>> {
       return execute(input, parseDraft, async (tx, auth, draft, clock, guard) => {
-        const { candidate, service } = await requirePending(tx, auth, draft);
+        const { candidate, service } = await requirePending(tx, auth, draft, clock());
         const content: PreviewContent = freeze({ ...draft, serviceName: service.name, source: candidate.content! });
         await guard();
         const row: PreviewRow = freeze({ id: parseId(deps.newId()), ownerId: auth.ownerId,
           dataGeneration: auth.dataGeneration, revision: 1, sessionId: auth.sessionId,
-          sessionRevision: auth.sessionRevision, expiresAt: Math.min(clock() + PREVIEW_TTL_MS, auth.expiresAt),
+          sessionRevision: auth.sessionRevision, expiresAt: Math.min(clock() + PREVIEW_TTL_MS, auth.expiresAt, candidate.expiresAt),
           state: "pending", candidateId: candidate.id, content });
         tx.limitCommitTime(row.expiresAt);
         if (!await tx.insertPreview(row)) return failReview("REVIEW_CONFLICT");
         if (clock() >= row.expiresAt) return failReview("REVIEW_PREVIEW_EXPIRED");
         return freeze({ id: row.id, revision: row.revision, expiresAt: row.expiresAt, content,
           accountProof: "not-established" as const, currentBalanceProof: "not-established" as const });
+      }, (view, now) => {
+        if (view.expiresAt <= now) return failReview("REVIEW_PREVIEW_EXPIRED");
+        return view;
       });
     },
     confirm(input: unknown): Promise<ReviewResult<ReviewReceipt>> {
@@ -248,7 +254,7 @@ export function createReviewService(deps: ReviewDependencies) {
         const preview = await loadPreview(tx, auth, request.previewId);
         const draft = pendingPreview(preview, auth, clock());
         tx.limitCommitTime(preview.expiresAt);
-        const { candidate, service } = await requirePending(tx, auth, draft);
+        const { candidate, service } = await requirePending(tx, auth, draft, clock());
         if (!same(candidate.content, draft.source) || service.name !== draft.serviceName) return failReview("REVIEW_CONFLICT");
         const candidateRevision = nextRevision(candidate.revision);
         const previewRevision = nextRevision(preview.revision);

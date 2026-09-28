@@ -43,7 +43,8 @@ OAuth의 제공자 권한 범위와 이 앱의 query 제한은 다르다. query�
 
 ## 동의와 결합
 
-- `ownerId`와 `sessionId`는 검증된 로그인에서만 나온다.
+- `ownerId`와 `sessionId`, 양의 정수 `sessionRevision`/`dataGeneration`은 검증된 서버 상태에서만 나온다.
+  세션 변경·삭제 세대 변경도 모든 guard와 quota permit에서 검사한다. 누락 시 기본값을 만들지 않는다.
 - `grantOwnerId`, `grantSessionId`, `grantMailboxBindingId`가 선택한 사용자/세션/메일 연결과
   같아야 한다. 연결 ID는 불투명한 서버 참조이지 메일 주소·OAuth 토큰이 아니다.
 - `mailRead`와 `externalAnalysis`를 독립적으로 선택·확인해야 한다. Google 연결 성공이나
@@ -106,6 +107,15 @@ quota 단계 이후 실패하더라도 자동 환불/재시도를 하지 않는�
 
 로그인/동의/실행 기록의 영속 보관, crash 복구, provider 완료 증명, 삭제와 보존 기간은
 후속 구현이다. receipt만으로 그 기능이 완료됐다고 하지 않는다.
+
+## 후보 수신함으로의 내부 연결
+
+실제 성공 객체만 module-private WeakMap에 원래 authority와 결합한다.
+`getVerifiedAnalysisHandoff`는 그 원본 객체에 대해서만 값을 반환하며 복사본/실패/가짜 receipt는 거부한다.
+공개 result/receipt에 owner/session/revision/generation을 추가하지 않는다.
+같은 프로세스의 실행 출처를 구분하는 장치이지 인증 어댑터나 프로세스 재시작 복구를 대체하지 않는다.
+[후보 수신함](INBOX_CONTRACT.md)은 이를 사용해 별도 저장 동의·현재 권한·batch 원자성을 검사한다.
+모든 어댑터는 여전히 합성 테스트 전용이며 실제 로그인/메일/DB 연결은 하지 않았다.
 
 이 설계에는 `agent-consent-patterns`의 좁은 권한, 독립 동의, 수신자·범위의 구체화,
 일회 권한, 외부 한도 강제, 정직한 철회/처리 기록 원칙을 반영했다. 최종 UI/디자인은 하지 않았다.

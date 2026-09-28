@@ -2,8 +2,11 @@ import {
   REVIEW_SCHEMA,
   type CandidateContent, type CandidateRow, type PreviewRow, type ReviewedBenefitRow,
   type ReviewAuthority, type ReviewDependencies, type ReviewOperation,
-  type ReviewServiceRow, type ReviewTransaction, type ReviewValues,
+  type ReviewServiceRow, type ReviewValues,
 } from "../../src/server/review/contracts.ts";
+import { STAGING_POLICY, type CandidateBatchRow, type CandidateInboxDependencies,
+  type CandidateInboxTransaction, type CandidateStagingGrant } from "../../src/server/inbox/contracts.ts";
+import { MAIL_ANALYSIS_POLICY, type RunAuthority } from "../../src/server/mail/run-analysis.ts";
 
 // SYNTHETIC TEST SUPPORT ONLY. A serialized in-memory snapshot is not a real DB,
 // durable persistence, transaction-isolation evidence, RLS, or verified auth.
@@ -36,7 +39,25 @@ export function candidateContent(patch: Partial<CandidateContent> = {}): Candida
 
 export function candidateRow(patch: Partial<CandidateRow> = {}): CandidateRow {
   return { id: CANDIDATE_ID, ownerId: REVIEW_OWNER, dataGeneration: 1, revision: 1,
-    state: "pending", content: candidateContent(), ...patch };
+    expiresAt: REVIEW_NOW + 86400000, state: "pending", content: candidateContent(), ...patch };
+}
+
+export function analysisAuthority(patch: Partial<RunAuthority> = {}): RunAuthority {
+  return { ownerId: REVIEW_OWNER, sessionId: "synthetic-session", sessionRevision: 1, dataGeneration: 1,
+    sessionExpiresAt: REVIEW_NOW + 600000, mailboxBindingId: "synthetic-mailbox", grantId: "synthetic-analysis-grant",
+    grantRevision: 1, grantExpiresAt: REVIEW_NOW + 600000, operationId: "synthetic-analysis-operation",
+    recipientId: "synthetic-analyzer", policyVersion: MAIL_ANALYSIS_POLICY.version,
+    mailRead: true, externalAnalysis: true, ...patch };
+}
+
+export function stagingGrant(patch: Partial<CandidateStagingGrant> = {}): CandidateStagingGrant {
+  const analysis = analysisAuthority();
+  return { id: "synthetic-staging-grant", revision: 1, ownerId: analysis.ownerId,
+    sessionId: analysis.sessionId, sessionRevision: analysis.sessionRevision, dataGeneration: analysis.dataGeneration,
+    analysisOperationId: analysis.operationId, mailboxBindingId: analysis.mailboxBindingId,
+    recipientId: analysis.recipientId, analysisGrantId: analysis.grantId, analysisGrantRevision: analysis.grantRevision,
+    policyVersion: STAGING_POLICY, allowCandidateStorage: true,
+    expiresAt: REVIEW_NOW + 600000, pendingAccessUntil: REVIEW_NOW + 86400000, ...patch };
 }
 
 export function serviceRow(patch: Partial<ReviewServiceRow> = {}): ReviewServiceRow {
@@ -50,10 +71,13 @@ export interface MemoryRows {
   previews: Map<string, PreviewRow>;
   benefits: Map<string, ReviewedBenefitRow>;
   operations: Map<string, ReviewOperation>;
+  batches: Map<string, CandidateBatchRow>;
+  // Synthetic unique-index metadata survives candidate payload erasure.
+  candidateSlots: Map<string, string>;
 }
-type Method = keyof ReviewTransaction;
+type Method = keyof CandidateInboxTransaction;
 type ConditionalMethod = "insertPreview" | "insertBenefit" | "insertOperation"
-  | "updateCandidate" | "updatePreview" | "updateBenefit";
+  | "updateCandidate" | "updatePreview" | "updateBenefit" | "insertCandidate" | "insertCandidateBatch";
 export interface MemoryControls {
   authority: unknown;
   now: number;
@@ -62,6 +86,12 @@ export interface MemoryControls {
   commits: number;
   rollbacks: number;
   trace: string[];
+  analysisAuthority: unknown;
+  stagingGrant: unknown;
+  analysisChecks: number;
+  stagingGrantReads: number;
+  isAnalysisAuthorized?: (expected: RunAuthority, call: number) => boolean | Promise<boolean>;
+  readStagingGrant?: (expected: RunAuthority, call: number) => unknown | Promise<unknown>;
   falseMethod?: ConditionalMethod;
   readAuthority?: (call: number) => unknown | Promise<unknown>;
   beforeMethod?: (method: Method) => void | Promise<void>;
@@ -78,9 +108,11 @@ export function createReviewMemoryStore() {
   let rows: MemoryRows = {
     candidates: new Map([[CANDIDATE_ID, candidateRow()]]),
     services: new Map([[SERVICE_ID, serviceRow()]]), previews: new Map(), benefits: new Map(), operations: new Map(),
+    batches: new Map(), candidateSlots: new Map(),
   };
   const controls: MemoryControls = { authority: reviewAuthority(), now: REVIEW_NOW,
-    authorityReads: 0, transactions: 0, commits: 0, rollbacks: 0, trace: [] };
+    authorityReads: 0, transactions: 0, commits: 0, rollbacks: 0, trace: [],
+    analysisAuthority: analysisAuthority(), stagingGrant: stagingGrant(), analysisChecks: 0, stagingGrantReads: 0 };
   let serial = Promise.resolve();
   let idSequence = 0;
 
@@ -94,7 +126,32 @@ export function createReviewMemoryStore() {
     }
   }
 
-  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: { notAfter: number }): ReviewTransaction {
+  function matches(current: unknown, expected: object): boolean {
+    return typeof current === "object" && current !== null
+      && Object.entries(expected).every(([key, value]) => (current as Record<string, unknown>)[key] === value);
+  }
+  function analysisAllowed(expected: RunAuthority): boolean {
+    return matches(controls.analysisAuthority, expected) && expected.sessionExpiresAt > controls.now
+      && expected.grantExpiresAt > controls.now;
+  }
+  function assertStaging(authority: ReviewAuthority, analysis: RunAuthority, grant: CandidateStagingGrant) {
+    if (!analysisAllowed(analysis) || !matches(controls.stagingGrant, grant)
+      || grant.ownerId !== authority.ownerId || grant.sessionId !== authority.sessionId
+      || grant.sessionRevision !== authority.sessionRevision || grant.dataGeneration !== authority.dataGeneration
+      || analysis.ownerId !== authority.ownerId || analysis.sessionId !== authority.sessionId
+      || analysis.sessionRevision !== authority.sessionRevision || analysis.dataGeneration !== authority.dataGeneration
+      || grant.analysisOperationId !== analysis.operationId || grant.mailboxBindingId !== analysis.mailboxBindingId
+      || grant.recipientId !== analysis.recipientId || grant.analysisGrantId !== analysis.grantId
+      || grant.analysisGrantRevision !== analysis.grantRevision || grant.allowCandidateStorage !== true
+      || grant.policyVersion !== STAGING_POLICY || grant.expiresAt <= controls.now || grant.pendingAccessUntil <= controls.now) {
+      throw new Error(SYNTHETIC_PRIVATE);
+    }
+  }
+  interface CommitRequirements {
+    notAfter: number;
+    staging: Array<{ analysis: RunAuthority; grant: CandidateStagingGrant }>;
+  }
+  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: CommitRequirements): CandidateInboxTransaction {
     async function operation<T>(method: Method, action: () => T): Promise<T> {
       controls.trace.push(method);
       await controls.beforeMethod?.(method);
@@ -126,7 +183,7 @@ export function createReviewMemoryStore() {
       if (method === "updateCandidate") {
         const before = existing as unknown as CandidateRow;
         const after = row as unknown as CandidateRow;
-        if ((before.state !== "pending" && after.state === "pending")
+        if (before.expiresAt !== after.expiresAt || (before.state !== "pending" && after.state === "pending")
           || (before.state === "deleted" && (after.state !== "deleted" || after.content !== null))) return false;
       }
       if (method === "updatePreview") {
@@ -149,6 +206,33 @@ export function createReviewMemoryStore() {
       return true;
     }
     return {
+      requireCandidateStaging: (analysis, grant) => {
+        controls.trace.push("requireCandidateStaging");
+        assertStaging(authority, analysis, grant);
+        deadline.staging.push({ analysis: clone(analysis), grant: clone(grant) });
+      },
+      getCandidateBatch: (id) => operation("getCandidateBatch", () => scoped(snapshot.batches.get(operationKey(authority.ownerId, id)))),
+      insertCandidateBatch: (row) => operation("insertCandidateBatch", () => {
+        const key = operationKey(row.ownerId, row.analysisOperationId);
+        if (controls.falseMethod === "insertCandidateBatch" || !allowed(row) || snapshot.batches.has(key)
+          || !deadline.staging.some(({ analysis, grant }) => row.analysisOperationId === analysis.operationId
+            && row.mailboxBindingId === analysis.mailboxBindingId && row.pendingAccessUntil === grant.pendingAccessUntil)) return false;
+        snapshot.batches.set(key, clone(row));
+        return true;
+      }),
+      insertCandidate: (row) => operation("insertCandidate", () => {
+        if (!row.content || row.state !== "pending" || !Number.isSafeInteger(row.expiresAt)
+          || row.expiresAt <= controls.now || !deadline.staging.some(({ analysis, grant }) =>
+            row.content!.analysisOperationId === analysis.operationId && row.content!.mailboxBindingId === analysis.mailboxBindingId
+            && row.expiresAt === grant.pendingAccessUntil)) return false;
+        const key = JSON.stringify([row.ownerId, row.content.analysisOperationId, row.content.candidateIndex]);
+        if (snapshot.candidateSlots.has(key) || [...snapshot.candidates.values()].some((existing) =>
+          existing.ownerId === row.ownerId && existing.content?.analysisOperationId === row.content!.analysisOperationId
+          && existing.content.candidateIndex === row.content!.candidateIndex)) return false;
+        if (!insert("insertCandidate", snapshot.candidates, row)) return false;
+        snapshot.candidateSlots.set(key, row.id);
+        return true;
+      }),
       limitCommitTime: (notAfter) => {
         controls.trace.push("limitCommitTime");
         if (!Number.isSafeInteger(notAfter) || notAfter < 0) throw new Error(SYNTHETIC_PRIVATE);
@@ -187,15 +271,12 @@ export function createReviewMemoryStore() {
     };
   }
 
-  const dependencies: ReviewDependencies = {
-    readAuthority: async () => {
-      controls.authorityReads++;
-      controls.trace.push("readAuthority");
-      return clone(controls.readAuthority ? await controls.readAuthority(controls.authorityReads) : controls.authority);
-    },
-    now: () => controls.now,
-    newId: () => `synthetic-generated-${++idSequence}`,
-    transaction: async <T>(authority: ReviewAuthority, action: (tx: ReviewTransaction) => Promise<T>): Promise<T> => {
+  const readAuthority = async () => {
+    controls.authorityReads++;
+    controls.trace.push("readAuthority");
+    return clone(controls.readAuthority ? await controls.readAuthority(controls.authorityReads) : controls.authority);
+  };
+  const transaction = async <T>(authority: ReviewAuthority, action: (tx: CandidateInboxTransaction) => Promise<T>): Promise<T> => {
       let release!: () => void;
       const previous = serial;
       serial = new Promise<void>((resolve) => { release = resolve; });
@@ -206,11 +287,12 @@ export function createReviewMemoryStore() {
         await controls.beforeEntry?.();
         assertAuthority(authority);
         const snapshot = clone(rows);
-        const deadline = { notAfter: authority.expiresAt };
+        const deadline: CommitRequirements = { notAfter: authority.expiresAt, staging: [] };
         const result = await action(transactionView(snapshot, authority, deadline));
         await controls.beforeCommit?.();
         assertAuthority(authority);
         if (controls.now >= deadline.notAfter) throw new Error(SYNTHETIC_PRIVATE);
+        for (const expected of deadline.staging) assertStaging(authority, expected.analysis, expected.grant);
         rows = snapshot;
         controls.commits++;
         committed = true;
@@ -222,7 +304,20 @@ export function createReviewMemoryStore() {
       } finally {
         release();
       }
+  };
+  const common = { readAuthority, now: () => controls.now, newId: () => `synthetic-generated-${++idSequence}` };
+  const dependencies: ReviewDependencies = { ...common, transaction };
+  const inboxDependencies: CandidateInboxDependencies = { ...common, transaction,
+    isAnalysisAuthorized: async (expected) => {
+      controls.analysisChecks++;
+      controls.trace.push("isAnalysisAuthorized");
+      return controls.isAnalysisAuthorized ? controls.isAnalysisAuthorized(expected, controls.analysisChecks) : analysisAllowed(expected);
+    },
+    readStagingGrant: async (expected) => {
+      controls.stagingGrantReads++;
+      controls.trace.push("readStagingGrant");
+      return clone(controls.readStagingGrant ? await controls.readStagingGrant(expected, controls.stagingGrantReads) : controls.stagingGrant);
     },
   };
-  return { dependencies, controls, get rows() { return rows; }, snapshot: () => clone(rows) };
+  return { dependencies, inboxDependencies, controls, get rows() { return rows; }, snapshot: () => clone(rows) };
 }

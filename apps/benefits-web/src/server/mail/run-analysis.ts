@@ -13,6 +13,8 @@ export const MAIL_ANALYSIS_POLICY = Object.freeze({
 export interface RunAuthority {
   readonly ownerId: string;
   readonly sessionId: string;
+  readonly sessionRevision: number;
+  readonly dataGeneration: number;
   readonly sessionExpiresAt: number;
   readonly mailboxBindingId: string;
   readonly grantId: string;
@@ -37,7 +39,8 @@ export interface MailAnalysisAdapters {
   // and use the earlier expiry. OAuth connection alone never implies AI-analysis consent.
   // grantOwnerId/grantSessionId/grantMailboxBindingId are checked against the principal.
   readAuthority(signal: AbortSignal): Promise<unknown>;
-  // Atomically enforce owner/session/mailbox/recipient/policy/grant/expiry and numeric caps.
+  // Atomically enforce owner/session/revision/data-generation/mailbox/recipient/
+  // policy/grant/expiry and numeric caps.
   // One-use key is (ownerId, operationId), NOT grant revision/session; a replay is denied.
   // This runner never automatically retries or refunds an uncertain consumption.
   reserveQuota(context: RunContext, signal: AbortSignal): Promise<unknown>;
@@ -83,6 +86,24 @@ export type MailRunResult =
     readonly extractedAt: string; readonly receipt: AnalysisReceipt }
   | { readonly ok: false; readonly code: ErrorCode; readonly receipt: AnalysisReceipt };
 
+export interface VerifiedAnalysisHandoff {
+  readonly authority: RunAuthority;
+  readonly result: Extract<MailRunResult, { ok: true }>;
+}
+
+const verifiedAnalysisHandoffs = new WeakMap<object, VerifiedAnalysisHandoff>();
+
+/**
+ * Server-internal provenance for the exact successful object from this module.
+ * It is not current authorization, durable storage or evidence across a process
+ * restart. Callers must recheck authority before persistence. Reads do not consume
+ * the handoff, so the same object can retry an independently idempotent stage.
+ */
+export function getVerifiedAnalysisHandoff(result: unknown): VerifiedAnalysisHandoff | null {
+  if (typeof result !== "object" || result === null) return null;
+  return verifiedAnalysisHandoffs.get(result) ?? null;
+}
+
 class RunFailure extends Error {
   constructor(readonly code: ErrorCode) { super(code); }
 }
@@ -91,15 +112,19 @@ function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 function identifier(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+  return typeof value === "string" && value.trim() === value && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }
 function timestamp(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 253402300799999;
+}
+function revision(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 function authority(value: unknown, options: MailRunOptions, now: number): RunAuthority {
   if (value === null) return fail("AUTH_REQUIRED");
   const raw = record(value);
   if (!raw || !identifier(raw.ownerId) || !identifier(raw.sessionId)
+    || !revision(raw.sessionRevision) || !revision(raw.dataGeneration)
     || !timestamp(raw.sessionExpiresAt) || raw.sessionExpiresAt <= now) return fail("AUTH_REQUIRED");
   if (!identifier(raw.grantId) || !Number.isSafeInteger(raw.grantRevision) || (raw.grantRevision as number) < 1
     || raw.grantOwnerId !== raw.ownerId || raw.grantSessionId !== raw.sessionId
@@ -111,7 +136,8 @@ function authority(value: unknown, options: MailRunOptions, now: number): RunAut
   }
   // Explicit projection: no tokens, extra adapter data or mutable objects cross stages.
   return Object.freeze({
-    ownerId: raw.ownerId, sessionId: raw.sessionId, sessionExpiresAt: raw.sessionExpiresAt,
+    ownerId: raw.ownerId, sessionId: raw.sessionId,
+    sessionRevision: raw.sessionRevision, dataGeneration: raw.dataGeneration, sessionExpiresAt: raw.sessionExpiresAt,
     mailboxBindingId: options.mailboxBindingId,
     grantId: raw.grantId, grantRevision: raw.grantRevision as number, grantExpiresAt: raw.grantExpiresAt,
     operationId: options.operationId, recipientId: options.recipientId,
@@ -216,7 +242,8 @@ export async function runMailAnalysis(adapters: MailAnalysisAdapters, options: M
       catch { return fail("AUTHORITY_CHANGED"); }
       if (JSON.stringify(current) !== JSON.stringify(initial)) return fail("AUTHORITY_CHANGED");
     }
-    // The atomic quota adapter also binds this permit to the verified owner/session/grant.
+    // The atomic quota adapter also binds this permit to the verified owner,
+    // session revision, owner data generation and grant.
     const rawPermit = await stage(() => {
       state.quota = "unknown";
       return adapters.reserveQuota(context, controller.signal);
@@ -227,10 +254,11 @@ export async function runMailAnalysis(adapters: MailAnalysisAdapters, options: M
       state.quota = "not-consumed";
       return fail("QUOTA_DENIED");
     }
-    const permitFields = ["status", "ownerId", "sessionId", "mailboxBindingId", "recipientId", "policyVersion",
+    const permitFields = ["status", "ownerId", "sessionId", "sessionRevision", "dataGeneration", "mailboxBindingId", "recipientId", "policyVersion",
       "grantId", "grantRevision", "operationId", "remaining"];
     if (!permit || Object.keys(permit).length !== permitFields.length || Object.keys(permit).some((key) => !permitFields.includes(key))
       || permit.status !== "granted" || permit.ownerId !== initial.ownerId || permit.sessionId !== initial.sessionId
+      || permit.sessionRevision !== initial.sessionRevision || permit.dataGeneration !== initial.dataGeneration
       || permit.mailboxBindingId !== initial.mailboxBindingId
       || permit.recipientId !== initial.recipientId || permit.policyVersion !== initial.policyVersion
       || permit.grantId !== initial.grantId || permit.grantRevision !== initial.grantRevision
@@ -269,7 +297,9 @@ export async function runMailAnalysis(adapters: MailAnalysisAdapters, options: M
     const extractedAt = new Date(now()).toISOString();
     check();
     if (initial.grantExpiresAt <= lastTime || initial.sessionExpiresAt <= lastTime) return fail("AUTHORITY_CHANGED");
-    return Object.freeze({ ok: true, candidates, extractedAt, receipt: receipt() });
+    const result: Extract<MailRunResult, { ok: true }> = Object.freeze({ ok: true, candidates, extractedAt, receipt: receipt() });
+    verifiedAnalysisHandoffs.set(result, Object.freeze({ authority: initial, result }));
+    return result;
   } catch (error) {
     return Object.freeze({ ok: false, code: error instanceof RunFailure ? error.code : "AUTHORITY_UNAVAILABLE", receipt: receipt() });
   } finally {

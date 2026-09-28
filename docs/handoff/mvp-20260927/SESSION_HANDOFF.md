@@ -122,3 +122,20 @@ GitHub 체크 색상이나 브랜치 개수로 완료 상태를 추정하지 않
 - 09:21 KST 갱신: 위 기준 SHA의 두 run 모두 `completed/success` 확인.
   새 확인·삭제 구현의 로컬 commit은 `94d29d55c41d1e7f5ec96ca0e8c806a3e4742e4f`다.
   이후 push 및 새 SHA 검사는 별개이며, 기준 CI 통과가 새 코드의 원격 검증을 대신하지 않는다.
+
+## 2026-09-28 후보 수신함 연결 체크포인트
+
+- 기준 `3c25df606d91a5cba716d251f9d463a4f3c96278`, 시작 clean/origin 일치.
+- [검사 기록](../../verification/mvp-integration/2026-09-28-candidate-inbox.md) /
+  [후보 수신함 계약](../../../apps/benefits-web/INBOX_CONTRACT.md).
+- runner의 private owner/sessionRevision/generation binding, 별도 저장 grant,
+  원자적 batch 요청/조회/폐기, 기존 확인·삭제 흐름을 합성 메모리 adapter로 연결했다.
+- 정확한 원본 성공 객체만 stage한다. expired pending은 내용 숨김/확인 거부하며 폐기는 가능하다.
+  이미 accepted된 혜택의 삭제를 이전 pending 기한 때문에 막지는 않는다.
+- 독립 검토에서 preview의 commit 후 만료 본문 반환을 수정했다. 본문만 차단하고
+  commit을 rollback했다고 오표시하지 않는다. stage 최종 권한 조회 지연의 기한 회귀도 있다.
+- 앱 761/761, build/typecheck/boundary(20/4)/loopback smoke exit 0.
+- 기준 SHA 원격 run 36362044099/36362040475는 09:46 KST 실제 in_progress/Rust 검사 중이었다.
+  같은 handle 종료 확인 전 새 push로 취소하지 않는다. 현재 inbox 코드의 CI 성공이 아니다.
+- 다음 작업은 owned 서비스 생성·조회 및 화면용 안전한 projection/응답 순서 제어다.
+  실제 DB·도메인·배포 보류, 원본 Lovable/benefit/DB 동결, M02 예약 UI/vault 불변을 유지한다.

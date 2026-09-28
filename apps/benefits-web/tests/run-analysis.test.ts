@@ -3,7 +3,7 @@ import { setImmediate as immediate } from "node:timers/promises";
 import { test } from "node:test";
 import { MAIL_LIMITS } from "../src/server/mail/contracts.ts";
 import {
-  MAIL_ANALYSIS_POLICY, runMailAnalysis,
+  getVerifiedAnalysisHandoff, MAIL_ANALYSIS_POLICY, runMailAnalysis,
   type AnalysisReceipt, type MailAnalysisAdapters, type MailRunOptions,
   type MailRunResult, type RunContext,
 } from "../src/server/mail/run-analysis.ts";
@@ -22,7 +22,8 @@ type Ledger = Set<string>;
 
 function validAuthority(patch: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    ownerId: "synthetic-owner", sessionId: "synthetic-session", sessionExpiresAt: NOW + 60000,
+    ownerId: "synthetic-owner", sessionId: "synthetic-session", sessionRevision: 1, dataGeneration: 1,
+    sessionExpiresAt: NOW + 60000,
     grantOwnerId: "synthetic-owner", grantSessionId: "synthetic-session",
     mailboxBindingId: OPTIONS.mailboxBindingId, grantMailboxBindingId: OPTIONS.mailboxBindingId,
     grantId: "synthetic-grant", grantRevision: 1, grantExpiresAt: NOW + 60000,
@@ -36,6 +37,7 @@ function granted(context: RunContext): Record<string, unknown> {
   const authority = context.authority;
   return {
     status: "granted", ownerId: authority.ownerId, sessionId: authority.sessionId,
+    sessionRevision: authority.sessionRevision, dataGeneration: authority.dataGeneration,
     mailboxBindingId: authority.mailboxBindingId, grantId: authority.grantId,
     grantRevision: authority.grantRevision, operationId: authority.operationId,
     recipientId: authority.recipientId, policyVersion: authority.policyVersion, remaining: 0,
@@ -108,6 +110,7 @@ function expectFailure(result: MailRunResult, code: FailureCode) {
   assert.ok(!JSON.stringify(result).includes(PRIVATE_MARKER));
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.receipt));
+  assert.equal(getVerifiedAnalysisHandoff(result), null, "failure results never carry successful-run provenance");
 }
 
 function expectStages(
@@ -192,7 +195,7 @@ test("success returns only ephemeral pending-review candidates with observed sta
   assert.equal(result.candidates[0]!.observedAt, null);
   assert.ok(result.candidates[0]!.reviewReasons.includes("NOT_CURRENT_ACCOUNT_OR_BALANCE_PROOF"));
   assert.deepEqual(Object.keys(result).sort(), ["candidates", "extractedAt", "ok", "receipt"]);
-  for (const field of ["confirmedAt", "persistedAt", "recordId", "ownerId", "sessionId"]) {
+  for (const field of ["confirmedAt", "persistedAt", "recordId", "ownerId", "sessionId", "sessionRevision", "dataGeneration"]) {
     assert.ok(!(field in result.candidates[0]!));
   }
   expectStages(result.receipt, "consumed", "returned", "returned");
@@ -215,6 +218,106 @@ test("empty mailbox succeeds with an immutable empty candidate list and never st
   assert.equal(fixture.state.calls.authority, 4);
   expectStages(result.receipt, "consumed", "returned", "not-started");
   assertFrozenTree(result);
+  assert.equal(getVerifiedAnalysisHandoff(result)?.result, result);
+});
+
+test("successful objects retain a private frozen authority binding without changing public output", async () => {
+  const fixture = harness();
+  const rawAuthority = validAuthority({ sessionRevision: 7, dataGeneration: 9,
+    token: PRIVATE_MARKER, nestedPrivate: { value: PRIVATE_MARKER } });
+  fixture.state.authority = rawAuthority;
+  const result = await runMailAnalysis(fixture.adapters, OPTIONS);
+  assert.ok(result.ok);
+  const handoff = getVerifiedAnalysisHandoff(result);
+  assert.ok(handoff);
+  assert.equal(handoff.result, result);
+  assert.equal(handoff.authority, fixture.state.contexts[0]!.authority);
+  assert.equal(handoff.authority.ownerId, "synthetic-owner");
+  assert.equal(handoff.authority.sessionId, "synthetic-session");
+  assert.equal(handoff.authority.sessionRevision, 7);
+  assert.equal(handoff.authority.dataGeneration, 9);
+  assert.deepEqual(Object.keys(handoff).sort(), ["authority", "result"]);
+  assertFrozenTree(handoff);
+  assert.throws(() => { (handoff.authority as unknown as Record<string, unknown>).dataGeneration = 10; }, TypeError);
+  assert.throws(() => { (handoff as unknown as Record<string, unknown>).result = {}; }, TypeError);
+  assert.throws(() => { (result as unknown as Record<string, unknown>).extractedAt = "synthetic-changed"; }, TypeError);
+  rawAuthority.sessionRevision = 100;
+  rawAuthority.dataGeneration = 100;
+  assert.equal(handoff.authority.sessionRevision, 7, "the binding is a frozen snapshot, not a live adapter object");
+  assert.equal(handoff.authority.dataGeneration, 9);
+  assert.equal(getVerifiedAnalysisHandoff(result), handoff);
+  await immediate();
+  assert.equal(getVerifiedAnalysisHandoff(result), handoff, "handoff lookup does not consume same-object provenance");
+  assert.deepEqual(Reflect.ownKeys(result).sort(), ["candidates", "extractedAt", "ok", "receipt"]);
+  const publicText = JSON.stringify(result);
+  for (const field of ["ownerId", "sessionId", "sessionRevision", "dataGeneration", "authority", "token", "nestedPrivate"]) {
+    assert.ok(!publicText.includes(`"${field}"`));
+  }
+  assert.ok(!publicText.includes(PRIVATE_MARKER));
+  assert.ok(!JSON.stringify(handoff).includes(PRIVATE_MARKER));
+});
+
+test("handoff lookup rejects structural copies, serialized clones and fabricated success objects", async () => {
+  const fixture = harness();
+  const result = await runMailAnalysis(fixture.adapters, OPTIONS);
+  assert.ok(result.ok);
+  const handoff = getVerifiedAnalysisHandoff(result);
+  assert.ok(handoff);
+  let getterCalls = 0;
+  const proxy = new Proxy(result, { get() { getterCalls++; throw new Error(PRIVATE_MARKER); } });
+  const revoked = Proxy.revocable(result, {});
+  revoked.revoke();
+  for (const input of [undefined, null, false, 0, "synthetic", Symbol("synthetic"), () => result, [], {},
+    { ...result }, Object.freeze({ ...result }), JSON.parse(JSON.stringify(result)) as unknown,
+    structuredClone(result), Object.create(result), handoff, proxy, revoked.proxy,
+    { ok: true, candidates: result.candidates, extractedAt: result.extractedAt, receipt: result.receipt },
+    { ok: false, code: "QUOTA_DENIED", receipt: result.receipt }]) {
+    assert.equal(getVerifiedAnalysisHandoff(input), null);
+  }
+  assert.equal(getterCalls, 0, "identity lookup must not read untrusted object properties");
+  assert.equal(getVerifiedAnalysisHandoff(result), handoff, "rejected copies never invalidate the genuine object");
+  const rejected = harness({ readAuthority: async () => null });
+  const failure = await runMailAnalysis(rejected.adapters, OPTIONS);
+  expectFailure(failure, "AUTH_REQUIRED");
+  assert.equal(getVerifiedAnalysisHandoff({ ...failure, ok: true }), null);
+});
+
+test("identical public results retain distinct owner, session revision and generation bindings", async () => {
+  const first = harness();
+  const second = harness();
+  second.state.authority = validAuthority({
+    ownerId: "synthetic-second-owner", grantOwnerId: "synthetic-second-owner",
+    sessionId: "synthetic-second-session", grantSessionId: "synthetic-second-session",
+    sessionRevision: 2, dataGeneration: 3,
+  });
+  const one = await runMailAnalysis(first.adapters, OPTIONS);
+  const two = await runMailAnalysis(second.adapters, OPTIONS);
+  assert.ok(one.ok && two.ok);
+  assert.notEqual(one, two);
+  assert.deepEqual(one, two);
+  const firstHandoff = getVerifiedAnalysisHandoff(one)!;
+  const secondHandoff = getVerifiedAnalysisHandoff(two)!;
+  assert.notEqual(firstHandoff, secondHandoff);
+  assert.equal(firstHandoff.result, one);
+  assert.equal(secondHandoff.result, two);
+  assert.equal(firstHandoff.authority.ownerId, "synthetic-owner");
+  assert.equal(firstHandoff.authority.sessionRevision, 1);
+  assert.equal(firstHandoff.authority.dataGeneration, 1);
+  assert.equal(secondHandoff.authority.ownerId, "synthetic-second-owner");
+  assert.equal(secondHandoff.authority.sessionRevision, 2);
+  assert.equal(secondHandoff.authority.dataGeneration, 3);
+});
+
+test("positive safe-integer maxima are retained exactly in authority and quota bindings", async () => {
+  const fixture = harness();
+  fixture.state.authority = validAuthority({ sessionRevision: Number.MAX_SAFE_INTEGER, dataGeneration: Number.MAX_SAFE_INTEGER });
+  const result = await runMailAnalysis(fixture.adapters, OPTIONS);
+  assert.ok(result.ok);
+  const handoff = getVerifiedAnalysisHandoff(result)!;
+  assert.equal(handoff.authority.sessionRevision, Number.MAX_SAFE_INTEGER);
+  assert.equal(handoff.authority.dataGeneration, Number.MAX_SAFE_INTEGER);
+  assert.ok(fixture.state.contexts.every((context) => context.authority.sessionRevision === Number.MAX_SAFE_INTEGER
+    && context.authority.dataGeneration === Number.MAX_SAFE_INTEGER));
 });
 
 const badAuthority: Array<[string, unknown, FailureCode]> = [
@@ -242,6 +345,11 @@ const badAuthority: Array<[string, unknown, FailureCode]> = [
   ["wrong recipient", validAuthority({ recipientId: "synthetic-other" }), "CONSENT_REQUIRED"],
   ["wrong policy", validAuthority({ policyVersion: "synthetic-other" }), "CONSENT_REQUIRED"],
 ];
+for (const field of ["sessionRevision", "dataGeneration"]) {
+  for (const value of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined]) {
+    badAuthority.push([`invalid ${field} (${String(value)})`, validAuthority({ [field]: value }), "AUTH_REQUIRED"]);
+  }
+}
 for (const capability of ["mailRead", "externalAnalysis"]) {
   for (const value of [false, undefined, null, "true", 1, {}]) {
     badAuthority.push([`${capability} must be explicit true (${String(value)})`,
@@ -252,7 +360,7 @@ for (const field of Object.keys(validAuthority())) {
   const raw = validAuthority();
   delete raw[field];
   badAuthority.push([`missing ${field}`, raw,
-    ["ownerId", "sessionId", "sessionExpiresAt"].includes(field) ? "AUTH_REQUIRED" : "CONSENT_REQUIRED"]);
+    ["ownerId", "sessionId", "sessionRevision", "dataGeneration", "sessionExpiresAt"].includes(field) ? "AUTH_REQUIRED" : "CONSENT_REQUIRED"]);
 }
 for (const [name, raw, code] of badAuthority) {
   test(`initial authority fails closed before quota or providers: ${name}`, async () => {
@@ -289,6 +397,36 @@ for (const [name, options] of badOptions) {
   });
 }
 
+test("configuration and authority IDs reject trailing LF, CRLF and spaces before any provider call", async () => {
+  for (const suffix of ["\n", "\r\n", " "]) {
+    for (const field of ["operationId", "mailboxBindingId", "recipientId"] as const) {
+      const options = { ...OPTIONS, [field]: OPTIONS[field] + suffix };
+      const fixture = harness();
+      // Keep the synthetic authority bindings aligned so rejection specifically
+      // comes from the ID boundary, not an unrelated downstream mismatch.
+      fixture.state.authority = validAuthority({ [field]: options[field],
+        ...(field === "mailboxBindingId" ? { grantMailboxBindingId: options[field] } : {}) });
+      const result = await runMailAnalysis(fixture.adapters, options);
+      expectFailure(result, "RUN_CONFIG_INVALID");
+      assert.equal(fixture.state.calls.authority, 0);
+      expectNoProviders(fixture);
+      expectStages(result.receipt, "not-consumed", "not-started", "not-started");
+    }
+    for (const field of ["ownerId", "sessionId", "grantId"] as const) {
+      const fixture = harness();
+      const value = String(validAuthority()[field]) + suffix;
+      fixture.state.authority = validAuthority({ [field]: value,
+        ...(field === "ownerId" ? { grantOwnerId: value } : {}),
+        ...(field === "sessionId" ? { grantSessionId: value } : {}) });
+      const result = await runMailAnalysis(fixture.adapters, OPTIONS);
+      expectFailure(result, field === "grantId" ? "CONSENT_REQUIRED" : "AUTH_REQUIRED");
+      assert.equal(fixture.state.calls.authority, 1);
+      expectNoProviders(fixture);
+      expectStages(result.receipt, "not-consumed", "not-started", "not-started");
+    }
+  }
+});
+
 test("exact denied quota is a known non-consumption and performs no mailbox call", async () => {
   const fixture = harness({ reserveQuota: async () => ({ status: "denied" }) });
   const result = await runMailAnalysis(fixture.adapters, OPTIONS);
@@ -307,13 +445,19 @@ const badPermits: Array<[string, (permit: Record<string, unknown>) => unknown]> 
 for (const remaining of [-1, NaN, Infinity, 0.5, "0", null, Number.MAX_SAFE_INTEGER + 1]) {
   badPermits.push([`invalid remaining ${String(remaining)}`, (permit) => ({ ...permit, remaining })]);
 }
-for (const field of ["ownerId", "sessionId", "mailboxBindingId", "grantId", "grantRevision",
+for (const field of ["ownerId", "sessionId", "sessionRevision", "dataGeneration", "mailboxBindingId", "grantId", "grantRevision",
   "operationId", "recipientId", "policyVersion"]) {
-  badPermits.push([`wrong ${field}`, (permit) => ({ ...permit, [field]: field === "grantRevision" ? 2 : "synthetic-other" })]);
+  badPermits.push([`wrong ${field}`, (permit) => ({ ...permit,
+    [field]: ["grantRevision", "sessionRevision", "dataGeneration"].includes(field) ? 2 : "synthetic-other" })]);
 }
-for (const field of ["status", "ownerId", "sessionId", "mailboxBindingId", "grantId", "grantRevision",
+for (const field of ["status", "ownerId", "sessionId", "sessionRevision", "dataGeneration", "mailboxBindingId", "grantId", "grantRevision",
   "operationId", "recipientId", "policyVersion", "remaining"]) {
   badPermits.push([`missing ${field}`, (permit) => { delete permit[field]; return permit; }]);
+}
+for (const field of ["sessionRevision", "dataGeneration"]) {
+  for (const value of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1", null, undefined]) {
+    badPermits.push([`invalid ${field} (${String(value)})`, (permit) => ({ ...permit, [field]: value })]);
+  }
 }
 for (const [name, transform] of badPermits) {
   test(`uncertain quota response remains unknown and never reads mailbox: ${name}`, async () => {
@@ -340,12 +484,13 @@ test("shared synthetic atomic ledger allows at most one provider run for concurr
   assert.equal(ledger.size, 1);
 });
 
-test("grant revision, grant id, and session changes do not reset a used owner-operation ledger key", async () => {
+test("grant, session revision, and data generation changes do not reset a used owner-operation ledger key", async () => {
   const fixture = harness();
   assert.ok((await runMailAnalysis(fixture.adapters, OPTIONS)).ok);
   fixture.state.authority = validAuthority({
     grantId: "synthetic-new-grant", grantRevision: 2,
     sessionId: "synthetic-new-session", grantSessionId: "synthetic-new-session",
+    sessionRevision: 2, dataGeneration: 2,
   });
   const replay = await runMailAnalysis(fixture.adapters, OPTIONS);
   expectFailure(replay, "QUOTA_DENIED");
@@ -376,12 +521,14 @@ const boundaries = [
   { call: 6, name: "before successful output", mailbox: 1, analysis: 1 },
 ];
 for (const boundary of boundaries) {
-  for (const change of ["revision", "revoked-mail", "revoked-analysis", "session-expired", "grant-expired"]) {
+  for (const change of ["revision", "session-revision", "data-generation", "revoked-mail", "revoked-analysis", "session-expired", "grant-expired"]) {
     test(`${change} ${boundary.name} prevents every subsequent stage and discards candidates`, async () => {
       const fixture = harness();
       fixture.overrides.readAuthority = async () => {
         if (fixture.state.calls.authority !== boundary.call) return validAuthority();
         if (change === "revision") return validAuthority({ grantRevision: 2 });
+        if (change === "session-revision") return validAuthority({ sessionRevision: 2 });
+        if (change === "data-generation") return validAuthority({ dataGeneration: 2 });
         if (change === "revoked-mail") return validAuthority({ mailRead: false });
         if (change === "revoked-analysis") return validAuthority({ externalAnalysis: false });
         fixture.state.now = NOW + 60000;
@@ -410,6 +557,25 @@ for (const boundary of boundaries) {
     assert.equal(fixture.state.calls.mailbox, boundary.mailbox);
     assert.equal(fixture.state.calls.analysis, boundary.analysis);
   });
+}
+
+for (const field of ["sessionRevision", "dataGeneration"] as const) {
+  for (const stage of ["quota", "mailbox", "analysis"] as const) {
+    test(`${field} changed inside the ${stage} adapter prevents successful handoff and subsequent dispatch`, async () => {
+      const fixture = harness();
+      const changeAuthority = () => { fixture.state.authority = validAuthority({ [field]: 2 }); };
+      if (stage === "quota") fixture.overrides.reserveQuota = async (context) => { changeAuthority(); return granted(context); };
+      if (stage === "mailbox") fixture.overrides.readMailbox = async () => { changeAuthority(); return MAIL_JSON; };
+      if (stage === "analysis") fixture.overrides.analyze = async () => { changeAuthority(); return ANALYSIS_JSON; };
+      const result = await runMailAnalysis(fixture.adapters, OPTIONS);
+      expectFailure(result, "AUTHORITY_CHANGED");
+      assert.equal(fixture.state.calls.quota, 1);
+      assert.equal(fixture.state.calls.mailbox, stage === "quota" ? 0 : 1);
+      assert.equal(fixture.state.calls.analysis, stage === "analysis" ? 1 : 0);
+      expectStages(result.receipt, "consumed", stage === "quota" ? "not-started" : "returned",
+        stage === "analysis" ? "returned" : "not-started");
+    });
+  }
 }
 
 test("replaced authenticated owner and matching grant still change authority after quota", async () => {
@@ -596,7 +762,7 @@ test("private stage context is frozen, projected, shared, and excludes unrelated
     assertFrozenTree(context);
     assertFrozenTree(messages);
     assert.deepEqual(Object.keys(context).sort(), ["authority", "scope"]);
-    assert.deepEqual(Object.keys(context.authority).sort(), ["ownerId", "sessionId", "sessionExpiresAt",
+    assert.deepEqual(Object.keys(context.authority).sort(), ["ownerId", "sessionId", "sessionRevision", "dataGeneration", "sessionExpiresAt",
       "mailboxBindingId", "grantId", "grantRevision", "grantExpiresAt", "operationId", "recipientId",
       "policyVersion", "mailRead", "externalAnalysis"].sort());
     assert.equal(context.scope, MAIL_ANALYSIS_POLICY);
@@ -615,6 +781,8 @@ test("private stage context is frozen, projected, shared, and excludes unrelated
   const receiptText = JSON.stringify(result.receipt);
   assert.ok(!receiptText.includes("ownerId"));
   assert.ok(!receiptText.includes("sessionId"));
+  assert.ok(!receiptText.includes("sessionRevision"));
+  assert.ok(!receiptText.includes("dataGeneration"));
   assert.ok(!receiptText.includes(PRIVATE_MARKER));
   assertFrozenTree(result.receipt);
 });

@@ -31,7 +31,7 @@ export function failReview(code: ReviewErrorCode = "REVIEW_INPUT_INVALID"): neve
 }
 
 /** Snapshot own data properties only; never invoke caller-supplied accessors. */
-function objectFields(value: unknown, keys: readonly string[], exact = true): Record<string, unknown> {
+export function objectFields(value: unknown, keys: readonly string[], exact = true): Record<string, unknown> {
   try {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return failReview();
     const prototype = Object.getPrototypeOf(value);

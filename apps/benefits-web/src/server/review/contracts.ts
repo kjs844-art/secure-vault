@@ -48,6 +48,9 @@ interface OwnedRow {
   readonly revision: number;
 }
 export interface CandidateRow extends OwnedRow {
+  // Access deadline for pending proposals, not a promise of physical erasure.
+  // Immutable after insert. Accepted benefits are not expired by this deadline.
+  readonly expiresAt: number;
   // Trusted pipeline creates/updates pending proposals only. Accepted/deleted
   // candidate IDs are never reused or turned back into pending on reanalysis.
   readonly state: "pending" | "accepted" | "deleted";

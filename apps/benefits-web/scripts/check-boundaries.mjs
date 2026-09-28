@@ -88,6 +88,7 @@ for (const file of client) {
     "CANDIDATE_EVIDENCE_INVALID", "keyatlas.gmail-candidates.v1",
     "keyatlas.gmail-review.v1", "keyatlas.mail-analysis-receipt.v1", "QUOTA_UNAVAILABLE",
     "keyatlas.benefit-review.v1", "REVIEW_STORE_UNAVAILABLE", "REVIEW_OPERATION_CONFLICT",
+    "keyatlas.candidate-inbox.v1", "keyatlas.candidate-staging.v1", "getVerifiedAnalysisHandoff",
     "SUPABASE_SERVICE_ROLE_KEY", "APP_USER_CONNECTION_KEY_SECRET",
     "APP_USER_CONNECTIONS_ENCRYPTION_KEY", "api.lovable.dev",
     "ai.gateway.lovable.dev", "connector-gateway.lovable.dev",
