@@ -13,6 +13,10 @@ The internal runner now sequences injected auth/consent/quota/mail/analyzer adap
 and drops cancelled or stale-authority results. Only test fixtures implement those
 adapters so far; this is not working OAuth or a real database quota ledger.
 See [the authority and cancellation contract](MAIL_RUN_CONTRACT.md).
+The provider-independent review controller now separates an immutable preview
+from confirmation, applies owned revision checks, and keeps deletion/replay fences.
+It has only a synthetic in-memory adapter, not connected authentication or DB storage.
+See [the confirmation and deletion contract](REVIEW_CONTRACT.md).
 
 ## Local execution
 
