@@ -17,9 +17,15 @@ were not modified. No .env file or real mail/key/DB content was read or imported
 | vite.config.ts + src/server.ts | New explicit config/server boundary | No Lovable config, MCP plugin, install patch, error capture or provider integration |
 | src/lib/gmail.functions.ts | New src/server/mail pure contracts/parser/validator | Retains separate grant/balance/day concepts; replaces unbounded parsing, current-date fallback and immediate upsert with bounded ephemeral pending candidates |
 
-The new index page is a technical migration placeholder, **not** a replacement design
-or a claim that the original UI was fully ported. The demo data and original visual
-components remain a separate M02 task.
+The index page is a technical migration placeholder, **not** a replacement design
+or a claim that the original UI was fully ported. The M02 contribution in secure-vault
+PR #21 at `e19ae37872a1cb2324d4c227593fbf57f8731667` supplies eight components under
+`src/components/mvp-demo/` and the synthetic `src/lib/mvp-demo-data.ts` dataset.
+Those nine files were selectively imported into M01A, not merged with the whole branch.
+M01A adds the `/demo` route, strict-type fixes, one SSR/client reference-time seed,
+honest expiry/unknown values, counts instead of unlike-benefit totals, and actual
+focus/scroll navigation. The contribution's inline layout is retained; no design
+framework, live provider, new dependency, original environment or DB is imported.
 
 The source tree has no LICENSE/NOTICE/COPYING file. Public repository visibility is
 not a grant of a new license; this work does not relicense it. Review third-party

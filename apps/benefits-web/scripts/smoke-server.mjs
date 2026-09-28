@@ -57,6 +57,16 @@ try {
   assert.match(statusHtml, /연결 준비 상태/);
   assert.match(statusHtml, /not-connected/);
   assert.match(statusHtml, /CLOSED/);
+  const demoPage = await request("/demo");
+  assert.equal(demoPage.status, 200);
+  const demoHtml = await demoPage.text();
+  assert.match(demoHtml, /서비스와 혜택을 한곳에서/);
+  assert.match(demoHtml, /데모 데이터입니다/);
+  assert.match(demoHtml, /샘플 서비스와 혜택/);
+  assert.match(demoHtml, /AI 어시스턴트/);
+  assert.match(demoHtml, /파일 업로드 용량/);
+  assert.match(demoHtml, /모름/);
+  assert.doesNotMatch(demoHtml, /핵택|13 회|supabase\.co|lovable\.app/);
   const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1]);
   assert.ok(assets.length >= 2, "SSR must reference executable client assets");
   for (const asset of assets) {

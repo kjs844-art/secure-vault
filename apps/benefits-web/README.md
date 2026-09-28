@@ -63,9 +63,12 @@ It is not browser hydration or Gmail/DB E2E evidence.
 - `/api/integration-status`: public fixed integration metadata, no credentials or user state.
 - `/status`: readable status page loaded through a protected framework server function.
   This verifies SSR/server-function plumbing, not authentication or a live provider.
+- `/demo`: M02's synthetic service/benefit walkthrough, selectively integrated in M01A.
+  Fixed per-page reference time preserves SSR/client hydration. Selection changes
+  are memory-only; this screen cannot discover accounts, read mail or save real data.
 - `scripts/`: local-only launch, HTTP verification and focused source/bundle checks.
-- M02 owns `src/components/mvp-demo/**` and `src/lib/mvp-demo-data.ts`.
-  Those screens are not included in this scaffold yet.
+- `src/components/mvp-demo/**` and `src/lib/mvp-demo-data.ts` originated in M02 PR #21.
+  Integration fixes live on M01A; the original M02 branch remains unchanged.
 
 Vite does not read .env files and exposes no environment prefix. The production local
 launcher allowlists OS environment settings and drops inherited provider variables.

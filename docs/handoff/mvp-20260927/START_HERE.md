@@ -1,5 +1,14 @@
 # KeyAtlas — 2주 첫 출시와 AI 작업 시작점
 
+## 최신: M02 제출 데모 선별 통합 (2026-09-28)
+
+M01A에 M02 PR #21의 제출 파일을 선별 이식해 `/demo`를 연결했다.
+서비스 4개·혜택 6개·확인 항목 5개의 합성 화면이며 실제 계정 조회/저장은 아니다.
+앱 1,253/1,253, build/typecheck/boundary/SSR smoke와 데스크톱·360px 브라우저 검증을 통과했다.
+[통합 및 제한 기록](../../verification/mvp-integration/2026-09-28-m02-demo-integration.md).
+M02 원격 브랜치/PR은 변경·merge하지 않았고, M01A 전체 완료나 공개 배포는 아니다.
+새 M01A-1A/2A/3은 그대로 다른 AI에게 배정할 수 있으며 소유 경로를 건드리지 않았다.
+
 ## 최신: M01A 추가 분담과 PR 상태 (2026-09-28)
 
 M01A는 진행 중이며, HTTP 경계 체크포인트 `32856a6`를 구현·로컬 검증했다.
@@ -53,7 +62,7 @@ PR이 있다는 사실만으로 통합·검증·출시 완료를 표시하지 �
 
 같은 Git 저장소 안에 공개 웹과 금고를 나눠 둔다. 현재 React/Worker/WASM 금고는 유지하고,
 benefit 웹의 필요한 부분을 새 `apps/benefits-web/` 영역으로 단계별 이식 중이다.
-독립 실행 구조와 순수 계산은 구현했으며 기존 화면/Gmail/DB 연결은 다음 단계다.
+독립 실행 구조·순수 계산·합성 데모 화면은 구현했고, Gmail/DB 실연결은 다음 단계다.
 서로 다른 origin·인증·복호화 경계는 계속 분리한다.
 참고 원본 Git 이력/전체 DB를 무조건 merge하거나 복제하지 않는다.
 
@@ -66,7 +75,7 @@ Lovable 원본 앱·repo main·DB·환경변수·연결 브랜치·도메인에 
 | 작업 | 담당 | 범위 |
 |---|---|---|
 | [M01A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-01a-integration-20260927/docs/handoff/mvp-20260927/M01A.md) | Codex 주 담당 / 현재 작업 | 통합·금고 보안·최종 출시 판정 |
-| [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | 외부 AI 산출물 PR #21 · 통합 대기 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
+| [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | PR #21 제출 파일 선별 통합·로컬 검증 완료, main 미병합 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
 | [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | 외부 AI 산출물 PR #17 · 검토 대기 | 서비스·API 사용처 관계의 합성 연결 계약 |
 | [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | 초기 경계 검토 PR #16 · 최신 코드 재검토 별도 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
 | [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | QA 산출물 PR #18 · 근거 검토 대기 | 독립 브라우저 QA: 저장 실패·화면·잠금 |

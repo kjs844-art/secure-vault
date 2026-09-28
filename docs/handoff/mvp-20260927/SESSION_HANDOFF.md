@@ -1,5 +1,19 @@
 # 세션 인계 — 2026-09-27
 
+## 가장 최신: M02 합성 화면 연결 (2026-09-28)
+
+- 같은 M01A checkout/branch와 PR #19를 사용한다. 시작 HEAD/origin은 `8119f9b`였다.
+- M02 PR #21 `e19ae37872a1cb2324d4c227593fbf57f8731667`의 9개 코드 파일을 선별 이식했다.
+  제출 branch/다른 AI worktree는 변경하지 않았다. `/demo` 및 홈 이동 링크가 있다.
+- [통합 검사 기록](../../verification/mvp-integration/2026-09-28-m02-demo-integration.md):
+  앱 1,253/1,253 및 build/typecheck/boundary/SSR smoke, 실제 데스크톱/360px 검사 통과.
+- `8119f9b` 원격 run 36369616347/36369612488은 둘 다 completed/success 확인했다.
+  이것은 이후 M02 통합 commit의 CI 결과가 아니다. 최신 SHA/run은 별도 조회한다.
+- 새 1A/2A/3 소유 경로는 untouched. M03 검토와 M04A/M05A 근거 정리가 다음 통합 작업이다.
+- 브라우저/서버는 이번 검사 후 정상 종료했고 4317 listener 부재를 확인했다.
+  화면은 합성 전용이고 auth/DB/메일은 연결하지 않았다. 환경 보류·Secret CLOSED 유지.
+- 이 문서 아래는 시간순 과거 기록이다. 과거 'M02 예약/미연결'을 최신 상태로 읽지 않는다.
+
 ## 최신 체크포인트와 다음 분담 (2026-09-28)
 
 - 현재 코드 checkout: `C:/Users/USER/Documents/ChatGPT/KeyAtlas/agent-staging/keyatlas-mvp-01a-20260927`.
