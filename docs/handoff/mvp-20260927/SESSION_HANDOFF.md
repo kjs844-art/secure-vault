@@ -1,5 +1,20 @@
 # 세션 인계 — 2026-09-27
 
+## 가장 최신: M03 V2 계약 / 검증 환경 제한 (2026-09-28)
+
+- 현재 M01A branch/checkout 그대로, 시작 HEAD/origin `b98ea7a`, clean 확인.
+- M03 PR #17 `5fecb0f29ce56b2959b5350913247114ded8e8cf`를 선별 검토했다.
+  원본 자체를 merge하지 않고 동일 독립 경로에 V2 계약/합성 회귀를 추가했다.
+- [정확한 검사 기록](../../verification/mvp-integration/2026-09-28-m03-connections-v2.md):
+  focused 211, 비-WASM 1,653 테스트와 두 파일 strict typecheck 통과.
+  full npm test는 7개 WASM suite 로딩 실패, full typecheck/build는 generated module 없음으로 실패.
+- Rust workspace verifier는 Secret/fmt까지만 통과. Application Control이 cargo-clippy 및
+  WASM build script를 os error 4551로 막았다. 우회/환경 정책 변경 없이 남겨둔다.
+- `b98ea7a` CI 36372171670/36372166803은 billing/limit 때문에 job steps 없이 실패했다.
+  사용자 결제/한도 설정은 변경하지 않았고 재실행만 반복하지 않는다.
+- V2는 실제 계정·서비스 연결/저장/자동 lock wiring 완료가 아니다. Secret CLOSED/환경 보류 유지.
+  다음은 M04A/M05A의 제출 근거 검토 및 가능한 로컬 통합이다. 1A/2A/3 담당 경로는 보존했다.
+
 ## 가장 최신: M02 합성 화면 연결 (2026-09-28)
 
 - 같은 M01A checkout/branch와 PR #19를 사용한다. 시작 HEAD/origin은 `8119f9b`였다.

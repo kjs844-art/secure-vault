@@ -1,5 +1,14 @@
 # KeyAtlas — 2주 첫 출시와 AI 작업 시작점
 
+## 최신: M03 연결 참조 V2 (2026-09-28)
+
+제출 PR #17의 개념을 검토해 서비스→키 참조→개별 사용처를 구분하는 순수 V2 계약을 추가했다.
+출처/관찰시각/후보 상태와 사용자 확인을 분리하며 실제 소유권·키 유효성은 증명하지 않는다.
+focused 211/211, 비-WASM 1,653/1,653, 두 신규 파일 strict 타입검사 통과.
+전체 앱은 WASM 미생성으로 typecheck/build 실패이고, Windows 정책이 Rust/WASM 생성 도구를 막는다.
+정책은 우회하지 않았다. [검사와 미완료 범위](../../verification/mvp-integration/2026-09-28-m03-connections-v2.md).
+실제 UI/DB/금고 bridge 연결은 아직 없으며, M03 원본 branch/PR은 그대로다.
+
 ## 최신: M02 제출 데모 선별 통합 (2026-09-28)
 
 M01A에 M02 PR #21의 제출 파일을 선별 이식해 `/demo`를 연결했다.
@@ -76,7 +85,7 @@ Lovable 원본 앱·repo main·DB·환경변수·연결 브랜치·도메인에 
 |---|---|---|
 | [M01A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-01a-integration-20260927/docs/handoff/mvp-20260927/M01A.md) | Codex 주 담당 / 현재 작업 | 통합·금고 보안·최종 출시 판정 |
 | [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | PR #21 제출 파일 선별 통합·로컬 검증 완료, main 미병합 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
-| [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | 외부 AI 산출물 PR #17 · 검토 대기 | 서비스·API 사용처 관계의 합성 연결 계약 |
+| [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | PR #17 검토 후 V2 계약·집중 검증 완료, 전체 빌드 환경 차단 | 서비스·API 사용처 관계의 합성 연결 계약 |
 | [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | 초기 경계 검토 PR #16 · 최신 코드 재검토 별도 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
 | [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | QA 산출물 PR #18 · 근거 검토 대기 | 독립 브라우저 QA: 저장 실패·화면·잠금 |
 | [M06](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-06-release-20260927/docs/handoff/mvp-20260927/M06.md) | PR #20 배정 문서만 확인 · 실환경 보류 | KeyAtlas 독립 배포·DB·도메인 준비 |

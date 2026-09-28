@@ -3,7 +3,8 @@
 2026-09-27 최신 사용자 결정. 2026-09-28 상태: PARTIAL.
 독립 SSR scaffold와 순수 benefits domain을 선별 이식했다.
 Gmail FULL 정규화/AI 후보 검증도 순수 함수로 구현했으며, 모두 확인 전 후보를 반환한다.
-실제 화면 전체, 인증/Gmail/DB 연결 및 금고 간 연결은 아직 미구현/미검증이다.
+M02 합성 데모는 이식·로컬 브라우저 검증했고 M03 V2 순수 참조 계약도 있다.
+실제 화면 전체, 인증/Gmail/DB 연결 및 금고 간 runtime 연결은 아직 미구현/미검증이다.
 원본 benefit-validator@`954da8da0b12d55a342d187fab17abe57b93fbb0`.
 대상 secure-vault@`34b43e1a5d2f1d81eb2f6456d657fd04ca57332f`.
 
@@ -14,7 +15,7 @@ Gmail FULL 정규화/AI 후보 검증도 순수 함수로 구현했으며, 모�
         │ 검토한 파일만 선택적 이식, 원본으로 push/DB 쓰기 없음
         ▼
 secure-vault (KeyAtlas 유일한 새 개발 repo)
-  ├─ apps/benefits-web/  구현: 독립 SSR + 순수 domain; 화면/Gmail/DB 연결은 다음 단계
+  ├─ apps/benefits-web/  구현: 독립 SSR + 순수 domain + 합성 demo; Gmail/DB 연결은 다음 단계
   └─ apps/web/ + crates/ 현재: 금고·Worker·Rust/WASM
          ↑ 명시적 사용자 선택 + 비밀 원문 없는 참조 계약
 ~~~
@@ -57,6 +58,10 @@ AI/MCP에 금고 원문·OAuth 토큰·복구 키를 넘기지 않는다.
 최소 관계 정보는 공개 서비스 slug, 불투명 참조, 관찰시각, 후보/확인상태다.
 참조 ID도 개인정보일 수 있고 권한 증명이 아니다.
 실제 cross-origin API/postMessage는 origin·세션·사용자 결속·회수 검토 후 구현한다.
+현재 [M03 V2 계약](../../verification/mvp-integration/2026-09-28-m03-connections-v2.md)은
+서비스/키/목적지별 합성 참조와 출처/관찰시각을 검증하는 순수 코드다. 검증 완료나 사용자의
+확인 동작만으로 실제 키 유효성·계정 소유권·연결 성공을 표시하지 않는다. DB나 두 앱 사이에
+참조를 자동 전송하지 않으며 실제 계층 연결에는 별도의 principal/generation/revision 검토가 필요하다.
 
 ## 기존 PR 처리
 
