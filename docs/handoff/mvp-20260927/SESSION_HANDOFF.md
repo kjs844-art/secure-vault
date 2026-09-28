@@ -1,5 +1,20 @@
 # 세션 인계 — 2026-09-27
 
+## 최신 체크포인트와 다음 분담 (2026-09-28)
+
+- 현재 코드 checkout: `C:/Users/USER/Documents/ChatGPT/KeyAtlas/agent-staging/keyatlas-mvp-01a-20260927`.
+- branch: `codex/firstvibe-mvp-01a-integration-20260927`, PR #19/main, merge 안 함.
+- 검증 코드 commit: `32856a6eecfedf19848bffb63d77c84332955600`.
+  [HTTP 경계 기록](../../verification/mvp-integration/2026-09-28-catalog-http.md): 앱 1,170/1,170 및
+  build/typecheck/boundary/loopback smoke 통과. Fetch 합성 adapter이며 public route 503 유지.
+- 앞선 `51f07f5` 원격 run 36366206491/36366201360은 둘 다 completed/success 확인.
+  새 코드 SHA의 원격 검증을 대신하지 않는다. push 이후 최신 SHA/run을 다시 조회한다.
+- 사용자 요청에 따라 [M01A 추가 분담표](M01A_DELEGATION.md)의 3개 브랜치/지침을 발행한다.
+  각 시작 tip은 현재 원격에서 확인한다. 이는 예약이며 완료 산출물/새 PR이 아니다.
+- 기존 M02~M05는 PR 산출물 검토/선별 통합 대기. M06 #20은 배정 문서만 확인됐다.
+  사용자 전달과 실제 원격 상태가 다르면 다른 AI의 최신 branch/SHA/PR을 먼저 확인한다.
+- DB·도메인·배포 보류, 원본 Lovable/repo/DB 동결, REAL_SECRET_GATE=CLOSED 유지.
+
 ## 우선 적용: 외부 환경 보류 (2026-09-28 사용자 요청)
 
 DB·도메인 등은 사용자가 다음 주 또는 다다음 주에 준비/구매할 예정이며 현재 보류다.

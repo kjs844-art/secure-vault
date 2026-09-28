@@ -1,5 +1,19 @@
 # KeyAtlas — 2주 첫 출시와 AI 작업 시작점
 
+## 최신: M01A 추가 분담과 PR 상태 (2026-09-28)
+
+M01A는 진행 중이며, HTTP 경계 체크포인트 `32856a6`를 구현·로컬 검증했다.
+앱 1,170/1,170, build/typecheck/boundary/loopback smoke 통과. 실제 API route는 아직 503이다.
+[검사 기록](../../verification/mvp-integration/2026-09-28-catalog-http.md).
+
+사용자 요청으로 새 업무 **M01A-1A / M01A-2A / M01A-3**를 따로 배정한다.
+다른 AI에게 보낼 때는 [추가 분담표와 복사 프롬프트](M01A_DELEGATION.md)를 먼저 본다.
+기존 M02~M05는 산출물이 PR로 제출되었으므로 재배정/중복 구현하지 않는다.
+M06 #20은 현재 원격에 배정 문서만 확인되며, 실제 DB·도메인·배포는 계속 보류다.
+PR이 있다는 사실만으로 통합·검증·출시 완료를 표시하지 않는다.
+
+## 기존 계획 및 기록
+
 2026-09-27 KST. 최신 사용자 결정: 기존 웹을 활용해 약 2주 작업한다.
 **benefit-validator와 연결된 Lovable 프로젝트는 당분간 그대로 둔다.
 필요한 기능은 KeyAtlas의 secure-vault repo로 가져온다.**
@@ -52,11 +66,11 @@ Lovable 원본 앱·repo main·DB·환경변수·연결 브랜치·도메인에 
 | 작업 | 담당 | 범위 |
 |---|---|---|
 | [M01A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-01a-integration-20260927/docs/handoff/mvp-20260927/M01A.md) | Codex 주 담당 / 현재 작업 | 통합·금고 보안·최종 출시 판정 |
-| [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | 미배정 — 사용자 지정 AI 1개 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
-| [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | 미배정 — 사용자 지정 AI 1개 | 서비스·API 사용처 관계의 합성 연결 계약 |
-| [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | 미배정 — 보안 검토 가능한 고급 AI | 이식 전 Gmail·로그인·개인정보 경계 검토 |
-| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | 미배정 — 브라우저 QA 가능한 AI | 독립 브라우저 QA: 저장 실패·화면·잠금 |
-| [M06](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-06-release-20260927/docs/handoff/mvp-20260927/M06.md) | 미배정 — 문서·배포 준비 AI | KeyAtlas 독립 배포·DB·도메인 준비 |
+| [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | 외부 AI 산출물 PR #21 · 통합 대기 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
+| [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | 외부 AI 산출물 PR #17 · 검토 대기 | 서비스·API 사용처 관계의 합성 연결 계약 |
+| [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | 초기 경계 검토 PR #16 · 최신 코드 재검토 별도 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
+| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | QA 산출물 PR #18 · 근거 검토 대기 | 독립 브라우저 QA: 저장 실패·화면·잠금 |
+| [M06](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-06-release-20260927/docs/handoff/mvp-20260927/M06.md) | PR #20 배정 문서만 확인 · 실환경 보류 | KeyAtlas 독립 배포·DB·도메인 준비 |
 
 - M01A: 내가 통합·보안·실제 배포 후보 판단을 담당한다.
 - M02/M06: 상대적으로 가벼운 AI도 맡을 수 있는 UI/문서 영역.
