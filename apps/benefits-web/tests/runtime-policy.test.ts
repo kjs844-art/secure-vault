@@ -18,6 +18,7 @@ for (const pathname of [
   "/analyze", "/mcp", "/mcp/tools", "/.well-known/oauth-protected-resource",
   "/.lovable.oauth.consent", "/dashboard", "/services", "/settings", "/schedule",
   "/AUTH", "/%61uth", "/oauth%2fgmail/return", "/%broken",
+  "/api/catalog", "/api/catalog/create", "/api/catalog/list", "/API/CATALOG/delete", "/api/%63atalog/get",
 ]) {
   test("unconnected route does not reach any adapter: " + pathname, async () => {
     assert.equal(isDisconnectedRoute(pathname), true);

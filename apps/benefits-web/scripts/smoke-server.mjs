@@ -65,7 +65,8 @@ try {
     assert.equal(result.status, 200, "Bundled asset not served");
     await result.arrayBuffer();
   }
-  for (const path of ["/auth", "/oauth/gmail/return", "/mcp", "/gmail", "/services"]) {
+  for (const path of ["/auth", "/oauth/gmail/return", "/mcp", "/gmail", "/services",
+    "/api/catalog", "/api/catalog/create", "/api/catalog/list"]) {
     const result = await request(path, { method: "POST", body: "synthetic" });
     assert.equal(result.status, 503);
     assert.deepEqual(await result.json(), { code: "INTEGRATION_NOT_CONNECTED" });

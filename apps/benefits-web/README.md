@@ -25,6 +25,10 @@ Owned service organization now has internal create/update/delete/get/list contro
 Reviewed benefits have a separate browser-safe projection/decoder and scoped response
 reducer. Neither is connected to UI, real authentication, or a database yet.
 See [the catalog and presentation contract](CATALOG_CONTRACT.md).
+An internal Fetch HTTP adapter now composes the catalog with bounded JSON,
+fixed-session authority, admission and deadline checks. It is not mounted;
+`/api/catalog/**` still returns 503. No real session/limiter/DB adapter is supplied.
+See [the HTTP boundary contract](HTTP_CONTRACT.md).
 
 ## Local execution
 

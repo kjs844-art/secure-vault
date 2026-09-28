@@ -9,6 +9,7 @@ export function isSyntheticRuntime(env: Readonly<Record<string, string | undefin
 const blockedRoots = [
   "/auth", "/oauth", "/mcp", "/.well-known", "/.lovable.oauth.consent",
   "/dashboard", "/services", "/gmail", "/analyze", "/settings", "/schedule",
+  "/api/catalog",
 ];
 
 export function isDisconnectedRoute(pathname: string): boolean {
