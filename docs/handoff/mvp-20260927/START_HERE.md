@@ -1,5 +1,16 @@
 # KeyAtlas — 2주 첫 출시와 AI 작업 시작점
 
+## 최신: 제출물 검토와 Git 백업 재확인 (2026-09-28)
+
+M01A 코드 `9b17e8c`는 local/origin/PR #19 head 일치를 확인했다.
+추가 분담 1A/2A/3도 GitHub에 있으며 공통 출발점 `8119f9b`다.
+[분담표·복사 프롬프트](M01A_DELEGATION.md)의 업무 하나씩 다른 AI에게 맡길 수 있다.
+
+M04A 원본 검토를 현재 코드와 대조했고, M05A는 실패 판정/복원 선택자/DB 처리 보정이
+필요해 현재 브라우저 PASS로 채택하지 않았다. [상세 검토·다음 조건](../../verification/mvp-integration/2026-09-28-m04-m05-review.md).
+현재 SHA의 CI는 결제/한도 사유로 실행되지 않았으며, 로컬 부분 통과와 구분한다.
+M01A 전체·B05·실제 인증/DB/배포는 미완료이고 사용자 환경 보류를 유지한다.
+
 ## 최신: M03 연결 참조 V2 (2026-09-28)
 
 제출 PR #17의 개념을 검토해 서비스→키 참조→개별 사용처를 구분하는 순수 V2 계약을 추가했다.
@@ -86,8 +97,8 @@ Lovable 원본 앱·repo main·DB·환경변수·연결 브랜치·도메인에 
 | [M01A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-01a-integration-20260927/docs/handoff/mvp-20260927/M01A.md) | Codex 주 담당 / 현재 작업 | 통합·금고 보안·최종 출시 판정 |
 | [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | PR #21 제출 파일 선별 통합·로컬 검증 완료, main 미병합 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
 | [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | PR #17 검토 후 V2 계약·집중 검증 완료, 전체 빌드 환경 차단 | 서비스·API 사용처 관계의 합성 연결 계약 |
-| [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | 초기 경계 검토 PR #16 · 최신 코드 재검토 별도 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
-| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | QA 산출물 PR #18 · 근거 검토 대기 | 독립 브라우저 QA: 저장 실패·화면·잠금 |
+| [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | PR #16 현재 적용성 대조 완료 · 운영 검증 미완료 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
+| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | PR #18 근거 대조 완료 · 검사 보정 및 재실행 필요 | 독립 브라우저 QA: 저장 실패·화면·잠금 |
 | [M06](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-06-release-20260927/docs/handoff/mvp-20260927/M06.md) | PR #20 배정 문서만 확인 · 실환경 보류 | KeyAtlas 독립 배포·DB·도메인 준비 |
 
 - M01A: 내가 통합·보안·실제 배포 후보 판단을 담당한다.
