@@ -52,6 +52,10 @@ jobs:
         shell: pwsh
         run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\check-repository-secrets.Tests.ps1
 
+      - name: Ensure the default PowerShell Gallery registration
+        shell: pwsh
+        run: .\scripts\ensure-ci-psgallery.ps1
+
       - name: Install pinned Pester for workflow policy checks
         shell: pwsh
         run: Install-Module -Name Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Repository PSGallery -Force
@@ -60,8 +64,11 @@ jobs:
         shell: pwsh
         run: |
           Import-Module Pester -RequiredVersion 5.7.1 -Force
-          $result = Invoke-Pester -Path .\tests\verification\verify-security-workflow.Tests.ps1 -Output Detailed -PassThru
-          if (($result.TotalCount -eq 0) -or ($result.FailedCount -ne 0)) { exit 1 }
+          $result = Invoke-Pester -Path .\tests\verification\verify-security-workflow.Tests.ps1, .\tests\verification\ensure-ci-psgallery.Tests.ps1 -Output Detailed -PassThru
+          if (($result.Result -ne 'Passed') -or ($result.TotalCount -eq 0) -or ($result.FailedCount -ne 0) -or ($result.SkippedCount -ne 0) -or (@($result.Containers).Count -ne 2)) { exit 1 }
+          foreach ($container in $result.Containers) {
+            if (($container.TotalCount -eq 0) -or ($container.Result -ne 'Passed')) { exit 1 }
+          }
 
       - name: Provision the pinned Rust toolchain
         shell: pwsh
