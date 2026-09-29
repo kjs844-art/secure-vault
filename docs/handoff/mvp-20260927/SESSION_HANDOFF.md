@@ -1,6 +1,27 @@
 # 세션 인계 — 2026-09-27
 
-## 가장 최신: M04A/M05A 검토 / 분담 원격 확인 (2026-09-28)
+## 가장 최신: M05A 도구 보정 / Actions 보류 / 위임 제출 (2026-09-29)
+
+- 사용자 재개 요청으로 개발을 계속한다. 빨간 Actions/사용량 해결만 보류한다.
+  자동 재시도·결제/한도 변경·보안 검사 완화는 하지 않는다.
+- 시작 HEAD/origin `1248e27a2328ea65d26d85b31ef03acf1bf84fd3`, clean 확인.
+  같은 M01A checkout/branch 및 기존 PR #19를 사용한다. main merge 없음.
+- `apps/web/tests/mvp-browser/`의 V2 도구 10개 파일과 대응 문서를 추가했다.
+  정확한 합성 DB·명시 재열기·transaction 완료·실패 종료·관찰값 검증·제한시간·정리를 보강했다.
+- [검사 기록](../../verification/mvp-integration/2026-09-29-m05-qa-tooling.md):
+  offline Node 180/180, 비-WASM 앱 1,653/1,653. 실제 runner는 WASM_NOT_GENERATED exit 2,
+  S1~S5 NOT_RUN. full build/typecheck/Rust/브라우저/CI PASS로 승격하지 않는다.
+- 독립 읽기 검토에서 무제한 대기를 보강했고, deadline 이후 성공/실패와 늦은 자원의
+  once-only 정리 회귀를 추가했다. 타이머는 브라우저 종료나 원천 작업 취소를 보장하지 않는다.
+- 원격 확인: 1A PR #22 `3230b1ae6fa9b062f1804c04e8439a9a99f14575`,
+  2A PR #23 `fdccf6a2c706c50ccefb8e5065ee49c840a8868f`, 둘 다 OPEN/M01A 대상.
+  3은 `8119f9b` 그대로. 조회는 Git refs/PR 상태만이며 CI를 재실행하거나 조회하지 않았다.
+- 다음: #22/#23의 정확한 제출 diff를 검토·재검증한 뒤 필요한 파일만 통합한다.
+  현재 두 제출물의 테스트 통과나 앱 연결을 확인한 것은 아니다.
+- B05/실제 Secret 금고/실제 auth·메일·DB·배포는 미완료. 원본 benefit-validator/Lovable/DB
+  동결과 사용자 외부 환경 보류, REAL_SECRET_GATE=CLOSED를 유지한다.
+
+## 이전: M04A/M05A 검토 / 분담 원격 확인 (2026-09-28)
 
 - 시작 M01A local/origin/PR #19 SHA `9b17e8c`, clean 확인. 코드까지 GitHub에 있다.
 - 새 1A/2A/3 브랜치 원격은 모두 `8119f9b`로 확인했다. 예약 파일 소유권은 그대로다.

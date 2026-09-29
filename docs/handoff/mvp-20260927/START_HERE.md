@@ -1,6 +1,24 @@
 # KeyAtlas — 2주 첫 출시와 AI 작업 시작점
 
-## 최신: 제출물 검토와 Git 백업 재확인 (2026-09-28)
+## 최신: 개발 재개 / M05A 검사 도구 보정 (2026-09-29)
+
+사용자가 개발을 재개했다. **GitHub Actions 사용량·빨간 실패 문제는 별도 보류**이며
+재실행·결제/한도 변경·검사 skip/완화를 하지 않는다. DB·도메인·배포 보류와 원본 동결도 유지한다.
+
+M01A의 `apps/web/tests/mvp-browser/`에 합성 QA 도구 V2를 추가했다.
+offline Node 회귀 180/180, 기존 비-WASM 웹 회귀 1,653/1,653 통과.
+실제 실행은 WASM 미생성으로 사전 차단(exit 2)되어 **브라우저 5개 시나리오는 NOT_RUN**이다.
+이는 금고 안전성 전체 승인이나 B05 파일 복원 완료가 아니다.
+[구현·정확한 검사·제한](../../verification/mvp-integration/2026-09-29-m05-qa-tooling.md).
+
+추가 위임 M01A-1A는 PR #22 / `3230b1a`, M01A-2A는 PR #23 / `fdccf6a`로 제출됐다.
+두 PR 모두 통합 브랜치 대상 OPEN이며 아직 주 담당의 코드 검토·재검증 전이다.
+M01A-3 원격은 `8119f9b` 그대로이고 매칭 OPEN PR은 조회되지 않았다.
+[최신 분담 상태](M01A_DELEGATION.md)를 보고 중복 배정하지 않는다.
+다음은 #22/#23을 소유 경로·정확한 SHA 기준으로 검토하는 것이다.
+아래 날짜별 내용은 과거 체크포인트이며 최신 검증을 대신하지 않는다.
+
+## 이전: 제출물 검토와 Git 백업 재확인 (2026-09-28)
 
 M01A 코드 `9b17e8c`는 local/origin/PR #19 head 일치를 확인했다.
 추가 분담 1A/2A/3도 GitHub에 있으며 공통 출발점 `8119f9b`다.
@@ -98,7 +116,7 @@ Lovable 원본 앱·repo main·DB·환경변수·연결 브랜치·도메인에 
 | [M02](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-02-demo-ui-20260927/docs/handoff/mvp-20260927/M02.md) | PR #21 제출 파일 선별 통합·로컬 검증 완료, main 미병합 | 기존 웹의 데모 UI를 KeyAtlas로 이식 |
 | [M03](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-03-connections-20260927/docs/handoff/mvp-20260927/M03.md) | PR #17 검토 후 V2 계약·집중 검증 완료, 전체 빌드 환경 차단 | 서비스·API 사용처 관계의 합성 연결 계약 |
 | [M04A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-04a-mail-review-20260927/docs/handoff/mvp-20260927/M04A.md) | PR #16 현재 적용성 대조 완료 · 운영 검증 미완료 | 이식 전 Gmail·로그인·개인정보 경계 검토 |
-| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | PR #18 근거 대조 완료 · 검사 보정 및 재실행 필요 | 독립 브라우저 QA: 저장 실패·화면·잠금 |
+| [M05A](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-05a-browser-qa-20260927/docs/handoff/mvp-20260927/M05A.md) | PR #18 대조 후 V2 도구·offline 회귀 완료 · 실제 브라우저 NOT_RUN | 독립 브라우저 QA: 저장 실패·화면·잠금 |
 | [M06](https://github.com/kjs844-art/secure-vault/blob/codex/firstvibe-mvp-06-release-20260927/docs/handoff/mvp-20260927/M06.md) | PR #20 배정 문서만 확인 · 실환경 보류 | KeyAtlas 독립 배포·DB·도메인 준비 |
 
 - M01A: 내가 통합·보안·실제 배포 후보 판단을 담당한다.
