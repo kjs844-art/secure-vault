@@ -305,7 +305,9 @@ test("listeners are removed after success, invalid input, abort and timeout", { 
     Object.defineProperty(signal, "addEventListener", { value: (...args: Parameters<typeof add>) => { added++; add(...args); } });
     Object.defineProperty(signal, "removeEventListener", { value: (...args: Parameters<typeof remove>) => { removed++; remove(...args); } });
     const input = request(outcome === "success" ? "{}" : outcome === "invalid" ? "{" : pending());
-    const task = readBoundedJson(input, { signal, timeoutMs: 20 });
+    // Only the timeout case needs a short deadline; the others verify cleanup under suite load.
+    const timeoutMs = outcome === "timeout" ? 20 : 1000;
+    const task = readBoundedJson(input, { signal, timeoutMs });
     if (outcome === "abort") controller.abort();
     if (outcome === "success") assert.deepEqual(await task, {});
     else await failure(task, outcome === "invalid" ? "BODY_INVALID" : outcome === "abort" ? "BODY_ABORTED" : "BODY_TIMEOUT");
