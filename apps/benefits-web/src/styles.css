@@ -1,0 +1,9 @@
+/* Minimal integration shell; final design and demo components belong to M02. */
+:root { font-family: system-ui, sans-serif; line-height: 1.6; color-scheme: light dark; }
+body { margin: 0; }
+main { max-width: 48rem; margin-inline: auto; padding: 2rem 1rem; }
+[role="status"] { border: 1px solid currentColor; padding: 1rem; }
+dt { font-weight: 600; margin-top: 1rem; }
+dd { margin-left: 0; }
+a { text-underline-offset: .2em; }
+:focus-visible { outline: 3px solid currentColor; outline-offset: 4px; }
