@@ -10,6 +10,7 @@ use crate::model::{
 use crate::secret::SecretValueV1;
 
 const PROVIDER_NAME: &str = "Example AI Workshop";
+const ITEM_NAME: &str = "Example Workshop API Credential";
 const CONSOLE_URL: &str = "https://console.example.invalid/api-keys";
 const ACCOUNT: &str = "demo-account";
 const PROJECT: &str = "demo-project";
@@ -71,7 +72,7 @@ pub(crate) fn build_synthetic_fixture_v1(
     Ok(CredentialItemV1 {
         item_schema_version: 1,
         parent_revision_id: None,
-        item_name: PROVIDER_NAME.to_owned(),
+        item_name: ITEM_NAME.to_owned(),
         provider_template_id: None,
         provider_name: PROVIDER_NAME.to_owned(),
         console_url: Some(CONSOLE_URL.to_owned()),
