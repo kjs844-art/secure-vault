@@ -1,0 +1,35 @@
+{
+  "checks": [
+    "initial page reads no fixture and offers no premature confirmation/results",
+    "keyboard preview binds selected service, exact period and metadata budget",
+    "cancel before confirmation reads no messages and clears consent",
+    "explicit confirmation produces only the selected service as a review candidate",
+    "user can confirm, dismiss and reopen false-positive review",
+    "rendered results contain no raw subject/domain and create no browser storage",
+    "390-pixel mobile review has no horizontal overflow",
+    "five-minute expiry removes candidates and requires a new scope preview",
+    "clear-results action removes review controls and owned candidates",
+    "only same-origin static GETs occur; no API, upload, console or CSP errors"
+  ],
+  "passed": 10,
+  "browser": "151.0.7922.173",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/signup-mail-discovery.html"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/signup-mail-discovery-CbDP466n.js"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/signup-mail-discovery-wpLeKeko.css"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/demo-icon-dmB_Oi0t.svg"
+    }
+  ],
+  "errors": []
+}

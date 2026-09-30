@@ -1,0 +1,44 @@
+.signup-mail-demo-page {
+  margin: 0;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: system-ui, sans-serif;
+}
+
+.signup-mail-panel {
+  box-sizing: border-box;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 48px);
+  line-height: 1.65;
+}
+
+.signup-mail-panel h1 { font-size: clamp(24px, 4vw, 36px); line-height: 1.35; }
+.signup-mail-panel h2 { margin-top: 28px; font-size: 21px; }
+.signup-mail-panel h3 { margin-top: 0; }
+.signup-mail-eyebrow { color: #94e1dd; font-size: 12px; letter-spacing: 0.08em; }
+.signup-mail-privacy { padding: 16px; border-left: 3px solid #94e1dd; background: #18233b; }
+.signup-mail-panel fieldset { border: 1px solid #64748b; border-radius: 8px; margin: 24px 0; padding: 16px; }
+.signup-mail-panel legend { padding: 0 8px; font-weight: 600; }
+.signup-mail-services, .signup-mail-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.signup-mail-services label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.signup-mail-period { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.signup-mail-panel select { font: inherit; padding: 8px; background: #18233b; color: #f1f5f9; border: 1px solid #64748b; border-radius: 6px; }
+.signup-mail-panel button { font: inherit; min-height: 44px; padding: 8px 14px; margin: 8px 0; border: 1px solid #64748b; border-radius: 6px; background: #26374f; color: #f1f5f9; cursor: pointer; }
+.signup-mail-panel button:disabled { color: #b5c1d4; cursor: default; }
+.signup-mail-panel .signup-mail-primary { background: #94e1dd; border-color: #94e1dd; color: #0f172a; font-weight: 600; }
+.signup-mail-panel .signup-mail-primary:disabled { background: #334155; border-color: #64748b; color: #b5c1d4; }
+.signup-mail-panel :focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px; }
+.signup-mail-card { margin: 16px 0; padding: 20px; border: 1px solid #64748b; border-radius: 8px; background: #18233b; }
+.signup-mail-card h2 { margin-top: 0; }
+.signup-mail-card dl { display: grid; grid-template-columns: minmax(90px, 1fr) 4fr; gap: 12px; }
+.signup-mail-card dt { color: #cbd5e1; }
+.signup-mail-card dd { margin: 0; overflow-wrap: anywhere; }
+.signup-mail-results { margin: 0; padding: 0; list-style: none; }
+.signup-mail-confidence { display: inline-block; margin-left: 8px; font-size: 14px; color: #94e1dd; }
+
+@media (max-width: 480px) {
+  .signup-mail-card dl { grid-template-columns: 1fr; gap: 6px; }
+  .signup-mail-card dd { margin-bottom: 12px; }
+  .signup-mail-actions { gap: 4px 12px; }
+}

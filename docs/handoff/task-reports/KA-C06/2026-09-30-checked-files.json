@@ -1,0 +1,16 @@
+{
+  "apps/web/signup-mail-discovery.html": "756db99fa5572ebe8dddb4ce955636d9f31d535227a1164315db3419e79e4480",
+  "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx": "52395236ed86359bdc1be100e7d630008b14615401e87c148ba5af24d8d886a8",
+  "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx": "ae8d885c2ea03cf63a6ced05facbe362956f96edaa5fd3504b768dc7a33f68d8",
+  "apps/web/src/features/signup-mail-discovery/demo-icon.svg": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d",
+  "apps/web/src/features/signup-mail-discovery/demo.tsx": "dba9c58567c4a5a4acddd5f57a7827f147dc7755ef07207c1c111c69eef09b4d",
+  "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css": "5836ee4348f3a4c92b9af5d7a711c07d5d4297db1f33ee63958f09ce9941a994",
+  "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts": "019dcf7eb7ed29e17edf98c7a29cffb787800b59280b6348a0d475aa40e64b08",
+  "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts": "901f41effcda2c6ae3299a8071eb1abc99d46fa7a76e84b553fe37191839776f",
+  "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts": "a6dce85ae94fada05f82818e1e496cedb0d20a784014a731d9d79deb2c05b2ff",
+  "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts": "e335431a899f58ca5ba3109b17383527bcffa63a5738fa6743fab4ec18512b06",
+  "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py": "69c6ec092f9ec5ab34db60d4a721766aeda55f027c6dc3a52bf6f46d77d00be9",
+  "contracts/local-v1/signup-mail-discovery-v1.md": "f4415efa40c67361459a90ffc2fb770acbbeb3e0141e577d88143714370d048f",
+  "docs/handoff/task-reports/KA-C06/ASSIGNMENT.md": "ef73b268818255b7d13732ef15b2dc680f3fbd8156b9fd197b0525dcf1c12bee",
+  "tests/fixtures/synthetic/signup-mail-discovery-v1.json": "fca1b5c5d318f8d956542ba568804ed42f06044e18db6d84d3c140310b1eb775"
+}
