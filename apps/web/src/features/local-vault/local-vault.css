@@ -1,0 +1,44 @@
+.vault-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vault-actions button:disabled { opacity: 0.5; cursor: wait; }
+.vault-actions button:focus-visible, .local-vault a:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.demo-warning { border-left: 4px solid #a96416; padding: 12px; background: #fff8e9; line-height: 1.6; }
+.vault-status { margin: 20px 0 12px; line-height: 1.7; }
+.local-vault small { line-height: 1.6; color: #52616d; }
+.relationship-list { list-style: none; padding: 0; display: grid; gap: 16px; }
+.relationship-list > li { border: 1px solid #dce2e8; border-radius: 10px; padding: 20px; }
+.relationship-list h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
+.relationship-service { color: #425d6a; font-weight: 600; }
+.relationship-list ul { list-style: none; padding-left: 12px; border-left: 2px solid #b3c4cf; }
+.relationship-list ul li { padding: 8px; overflow-wrap: anywhere; }
+.consumer-type { display: inline-block; font-size: 0.85rem; padding: 3px 8px; margin-left: 12px; background: #edf2f5; border-radius: 6px; }
+.local-catalog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.local-catalog-controls input, .local-catalog-controls select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.local-catalog-controls input:focus-visible, .local-catalog-controls select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.synthetic-registration form { display: grid; gap: 12px; }
+.synthetic-registration select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.synthetic-registration fieldset { min-width: 0; border: 1px solid #dce2e8; padding: 12px; }
+.synthetic-registration fieldset label, .registration-acknowledgement { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
+.synthetic-registration input[type="checkbox"] { flex: 0 0 auto; margin-top: 4px; }
+.synthetic-registration input:focus-visible, .synthetic-registration select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.registration-profile { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr); gap: 8px; margin: 0; }
+.registration-profile dt { color: #52616d; }
+.registration-profile dd { margin: 0; overflow-wrap: anywhere; }
+.connection-editor-actions { margin-top: 16px; }
+.synthetic-connection-editor { display: grid; gap: 12px; margin-top: 16px; padding: 16px; border: 1px solid #a9bbc8; border-radius: 8px; min-width: 0; }
+.synthetic-connection-editor h4, .synthetic-connection-editor p { margin: 0; overflow-wrap: anywhere; }
+.synthetic-connection-editor fieldset { min-width: 0; border: 1px solid #dce2e8; padding: 12px; }
+.synthetic-connection-editor fieldset label, .connection-editor-acknowledgement { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
+.synthetic-connection-editor input[type="checkbox"] { flex: 0 0 auto; margin-top: 4px; }
+.synthetic-connection-editor input:focus-visible, .synthetic-connection-editor h4:focus { outline: 3px solid #2877ba; outline-offset: 4px; }
+.connection-removal-warning { padding: 10px; background: #fff8e9; border-left: 3px solid #a96416; }
+.synthetic-rotation form { display: grid; gap: 12px; }
+.synthetic-rotation select { min-width: 0; max-width: 100%; padding: 10px; font: inherit; }
+.synthetic-rotation fieldset { min-width: 0; border: 1px solid #dce2e8; padding: 12px; }
+.synthetic-rotation fieldset label { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr); align-items: center; gap: 10px; margin: 10px 0; }
+.synthetic-rotation input:focus-visible, .synthetic-rotation select:focus-visible { outline: 3px solid #2877ba; outline-offset: 4px; }
+.rotation-acknowledgement { display: flex; align-items: flex-start; gap: 8px; margin: 14px 0; }
+.rotation-acknowledgement input { flex: 0 0 auto; margin-top: 4px; }
+
+@media (max-width: 560px) {
+  .synthetic-rotation fieldset label { grid-template-columns: minmax(0, 1fr); }
+}
