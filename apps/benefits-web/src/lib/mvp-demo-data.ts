@@ -48,6 +48,9 @@ export interface DemoBenefit {
   observed_timezone: string;
   source_kind: SourceKind;
   source_note: string | null;
+  /** Synthetic display facts only, not a provider's current entitlement. */
+  benefit_kind?: "credit" | "trial" | "other";
+  expires_at?: string | null;
 }
 
 export interface DemoDataset {

@@ -10,6 +10,7 @@ import { EmptyState } from "../src/components/mvp-demo/EmptyState.tsx";
 import { ErrorState } from "../src/components/mvp-demo/ErrorState.tsx";
 import { ServiceList } from "../src/components/mvp-demo/ServiceList.tsx";
 import { buildDemoData, collectAttention, DEMO_NOTICE, type DemoBenefit } from "../src/lib/mvp-demo-data.ts";
+import { buildDemoDataWithHistory, selectDemoHistoryView } from "../src/lib/demo-benefit-history.ts";
 
 // Synthetic server-rendered markup only. No DOM, browser clicks, keyboard event
 // dispatch, focus/scroll, hydration, screen reader, or mobile layout is exercised.
@@ -138,9 +139,39 @@ test("keyboard-facing markup has native buttons, a skip target and valid unique 
   const buttons = [...markup.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
   assert.ok(buttons.length >= 4);
   for (const button of buttons) assert.match(button, /type="button"/);
-  assert.equal([...markup.matchAll(/aria-pressed="true"/g)].length, 1);
-  assert.equal([...markup.matchAll(/aria-pressed="false"/g)].length, 3);
+  assert.equal([...markup.matchAll(/aria-pressed="true"/g)].length, 2);
+  assert.equal([...markup.matchAll(/aria-pressed="false"/g)].length, 4);
   // These attributes are not evidence that Arrow keys, scrolling or focus work.
+});
+
+test("history details are absent from initial markup, not merely hidden with CSS", () => {
+  const markup = demo();
+  assert.match(markup, /aria-label="혜택 조회 범위"/);
+  assert.match(markup, /지난 기록 보기/);
+  assert.match(markup, /현재·확인 필요 조회 중/);
+  assert.doesNotMatch(markup, /demo-b-history-credit|demo-b-history-trial|지난 프로모션 크레딧|지난 14일 무료 체험/);
+});
+
+test("explicit history rendering retains records and labels past amounts without usable-balance meters", () => {
+  const dataset = selectDemoHistoryView(buildDemoDataWithHistory(REFERENCE), "history", REFERENCE);
+  const markup = render(createElement(ServiceList, { dataset, selectedId: dataset.services[0]!.id,
+    onSelect: () => {}, historyView: true, referenceTime: REFERENCE }));
+  assert.equal([...markup.matchAll(/<article\b/g)].length, 2);
+  assert.match(markup, /지난 프로모션 크레딧/);
+  assert.match(markup, /지난 14일 무료 체험/);
+  assert.match(visibleText(markup), /기록 당시 잔량 80 크레딧/);
+  assert.match(visibleText(markup), /현재 사용할 수 있는 잔액이 아닙니다/);
+  assert.match(visibleText(markup), /현재 계정 상태 미조회/);
+  assert.match(visibleText(markup), /2026년/);
+  assert.doesNotMatch(markup, /role="meter"|aria-valuenow/);
+});
+
+test("history empty state is explicit and retains no unrelated current benefit", () => {
+  const dataset = selectDemoHistoryView(buildDemoData(REFERENCE), "history", REFERENCE);
+  const markup = render(createElement(ServiceList, { dataset, selectedId: null, onSelect: () => {},
+    historyView: true, referenceTime: REFERENCE }));
+  assert.match(markup, /지난 기록이 없습니다/);
+  assert.doesNotMatch(markup, /<article\b|고급 모델 요청/);
 });
 
 test("attention markup preserves synthetic uncertainty and its buttons do not run during SSR", () => {

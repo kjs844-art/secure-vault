@@ -1,6 +1,21 @@
 # 세션 인계 — 2026-09-27
 
-## 가장 최신: M05A 도구 보정 / Actions 보류 / 위임 제출 (2026-09-29)
+## 최신: 기존 작업에서 개발 재개 / 혜택 이력 (2026-09-30)
+
+- 사용자가 기존 작업 `01a07f4f-3a43-7890-bf89-ed2bf7339f76`으로 돌아와 미완성 변경을
+  이어서 마무리하도록 요청했다. 포크 작업은 interrupted/notLoaded로 확인했다.
+- checkout은 `agent-staging/keyatlas-mvp-01a-20260927`, branch는
+  `codex/firstvibe-benefit-history-20260929`, 시작 HEAD는 `babe05be8f59`다.
+  미커밋 혜택 이력 변경과 실제 Secret 계획 문서를 보존해 이어받았다.
+- 혜택 이력 6 → 2 → 6 전환, 기록 당시 잔량, 서비스 체험 종료 충돌 보정을 마무리했다.
+  1,308/1,308, build/typecheck·경계·SSR smoke와 실제 브라우저 모바일/키보드 검사 exit 0.
+  [정확한 근거](../../verification/mvp-integration/2026-09-30-benefit-history.md).
+- 공개 체험부터 점진 출시한다. 호스팅·DB·도메인·비용 준비는 사용자와 추후 논의한다.
+  실제 Secret·메일·DB·배포는 아직 완료가 아니다.
+- PR #22/#23은 소유 경로와 현재 제출 SHA를 다시 검토 중이다. 원본 위임 브랜치,
+  원본 Lovable/benefit-validator/DB와 Windows 보안 정책은 보존한다.
+
+## 이전: M05A 도구 보정 / Actions 보류 / 위임 제출 (2026-09-29)
 
 - 사용자 재개 요청으로 개발을 계속한다. 빨간 Actions/사용량 해결만 보류한다.
   자동 재시도·결제/한도 변경·보안 검사 완화는 하지 않는다.

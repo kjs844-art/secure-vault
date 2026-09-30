@@ -66,6 +66,9 @@ try {
   assert.match(demoHtml, /AI 어시스턴트/);
   assert.match(demoHtml, /파일 업로드 용량/);
   assert.match(demoHtml, /모름/);
+  assert.match(demoHtml, /지난 기록 보기/);
+  assert.match(demoHtml, /현재·확인 필요 조회 중/);
+  assert.doesNotMatch(demoHtml, /demo-b-history-credit|demo-b-history-trial|지난 프로모션 크레딧/);
   assert.doesNotMatch(demoHtml, /핵택|13 회|supabase\.co|lovable\.app/);
   const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1]);
   assert.ok(assets.length >= 2, "SSR must reference executable client assets");

@@ -78,6 +78,25 @@ content-security policy, an egress sandbox, or permission to use real secrets.
 
 ## Next integrations
 
+### Opt-in past benefit records (synthetic demo)
+
+`/demo` starts with the original four-service, six-benefit review view. The user
+can choose **지난 기록 보기** to see two additional historical fixtures (an expired
+credit and an ended trial) and switch back without deleting or changing records.
+Past details are not rendered into the default DOM. This is a display filter, not
+an authorization boundary: all fixtures are compiled synthetic data, not private
+history fetched from an authenticated server.
+
+`src/lib/demo-benefit-history.ts` only classifies an explicit canonical UTC expiry
+or an applicable recorded trial end. Old mail, a zero balance, a reset date or a
+cancelled subscription alone does not expire unrelated credits. Ambiguous dates
+and conflicting trial facts remain in the review view. Past amounts are labelled
+as recorded amounts, without a spendable-balance meter. The reference time is the
+page's SSR seed, not a continuously refreshed provider clock. A real data adapter
+must preserve these evidence distinctions and undergo separate validation.
+
+This does not connect Gmail, change the real database, or enable real vault secrets.
+
 Use [the M01A contract](../../docs/handoff/mvp-20260927/M01A.md) and
 [the two-week plan](../../docs/handoff/mvp-20260927/TWO_WEEK_PLAN.md).
 Existing web design/demo goes through M02. Authentication, consent, Gmail adapters,

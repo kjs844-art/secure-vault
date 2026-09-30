@@ -5,6 +5,7 @@ import {
   SOURCE_KIND_LABELS,
   type DemoBenefit,
 } from "../../lib/mvp-demo-data";
+import { formatDemoRecordDate } from "../../lib/demo-benefit-history";
 
 const card: CSSProperties = {
   border: "1px solid currentColor",
@@ -19,17 +20,22 @@ const meter: CSSProperties = {
   marginTop: "0.5rem",
 };
 
-export function BenefitCard({ benefit }: { benefit: DemoBenefit }) {
+export function BenefitCard({ benefit, historyReason }: { benefit: DemoBenefit; historyReason?: string | undefined }) {
   const ratio = remainingRatio(benefit);
   return (
     <article style={card} aria-labelledby={`${benefit.id}-name`}>
       <h4 id={`${benefit.id}-name`} style={{ margin: 0 }}>
         {benefit.name}
       </h4>
+      {historyReason && <p><strong>지난 기록</strong> · {historyReason}</p>}
       <p style={{ margin: "0.35rem 0 0" }}>
-        남음 {formatAmount(benefit.remaining_amount, benefit.unit)}
+        {historyReason ? "기록 당시 잔량 " : "남음 "}{formatAmount(benefit.remaining_amount, benefit.unit)}
         {" · "}
         지급 {formatAmount(benefit.granted_amount, benefit.unit)}
+      </p>
+      <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
+        기록 기준 {formatDemoRecordDate(benefit.observed_at)} · 현재 잔액을 조회한 값이 아닙니다.
+        {benefit.expires_at != null && <> 기록된 만료일 {formatDemoRecordDate(benefit.expires_at)}</>}
       </p>
       <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
         {SOURCE_KIND_LABELS[benefit.source_kind]}
@@ -38,7 +44,7 @@ export function BenefitCard({ benefit }: { benefit: DemoBenefit }) {
       <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
         별도 월 상한 {formatAmount(benefit.monthly_cap, benefit.unit)}
       </p>
-      {ratio === null ? (
+      {historyReason ? null : ratio === null ? (
         <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
           비율을 계산할 수 없습니다 (모름 값 유지).
         </p>
