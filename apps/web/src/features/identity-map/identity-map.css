@@ -1,0 +1,51 @@
+.identity-map-steps ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.identity-map-steps li {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #edf2f5;
+  color: #425d6a;
+}
+
+.identity-map-steps li[aria-current="step"] {
+  background: #17202a;
+  color: #ffffff;
+}
+
+.identity-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.identity-map-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.identity-map-list button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.identity-map-list button span,
+.identity-map-list button small {
+  color: #d7e2ea;
+  font-weight: 400;
+}
+
+.identity-map-list li p {
+  margin: 0 0 8px;
+}
