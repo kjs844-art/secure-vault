@@ -7,12 +7,11 @@ import { SyntheticEditableCatalog } from "./SyntheticConnectionEditor";
 import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import { SyntheticConflictReviewPanel } from "./SyntheticConflictReviewPanel";
+import { IdentityMapPanel } from "../identity-map/IdentityMapPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
 export function LocalVaultPanel() {
-  // Constructors do not read storage or start workers. StrictMode can safely
-  // create/discard a session; effect cleanup invalidates pending operations.
   const [session] = useState(() => new SyntheticVaultSession(
     createSyntheticCiphertextStore(), new BrowserSyntheticVaultWorker(),
   ));
@@ -31,6 +30,8 @@ export function LocalVaultPanel() {
         <p>서비스 → API 자격 증명 → 연결된 도구. 가상 데이터로 로컬 저장과 복원을 확인하는 기능 화면입니다.</p>
         <p className="demo-warning"><strong>실제 비밀번호·API 키 입력 금지.</strong> 공개된 테스트 비밀번호를 사용하는 데모입니다. 암호화 흐름을 시험하지만 실제 비밀정보를 보호할 수 있는 제품은 아닙니다.</p>
         <a href="/">기존 합성 목록 화면</a>
+        {" · "}
+        <a href="/?view=identity-map">Identity Map 3단계</a>
       </header>
 
       <section aria-labelledby="storage-heading">
@@ -48,7 +49,7 @@ export function LocalVaultPanel() {
           {state.phase === "open" && `열림 · 저장된 암호문에서 ${state.entries.length}개 합성 항목을 인증하고 복원했습니다.`}
           {state.phase === "error" && `작업을 확인하지 못했습니다 (${state.errorCode}). 오류 시 자동 초기화·재시도는 하지 않습니다. 저장이 이미 완료됐을 수 있으므로 먼저 금고를 다시 열어 확인하세요.`}
         </p>
-        <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠길 수 있습니다.</small>
+        <small>이미 금고가 있으면 만들기를 다시 눌러도 덮어쓰지 않습니다. 새로고침 후에는 다시 열어야 하며, 탭을 숨기거나 5분 동안 키보드·포인터 입력이 없으면 잠깁니다. 절전 복귀나 시스템 시각 변경 시에도 잠김 수 있습니다.</small>
       </section>
 
       {state.phase === "open" && <SyntheticConflictReviewPanel
@@ -56,6 +57,7 @@ export function LocalVaultPanel() {
       />}
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}
+      {state.phase === "open" && <IdentityMapPanel key={`identity-map-${generation}`} embedded entries={state.entries} sourceLabel="열린 합성 금고의 표시 스냅샷" />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">
         <h2 id="local-explanation-heading">로컬 저장은 ‘이 브라우저 안 서랍’이에요</h2>
