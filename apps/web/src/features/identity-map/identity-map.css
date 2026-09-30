@@ -7,16 +7,30 @@
   list-style: none;
 }
 
-.identity-map-steps li {
+.identity-map-steps button {
   padding: 8px 12px;
+  border: 0;
   border-radius: 999px;
   background: #edf2f5;
   color: #425d6a;
 }
 
-.identity-map-steps li[aria-current="step"] {
+.identity-map-steps button[aria-current="step"] {
   background: #17202a;
   color: #ffffff;
+}
+
+.identity-map-steps button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.identity-map-steps button:focus-visible,
+.identity-map-actions button:focus-visible,
+.identity-map-list button:focus-visible,
+.identity-map a:focus-visible {
+  outline: 3px solid #2877ba;
+  outline-offset: 4px;
 }
 
 .identity-map-actions {
@@ -33,19 +47,50 @@
   list-style: none;
 }
 
+.identity-map-list > li {
+  border: 1px solid #dce2e8;
+  border-radius: 12px;
+  padding: 4px;
+  min-width: 0;
+}
+
 .identity-map-list button {
   width: 100%;
   text-align: left;
   display: grid;
   gap: 4px;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  color: #17202a;
 }
 
 .identity-map-list button span,
 .identity-map-list button small {
-  color: #d7e2ea;
+  color: #425d6a;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .identity-map-list li p {
   margin: 0 0 8px;
+}
+
+.identity-map .consumer-type {
+  display: inline-block;
+  font-size: 0.85rem;
+  padding: 3px 8px;
+  background: #edf2f5;
+  border-radius: 6px;
+}
+
+@media (max-width: 360px) {
+  .identity-map-steps ol,
+  .identity-map-actions {
+    gap: 8px;
+  }
+
+  .identity-map-list button {
+    padding: 10px;
+  }
 }

@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
+import "../../styles.css";
 import {
   consumerLabels,
   credentialLabels,
@@ -9,6 +10,7 @@ import {
   buildIdentityMap,
   emptyIdentityMapView,
   reduceIdentityMap,
+  type IdentityMapStep,
   type IdentityMapView,
 } from "./identityMapModel";
 import { SYNTHETIC_IDENTITY_MAP_ENTRIES } from "./syntheticIdentityMapFixture";
@@ -30,6 +32,19 @@ export function IdentityMapPanel({
   const [view, setView] = useState<IdentityMapView>(() => emptyIdentityMapView(graph));
   const shown = view.accounts === graph.accounts ? view : emptyIdentityMapView(graph);
   const Root = embedded ? "section" : "main";
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setView((current) => reduceIdentityMap(graph, current, { type: "back" }));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [graph]);
+
+  const openStep = (step: IdentityMapStep) => {
+    setView((current) => reduceIdentityMap(graph, current, { type: "open-step", step }));
+  };
 
   return (
     <Root className="identity-map" {...(embedded ? { "aria-labelledby": "identity-map-title" } : {})}>
@@ -53,9 +68,38 @@ export function IdentityMapPanel({
 
       <nav aria-label="Identity Map 단계" className="identity-map-steps">
         <ol>
-          <li aria-current={shown.step === "account" ? "step" : undefined}>1. 계정</li>
-          <li aria-current={shown.step === "issuer" ? "step" : undefined}>2. 발급처</li>
-          <li aria-current={shown.step === "usage" ? "step" : undefined}>3. 사용처</li>
+          <li>
+            <button
+              type="button"
+              data-testid="identity-map-step-account"
+              aria-current={shown.step === "account" ? "step" : undefined}
+              onClick={() => openStep("account")}
+            >
+              1. 계정
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              data-testid="identity-map-step-issuer"
+              aria-current={shown.step === "issuer" ? "step" : undefined}
+              disabled={shown.selectedAccountId === null}
+              onClick={() => openStep("issuer")}
+            >
+              2. 발급처
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              data-testid="identity-map-step-usage"
+              aria-current={shown.step === "usage" ? "step" : undefined}
+              disabled={shown.selectedIssuerId === null}
+              onClick={() => openStep("usage")}
+            >
+              3. 사용처
+            </button>
+          </li>
         </ol>
       </nav>
 

@@ -57,6 +57,7 @@ export interface IdentityMapView {
 export type IdentityMapAction =
   | { readonly type: "select-account"; readonly accountId: string }
   | { readonly type: "select-issuer"; readonly issuerId: string }
+  | { readonly type: "open-step"; readonly step: IdentityMapStep }
   | { readonly type: "back" }
   | { readonly type: "reset" };
 
@@ -127,7 +128,7 @@ export function buildIdentityMap(entries: readonly LocalCatalogEntryV1[] | null 
     }
     const bucket = accounts.get(currentAccountId)!;
     const currentIssuerId = issuerId(entry);
-    const usages = Object.freeze(entry.connections.map((connection, index) => Object.freeze({
+    const usages = Object.freeze(entry.connections.map((connection: LocalCatalogEntryV1["connections"][number], index: number) => Object.freeze({
       id: `${currentIssuerId}\0${index}`,
       issuerId: currentIssuerId,
       label: connection.label,
@@ -252,6 +253,14 @@ export function reduceIdentityMap(
       if (view.selectedAccountId !== null && issuer.accountId !== view.selectedAccountId) return view;
       return viewFromSelection(graph, issuer.accountId, issuer.id);
     }
+    case "open-step":
+      if (action.step === "account") return emptyIdentityMapView(graph);
+      if (action.step === "issuer") {
+        if (view.selectedAccountId === null) return view;
+        return viewFromSelection(graph, view.selectedAccountId, null);
+      }
+      if (view.selectedIssuerId === null) return view;
+      return viewFromSelection(graph, view.selectedAccountId, view.selectedIssuerId);
     case "back":
       if (view.step === "usage") return viewFromSelection(graph, view.selectedAccountId, null);
       return emptyIdentityMapView(graph);

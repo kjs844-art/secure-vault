@@ -13,6 +13,8 @@ describe("IdentityMapPanel initial rendering", () => {
     expect(html).toContain("demo-workshop-owner");
     expect(html).toContain("기록 없음");
     expect(html.match(/data-testid="identity-map-account"/g)).toHaveLength(3);
+    expect(html).toContain("data-testid=\"identity-map-step-account\"");
+    expect(html).toContain("disabled");
     expect(html).not.toContain("data-testid=\"identity-map-issuer\"");
     expect(html).not.toContain("data-testid=\"identity-map-usages\"");
     expect(html).not.toMatch(/type="(password|text|email)"/);
@@ -36,9 +38,15 @@ describe("IdentityMapPanel initial rendering", () => {
       mcpConnectionCount: 0,
       connections: [],
     }]} />);
-    expect(html).toContain("<em>DEMO provider</em>");
-    expect(html).toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;em&gt;DEMO provider&lt;/em&gt;");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html.includes("<em>")).toBe(false);
     expect(html.includes("<script>")).toBe(false);
+  });
+
+  it("renders an empty state when no catalog rows are usable", () => {
+    const html = renderToStaticMarkup(<IdentityMapPanel entries={[]} />);
+    expect(html).toContain("표시할 합성 계정이 없습니다.");
+    expect(html).not.toContain("data-testid=\"identity-map-account\"");
   });
 });

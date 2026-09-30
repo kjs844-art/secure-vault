@@ -130,4 +130,17 @@ describe("reduceIdentityMap", () => {
     expect(reduceIdentityMap(graph, selected, { type: "select-issuer", issuerId: "missing" }).step).toBe("issuer");
     expect(reduceIdentityMap(graph, selected, { type: "reset" }).step).toBe("account");
   });
+
+  it("opens only reachable steps from the breadcrumb", () => {
+    const account = graph.accounts[0]!;
+    const selected = reduceIdentityMap(graph, start, { type: "select-account", accountId: account.id });
+    const issuer = selected.issuers[0]!;
+    const usage = reduceIdentityMap(graph, selected, { type: "select-issuer", issuerId: issuer.id });
+
+    expect(reduceIdentityMap(graph, start, { type: "open-step", step: "issuer" })).toBe(start);
+    expect(reduceIdentityMap(graph, start, { type: "open-step", step: "usage" })).toBe(start);
+    expect(reduceIdentityMap(graph, selected, { type: "open-step", step: "usage" })).toBe(selected);
+    expect(reduceIdentityMap(graph, usage, { type: "open-step", step: "issuer" }).step).toBe("issuer");
+    expect(reduceIdentityMap(graph, usage, { type: "open-step", step: "account" }).step).toBe("account");
+  });
 });
