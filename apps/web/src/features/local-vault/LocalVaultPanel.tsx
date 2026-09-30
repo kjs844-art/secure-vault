@@ -31,6 +31,8 @@ export function LocalVaultPanel() {
         <p>서비스 → API 자격 증명 → 연결된 도구. 가상 데이터로 로컬 저장과 복원을 확인하는 기능 화면입니다.</p>
         <p className="demo-warning"><strong>실제 비밀번호·API 키 입력 금지.</strong> 공개된 테스트 비밀번호를 사용하는 데모입니다. 암호화 흐름을 시험하지만 실제 비밀정보를 보호할 수 있는 제품은 아닙니다.</p>
         <a href="/">기존 합성 목록 화면</a>
+        {" · "}
+        <a href="/?view=discovery-inbox">가입 흔적 Inbox</a>
       </header>
 
       <section aria-labelledby="storage-heading">

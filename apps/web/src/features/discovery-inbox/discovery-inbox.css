@@ -1,0 +1,62 @@
+.discovery-inbox-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.discovery-inbox-filters button[aria-pressed="true"] {
+  background: #17202a;
+  color: #ffffff;
+}
+
+.discovery-inbox-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.discovery-inbox-list article {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #dce2e8;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.discovery-inbox-list h2,
+.discovery-inbox-list p {
+  margin: 0;
+}
+
+.discovery-confidence {
+  display: inline-block;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #edf2f5;
+  color: #425d6a;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.discovery-inbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.discovery-inbox button:focus-visible,
+.discovery-inbox a:focus-visible {
+  outline: 3px solid #2877ba;
+  outline-offset: 4px;
+}
+
+@media (max-width: 360px) {
+  .discovery-inbox-list article,
+  .discovery-inbox-actions {
+    min-width: 0;
+  }
+}
