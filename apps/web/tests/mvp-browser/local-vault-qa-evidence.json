@@ -1,0 +1,29 @@
+{
+  "scenarios": [
+    {
+      "name": "S1-quota-save-failure-preserves-archive",
+      "status": "PASS",
+      "evidence": "bytes 3892, hash 8fb852032421…, UI 오류 표시, 재열기 성공"
+    },
+    {
+      "name": "S2-lock-clears-screen-and-reloads-locked",
+      "status": "PASS",
+      "evidence": "항목 상세 제거, 암호문 유지, 새로고침 후 잠김, 재열기 복원"
+    },
+    {
+      "name": "S3-keyboard-lock-and-tab-order",
+      "status": "PASS",
+      "evidence": "Enter로 잠금, Tab 순회 시 금고 컨트롤 미노출"
+    },
+    {
+      "name": "S4-mobile-viewport-360px",
+      "status": "PASS",
+      "evidence": "unlocked 360/360, locked 360/360"
+    },
+    {
+      "name": "S5-upgrade-failure-preserves-archive",
+      "status": "PASS",
+      "evidence": "incompatible 표시, 암호문 유지(8fb852032421…), DB 버전 99 유지"
+    }
+  ]
+}

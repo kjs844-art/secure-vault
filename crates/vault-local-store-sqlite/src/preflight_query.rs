@@ -3,7 +3,6 @@
 use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -411,14 +410,7 @@ impl PreflightQueryGate {
         // second exact size check catches in-place growth as well.
         pre_open_files.revalidate_before_sqlite_open()?;
         observer.sqlite_open_attempt();
-        let connection = Connection::open_with_flags(path, schema_contract::read_only_open_flags())
-            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-        connection
-            .busy_timeout(Duration::from_secs(5))
-            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
-        connection
-            .load_extension_disable()
-            .map_err(|_| StorageError::new(StorageErrorCode::UnsupportedPlatform))?;
+        let connection = crate::schema::open_read_only(path)?;
         connection
             .execute_batch("BEGIN")
             .map_err(|_| StorageError::new(StorageErrorCode::Busy))?;
@@ -1495,6 +1487,7 @@ mod tests {
     use std::rc::Rc;
 
     use rusqlite::Connection;
+    use rusqlite::config::DbConfig;
     use tempfile::{TempDir, tempdir};
 
     use super::*;
@@ -1692,6 +1685,68 @@ mod tests {
         assert_eq!(
             sizes.max_shm_bytes,
             MAX_DATABASE_PAGE_BYTES / 32 + 32 * 1024
+        );
+    }
+
+    #[test]
+    fn read_only_preflight_connection_enforces_the_shared_security_profile() {
+        let fixture = Fixture::new();
+        let gate = PreflightQueryGate::open_read_only(&fixture.path).unwrap();
+        let connection = &gate.connection;
+
+        assert!(connection.is_readonly("main").unwrap());
+        for (pragma, expected) in [
+            ("query_only", 1_i64),
+            ("recursive_triggers", 1_i64),
+            ("foreign_keys", 1_i64),
+            ("trusted_schema", 0_i64),
+        ] {
+            assert_eq!(
+                connection
+                    .query_row(&format!("PRAGMA {pragma}"), [], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                expected,
+                "unexpected PRAGMA {pragma}"
+            );
+        }
+
+        for (config, expected) in [
+            (DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true),
+            (DbConfig::SQLITE_DBCONFIG_TRUSTED_SCHEMA, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, true),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DML, false),
+            (DbConfig::SQLITE_DBCONFIG_DQS_DDL, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE, false),
+            (DbConfig::SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE, false),
+        ] {
+            assert_eq!(connection.db_config(config).unwrap(), expected);
+        }
+
+        let dqs_result =
+            connection.query_row("SELECT \"not_a_column\"", [], |row| row.get::<_, String>(0));
+        assert!(dqs_result.is_err(), "DQS string fallback was enabled");
+
+        let attack_path = fixture.path.with_file_name("attacker.sqlite3");
+        let attack_path_text = attack_path.to_string_lossy().into_owned();
+        assert!(
+            connection
+                .execute("ATTACH ?1 AS attacker", [attack_path_text.as_str()])
+                .is_err(),
+            "read-only preflight created an ATTACH target"
+        );
+        assert!(!attack_path.exists());
+        let attached_database_count: i64 = connection
+            .query_row("SELECT count(*) FROM pragma_database_list", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(attached_database_count, 1);
+        assert!(
+            connection
+                .execute_batch("CREATE TEMP TABLE attacker(value INTEGER)")
+                .is_err(),
+            "query_only did not reject a temporary write"
         );
     }
 
