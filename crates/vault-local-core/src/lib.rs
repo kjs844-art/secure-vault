@@ -9,6 +9,8 @@ mod consent;
 mod consent_synthetic;
 mod error;
 mod ids;
+mod login_method;
+mod login_method_synthetic;
 mod model;
 mod persistence;
 mod record;
@@ -40,3 +42,6 @@ mod consent_tests;
 #[cfg(test)]
 #[path = "future_version_tests.rs"]
 mod future_version_tests;
+#[cfg(test)]
+#[path = "login_method_tests.rs"]
+mod login_method_tests;
