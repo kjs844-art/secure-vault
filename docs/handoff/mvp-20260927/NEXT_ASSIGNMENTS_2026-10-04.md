@@ -5,12 +5,15 @@
 
 ## 같은 코드부터 시작하기
 
-- Git 기준은 `afbc0fbc4dd41669e468d8658965ef8f5f10ee7d`다. 현재 cloud branch는
-  `codex/firstvibe-cloud-catalog-client-fix-20261003`이며 새 commit은 없다.
-- 이 SHA **위의 미커밋 변경**도 필요하다. HEAD만 checkout하면 검증한 코드가 아니다.
-  주 담당이 전달한 patch와
-  [현재 manifest](../../verification/mvp-integration/2026-10-04-cloud-shell-source-manifest.json)의
-  경로·hash를 대조한다. 실제 전달 전에는 수령했다고 보고하지 않는다.
+- 새 기능 기준 commit은 `b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6`다. cloud branch는
+  `codex/firstvibe-cloud-catalog-client-fix-20261003`이다. 검토한 87개 경로를 커밋했다.
+  인계 문서 commit이 뒤따를 수 있으므로 실제 HEAD·원격 tip도 확인한다.
+- 별도 checkout에서 이 기능 commit을 사용한다. 이전 `afbc0fbc4dd41669e468d8658965ef8f5f10ee7d`
+  + overlay/patch 방식은 당시 검증 이력이며 새 시작에 overlay를 다시 적용하지 않는다.
+  [검사 manifest](../../verification/mvp-integration/2026-10-04-cloud-shell-source-manifest.json)의
+  `source_contract_fixture_qa.files` 60개 hash는 기능 commit의 코드와 같다.
+  전체 87개 파일 hash는 당시 snapshot이고 이후 인계 metadata 변경과 구분한다.
+  [게시 기록](../../verification/mvp-integration/2026-10-04-cloud-publication.md)을 먼저 읽는다.
 - [10/3 배정표](NEXT_ASSIGNMENTS_2026-10-03.md)의 공통 제한을 유지한다.
   10/3 manifest·ZIP은 당시 트리의 증거다. 10/4 앱 셸을 포함한 현재 기준과 구분한다.
 - 원격 main 관찰 SHA는 `65d10dceb13039dc69cf2368aa0e31d7ad5cc6b2`다.
@@ -21,7 +24,7 @@
 - `AGENTS.md`, `START_HERE.md`, `SESSION_HANDOFF.md`,
   [준비 상태](SERVICE_READINESS_2026-10-03.md),
   [이번 검증](../../verification/mvp-integration/2026-10-04-cloud-shell-qa.md)을 먼저 읽는다.
-- 별도 checkout과 담당 branch를 사용하고 실제 경로·HEAD·Git 상태·원격 tip·overlay hash를
+- 별도 checkout과 담당 branch를 사용하고 실제 경로·HEAD·Git 상태·원격 tip·source hash를
   확인한다. 기존 미커밋 파일을 덮어쓰거나 대체하지 않는다.
 
 `REAL_SECRET_GATE=CLOSED`. 합성 데이터만 사용한다. 실제 password/API key/mail,
@@ -30,11 +33,14 @@ CI 재실행·결제/한도 변경, 보안 검사 약화·Windows 정책 우회�
 R3A core·R5A 실제 auth/DB/Gmail adapter는 별도 승인된 구현 manifest 없이는 변경하지 않는다.
 commit/push/PR 생성/main merge/force push, 다른 채팅 메시지·세션 생성은 별도 승인 전 금지다.
 
+이번 사용자 commit/push 승인은 M01A cloud의 검토된 변경에 대한 것이다.
+이 배정 초안으로 다른 AI에게 게시·PR·세션 생성 권한을 자동 부여하지 않는다.
+
 ## 부족분만 나누는 배정표
 
 | 담당 / 권장 branch | 허용 파일 | 금지 파일·선행 작업 | 완료 기준 |
 | --- | --- | --- | --- |
-| M02 / `codex/keyatlas-m02-ui-followup-20261004` | `apps/benefits-web/src/components/mvp-demo/**`; web identity-map/discovery-inbox/signup-mail의 `*Panel.tsx`, panel tests, 해당 CSS | 공용 `src/ui/**`, App/main/routes, model/scanner/policy/fixtures, worker/store/crypto/HTTP/config/CI. 현재 overlay 먼저 수령 | 기존 44px 버튼·초점·새 셸 재구현 없이 남은 한국어·모바일·screen reader 문제만 보완. 정책·합성 안내 보존, 집중 test/typecheck/build 및 실행한 browser 증거 |
+| M02 / `codex/keyatlas-m02-ui-followup-20261004` | `apps/benefits-web/src/components/mvp-demo/**`; web identity-map/discovery-inbox/signup-mail의 `*Panel.tsx`, panel tests, 해당 CSS | 공용 `src/ui/**`, App/main/routes, model/scanner/policy/fixtures, worker/store/crypto/HTTP/config/CI. 기능 commit과 최신 인계 기준 먼저 수령 | 기존 44px 버튼·초점·새 셸 재구현 없이 남은 한국어·모바일·screen reader 문제만 보완. 정책·합성 안내 보존, 집중 test/typecheck/build 및 실행한 browser 증거 |
 | M05A / `codex/keyatlas-m05a-qa-followup-20261004` | 새 `apps/web/tests/mvp-browser/m05a-*`; 새 benefits `tests/m05a-*.test.ts`; 새 `docs/verification/mvp-integration/2026-10-04-m05a-*.md` | 제품·기존 QA/helper·계약·dependencies/lockfile/config/CI/core. M02 전/후 source hash 구분 | 기존 Chromium 24개 셸·19개 금고 QA를 재사용. 현재 미검증인 Firefox/WebKit·실제 모바일/screen reader·native Windows/OS dialog 중 지원 환경만 확인. 미지원은 BLOCKED/NOT_RUN |
 | M06 / `codex/keyatlas-m06-korea-ops-followup-20261004` | 기존 한국 개인정보/운영 초안 2개; 새 `docs/privacy/mvp/2026-10-04-m06-open-decisions.md` | 앱/계약/core/API/infra/CI/LICENSE·다른 담당 기록. T1 공개 범위·운영자 결정 미정 | 기존 초안의 hosting 로그·보존/삭제·수신자·지역·비용·연락처·권리 요청·장애/rollback 미정 값을 정리. 실사 없는 준수/출시 승인 주장 금지 |
 | M04A/R4A / `codex/keyatlas-m04a-independent-review-20261004` | 새 `docs/security/reviews/m04a-2026-10-04/**`만 | 모든 product/tests/정책/CI/core는 읽기 전용. 마지막 변경의 고정 hash 수령 후 리뷰 | client/time/byte/abort·HTTP authority/commit·C04 projection/state·C06 scope/TTL·새 셸 이동/잠금·R3A/R5A 설계를 검토. 파일/행 근거·조건·최소 수정 제안·미검증 기록 |
@@ -47,12 +53,17 @@ C06의 pagehide/bfcache 후보·동의 정리도 이번 후속에 포함한다. 
 M05A는 `verify_mail_page_lifecycle.py`의 native persisted=true와 scripted event 구분을
 보존한다. M04A/R4A는 실제 cached DOM 정리와 heap erasure/실제 권한 증명의 차이를 검토한다.
 
+기능 commit 뒤의 인계 metadata는 cloud branch의 최신 문서에서도 먼저 읽는다.
+실제 작업 checkout이 metadata 후속 commit이어도 기능 source hash 60개가 같아야 한다.
+기능 base 자체의 과거 인계 문구를 최신 게시/배정 상태로 읽지 않는다.
+
 ## M02 복사용 프롬프트
 
 ```text
 KeyAtlas M02 화면·모바일·접근성 후속을 진행해 주세요.
-기준 SHA afbc0fbc4dd41669e468d8658965ef8f5f10ee7d와 주 담당이 전달한
-2026-10-04-cloud-shell-source-manifest.json/patch의 hash를 먼저 대조하세요.
+cloud branch의 최신 START_HERE/SESSION_HANDOFF/NEXT_ASSIGNMENTS 문서도 먼저 읽으세요.
+기능 기준 SHA b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6를 별도 checkout하고
+2026-10-04-cloud-shell-source-manifest.json의 source_contract_fixture_qa hash를 대조하세요.
 별도 checkout/branch codex/keyatlas-m02-ui-followup-20261004를 사용하세요.
 AGENTS.md와 NEXT_ASSIGNMENTS_2026-10-04.md의 공통 제한·M02 소유 파일을 따르세요.
 이미 제출/통합된 #21/#24/#26/C06·44px 버튼·초점·공통 셸을 다시 만들지 마세요.
@@ -67,10 +78,10 @@ AGENTS.md와 NEXT_ASSIGNMENTS_2026-10-04.md의 공통 제한·M02 소유 파일�
 ## M05A 복사용 프롬프트
 
 ```text
-KeyAtlas M05A QA 후속입니다. 기준 SHA afbc0fbc4dd41669e468d8658965ef8f5f10ee7d와
-전달받은 10/4 overlay/manifest hash를 확인하고 별도 checkout을 사용하세요.
+KeyAtlas M05A QA 후속입니다. 기능 기준 SHA b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6와
+10/4 manifest의 source_contract_fixture_qa hash를 확인하고 별도 checkout을 사용하세요.
 branch는 codex/keyatlas-m05a-qa-followup-20261004를 권장합니다.
-NEXT_ASSIGNMENTS_2026-10-04.md의 M05A 허용 파일만 작성하세요.
+cloud branch 최신 인계 문서와 NEXT_ASSIGNMENTS_2026-10-04.md의 M05A 허용 파일만 따르세요.
 기존 verify_app_shell.py, 금고 lifecycle 및 C02/C04/C06 browser QA를 재사용하세요.
 이미 통과한 기능을 새로 구현하지 말고 교차 browser·실제 모바일/screen reader·native
 Windows/OS dialog의 증거 부족분 중 현재 환경에서 가능한 것만 검사하세요.
@@ -85,7 +96,8 @@ M02 변경 전/후 source와 build hash·정확한 command/exit를 구분하세�
 
 ```text
 KeyAtlas M06 한국 출시·개인정보·운영 문서 후속입니다.
-기준 SHA afbc0fbc4dd41669e468d8658965ef8f5f10ee7d와 전달받은 최신 overlay hash를
+cloud branch의 최신 START_HERE/SESSION_HANDOFF/NEXT_ASSIGNMENTS 문서도 먼저 읽으세요.
+기능 기준 SHA b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6와 manifest의 source hash를
 확인하고 별도 checkout/branch codex/keyatlas-m06-korea-ops-followup-20261004를 사용하세요.
 NEXT_ASSIGNMENTS_2026-10-04.md의 M06 허용 파일만 수정하세요.
 기존 docs/privacy/mvp/2026-10-03-korea-data-handling-draft.md와
@@ -102,9 +114,9 @@ hosting 로그·수신자/지역·보존/삭제·연락처/권리 요청·incide
 
 ```text
 KeyAtlas M04A/R4A 독립 보안 리뷰입니다. 기준 SHA
-afbc0fbc4dd41669e468d8658965ef8f5f10ee7d와 마지막 고정 overlay/manifest hash를 수령하세요.
+b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6 및 후속 UI/QA가 반영된 마지막 고정 SHA/manifest를 수령하세요.
 별도 checkout/branch codex/keyatlas-m04a-independent-review-20261004를 사용하세요.
-NEXT_ASSIGNMENTS_2026-10-04.md의 읽기 전용 범위·공통 제한을 따르세요.
+cloud branch 최신 인계 문서와 NEXT_ASSIGNMENTS_2026-10-04.md의 읽기 전용 범위·공통 제한을 따르세요.
 client cancellation/time/byte 제한, HTTP authority/commit/replay, C04 state/projection,
 C06 consent/scope/TTL, 공통 셸의 문서 이동/잠금, R3A/R5A 설계 경계를 검토하세요.
 현재 자기 QA와 실제 환경/독립 보안 승인을 구분하세요. 제품/tests/policy/CI/core 수정 금지입니다.

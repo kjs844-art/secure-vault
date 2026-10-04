@@ -1,5 +1,18 @@
 # 세션 인계 — 2026-09-27
 
+## 게시 승인과 커밋 기준 — 2026-10-04 KST
+
+사용자가 이 cloud 세션의 검토된 변경에 대해 commit/push를 승인했다.
+기능 기준 commit은 `b0da263928f1eac4a022b3c5bcfc2f8783cf5bd6`이며 source/contract/fixture/QA 60개는
+10/4 검사 snapshot의 hash와 동일하다. 현재 branch는
+`codex/firstvibe-cloud-catalog-client-fix-20261003`이다.
+이 기준을 설명하는 문서 commit이 뒤따를 수 있으므로 실제 HEAD와 원격 tip도 확인한다.
+[게시 근거와 남은 제한](../../verification/mvp-integration/2026-10-04-cloud-publication.md)을
+먼저 읽는다. 아래 미커밋/게시 보류 표기는 해당 검사 시점의 이력이다.
+
+PR 생성/main merge/force push·다른 AI 전송/세션 생성·실제 auth/DB/Gmail/AI/Secret·
+환경/배포 보류는 유지한다. REAL_SECRET_GATE=CLOSED. 로컬 9개 파일은 NOT_RECEIVED다.
+
 ## 최신 cloud 후속 — 2026-10-04 KST
 
 현재 cloud checkout은 `codex/firstvibe-cloud-catalog-client-fix-20261003`, HEAD는
