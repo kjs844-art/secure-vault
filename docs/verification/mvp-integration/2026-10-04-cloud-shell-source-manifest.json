@@ -1,0 +1,594 @@
+{
+  "schema": "keyatlas.cloud-owned-review.v1",
+  "status": "LOCAL_SYNTHETIC_CHECKS_COMPLETE",
+  "real_secret_gate": "CLOSED",
+  "git": {
+    "head": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+    "branch": "codex/firstvibe-cloud-catalog-client-fix-20261003",
+    "origin_main_observed": "65d10dceb13039dc69cf2368aa0e31d7ad5cc6b2",
+    "staged_files": [],
+    "new_commit": false,
+    "pushed": false,
+    "new_pr": false,
+    "main_merged": false
+  },
+  "timebox": {
+    "started_utc": "2026-10-03T20:18:51Z",
+    "requested_end_utc": "2026-10-03T21:18:51Z",
+    "started_kst": "2026-10-04T05:18:51+09:00"
+  },
+  "owned_overlay": {
+    "file_count_including_self": 87,
+    "tracked_modified_count": 15,
+    "untracked_count_including_self": 72,
+    "self_hash_excluded": "docs/verification/mvp-integration/2026-10-04-cloud-shell-source-manifest.json",
+    "files_excluding_self": {
+      "apps/benefits-web/README.md": "1716d254ff19e9fb0279e0f035036cbf4a1e292ff7ed2c35cd89cca9f15e3ecf",
+      "apps/benefits-web/src/components/mvp-demo/AttentionList.tsx": "4e95308dd2d3c58d5fe6309502bd07cab3c2f38a57b0e7a41fe2bdf02b8b6510",
+      "apps/benefits-web/src/components/mvp-demo/ServiceList.tsx": "d2b3dceb25f92c4e35446f0f76d15ce2e3fc8061da27ee346b41a1afba23529c",
+      "apps/benefits-web/src/domain/catalog-client/client.ts": "0c6dee89b9413ed2007cd331104bfc60d9d6c643031b83e9db3c07bf5bf984a6",
+      "apps/benefits-web/src/domain/catalog-client/index.ts": "d2f69aada6cd6a13461bde3375d8d21b7d9302335eed2d22194bba9fbf20097f",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts": "a6bcd6209074d6a3336a1d6a153e245d9ba1be3eea59fe0aea5ae0f7f7b19d66",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts": "a4c8931612b9d34a96434c20baf7d53ba7fc82ac7074e99a8246a9158a8dc139",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts": "b720a7637435832d78e279d6208b445a9ba51c9bfad5df702ade3642348b7f46",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts": "579c72a996bb6cd9f8b4dc89418d03ff4537621983bde5b1e488757870908a3e",
+      "apps/benefits-web/tests/catalog-client.test.ts": "e6adbd5835d9cd81b3652bfca9c66b5b1a040bc226eeff3f51ccb24b41a73758",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts": "dbe86fc961b2eed1408b89c30d7db2d222942c2601e7dc46c72ebed04b1783a4",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts": "be769d39f325b1fb0069500c191cb5903e5d99b284edcb24b17e6a93970465fa",
+      "apps/benefits-web/tests/verify_synthetic_browser.py": "ad463d75452ebf7e86d5832673a30668ebc1358adac8bf04a1254894a75fecf8",
+      "apps/web/README.md": "f992bccd5945ccfe3271bf064844fbe6bbab120124545d344cfbd305d0959f3b",
+      "apps/web/signup-mail-discovery.html": "756db99fa5572ebe8dddb4ce955636d9f31d535227a1164315db3419e79e4480",
+      "apps/web/src/App.tsx": "1d189da72b9d0811d1829df73390a05461a338bf0d265f7a40aca7c7ff28b7ae",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx": "c2a5460c8db4fe5f5f0690ce0e203fcd0c19d08d3950d7a044ad13d580acc696",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx": "c5f3a3acdf02edc15c69650c7c4755768dc84b8a547eb520a4029db04889475d",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css": "777e18fbb2639f231bb34c9b10e2a587ec375b4b35587662bc5416ed574e8ec2",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts": "a5cc13642124b6bf67567d5225abdbcfc7e11a508a7f7d17d8f58672ee495228",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts": "3c1ae6d75a7485de5467e4e6d990c7a34070f253a23b64c64fd6ef4613aa4a1d",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts": "476c1e0b5f5f35c5bd3c25cb08704f2ed7607dd80f33b3fb786fc1a995cef91d",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py": "83d9cb6f62e3758c7715e91da8783ba40c4bda98e14f909c3e1f4019f77aa318",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx": "a6c46d04c626447752e67a3e59c55d5afdd8043063244855721e31116b6a4241",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx": "3a32ce62d902ac482b9e695dd88b9b6537589e3d49e5ae6d225ef3d6f28d4875",
+      "apps/web/src/features/identity-map/identity-map.css": "7dd6023ba3cb512b8f957d5000b2be7eb1cdeec547228d387a37a746f3b62085",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts": "81a8b248d83bd47236d76a6eba69c44777edf9c94b0a9728a62722495864414d",
+      "apps/web/src/features/identity-map/identityMapModel.ts": "0acc2816d4b12a5e263617a04b957c01d223e6a61900e90210a34ca83aa4ddc9",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts": "67a9988e73a3697f8eea401a48e6040c6c0b80bac9002c4ad3a31ce37abd9e33",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py": "ab68b17d960880930877b7ddcdde6f6a6d8fcb33ede7c03161007386b79aabdf",
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx": "069ac1ecac07994a67673881a339c15a877feb4bfddf617fe6b5d82f6651da5a",
+      "apps/web/src/features/local-vault/SyntheticBackupPanel.tsx": "87ecfd530a0bc877fcdb187e8506ba8f147cee896be902520ba1035461662751",
+      "apps/web/src/features/local-vault/SyntheticConflictReviewPanel.tsx": "a3ab43d53723fb64f220ab210c27bc6f180d7227f353511c0d9f76c5a801e1b4",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.interaction.test.tsx": "a1310df048b0937453adc3f0f7a3d0eee859dbf744cf6412fa88b1eafd665ca7",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.tsx": "60e70bf9aa7bb038e6058cf71dd8a2dfb6eb4f0b29e99260ca6755d2f85a63ae",
+      "apps/web/src/features/local-vault/local-vault.css": "cebba7dc4fb2de3bc2989f4886a4bd7180051d44d7399a5586931e5c2a92f5b8",
+      "apps/web/src/features/local-vault/verifyVaultLifecycleBrowser.py": "64f435c085e2b31ae5b0cd0d80c198839ac02612d400c7a6718852f78397c7d4",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx": "03517699b46ae1ebd22f0e2079d8a281b4ddee4f6770a36912e33807a403cef7",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx": "617db7b77c5a2c086f8cb15ea65301517f6158dd68d1d3e391e9498760e683ad",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx": "dba9c58567c4a5a4acddd5f57a7827f147dc7755ef07207c1c111c69eef09b4d",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css": "baa968778038d03dc8242c03e6c805b394f4d859197b0798de262d01456b7178",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts": "019dcf7eb7ed29e17edf98c7a29cffb787800b59280b6348a0d475aa40e64b08",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts": "901f41effcda2c6ae3299a8071eb1abc99d46fa7a76e84b553fe37191839776f",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts": "a6dce85ae94fada05f82818e1e496cedb0d20a784014a731d9d79deb2c05b2ff",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts": "e335431a899f58ca5ba3109b17383527bcffa63a5738fa6743fab4ec18512b06",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py": "06bf071032c08031b9d766562724dbbf8a68736d20e70ad378639a68acad61fc",
+      "apps/web/src/main.tsx": "d19361c4605d773c7567a93a53e0d59a23d7c2048f6a7bb527fd15f81da9cdfe",
+      "apps/web/src/ui/shell/AppShell.test.tsx": "e21ff4a80681a72bed5a48ff04a3f7aa3924037e8c60a941d018f6f09461facc",
+      "apps/web/src/ui/shell/AppShell.tsx": "d398a2406d531dc172340a3153af39042a63b038fa526fe9b278b21514fcefb7",
+      "apps/web/src/ui/shell/SyntheticAppShell.test.tsx": "ad2ce076f92a8626e8db6fc91e25c4bf20b0ef7fd2a316ef93bded69c63911e9",
+      "apps/web/src/ui/shell/SyntheticAppShell.tsx": "1350839f8f48e1560dc75956068341635e3bf0d5e4d6fbc0762ddd19274fec03",
+      "apps/web/src/ui/shell/shell.css": "dcc0efac80fe6aa07f9a7403b328f638a20409d3c75e75806028e6b944586ba9",
+      "apps/web/src/ui/shell/synthetic-shell.css": "6c4655f3224ba15aa7b196e98b6005c3ccf1715754ae61a12a07a17595b28c6f",
+      "apps/web/src/ui/tokens/tokens.css": "3b586694e9df1eb8354e1bb28e3ec935eee442e227a94691dc89e205f4d75371",
+      "apps/web/src/ui/tokens/tokens.test.ts": "a69e2bb1299478c9ab25200d1c390efaec5b8c11108a90f391d1be38a7e5c628",
+      "apps/web/src/ui/tokens/tokens.ts": "fd80b92781c91626cb43487f9f7deed3bc49c4aee689f289fb6d305274716eda",
+      "apps/web/tests/mvp-browser/verify_app_shell.py": "8937ef8eb7764e5b2b7e35633d1c9ba38ced9353419e7df5b5f53cbf32b4b1dd",
+      "apps/web/tests/mvp-browser/verify_mail_page_lifecycle.py": "f6e548d0998d8b22ca0766905114f87229dc504afe91f7ebf616e3539189f002",
+      "contracts/local-v1/signup-mail-discovery-v1.md": "c2d4effb05a63c3c65a6e277dca54ee201ac61cffaa00ca7b458ef56b92aca19",
+      "crates/vault-local-platform-windows/src/lib.rs": "a717ad50e64e9873d695f1936e07bfe6c89a627730b94ece36e6350204770a76",
+      "docs/deployment/mvp/2026-10-03-release-operations-draft.md": "7129685244002c11fd78f2a7ac7e52de4b265ee7c625d6a819039c1a966964dc",
+      "docs/handoff/mvp-20260927/CLOUD_DELEGATION_2026-09-30.md": "272a9e5c33d9ca0870b34c6561a8a0d16742a9fad10b21a3e8026cb98a69d591",
+      "docs/handoff/mvp-20260927/CLOUD_LEAD_HANDOFF_2026-09-30.md": "fc2748cfa1f825c01a6c8994a4208374b622f71548bbf5efc93211d8d84a425a",
+      "docs/handoff/mvp-20260927/DOMAIN_CONTRACT_REVIEW_2026-10-03.md": "51691ff788c76e2813262b5036ad6627d8296d67c921c20a521d20edacc3379e",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-03.md": "775fe52a49b844ec374f7bb27b2624ed43495932cf0230e7061a97c99bddd407",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-04.md": "02b9f5cc46a4c662df20d22c8b3dbbf6782328c87e6f7caf4811a18c8891f18a",
+      "docs/handoff/mvp-20260927/PROVIDER_ADAPTER_PLAN.md": "6b739c465f8f96815cbfa71b01654ef730c35f1657cbf4cb1983ef88e1a17d31",
+      "docs/handoff/mvp-20260927/R5A_AUTHORITY_AND_OAUTH_DESIGN_2026-10-03.md": "9705662d770a3ed90a5b74c3bbbd64398db39d3bde0addbf3c695dff1b2b468c",
+      "docs/handoff/mvp-20260927/R5A_PURPOSE_AND_ACCEPTANCE_2026-10-03.md": "acca19679ecc2771896c48bff126c071ab95ae1ddf240cbe9c8c3340a3b5c374",
+      "docs/handoff/mvp-20260927/R5A_TRANSACTION_AND_DELETION_DESIGN_2026-10-03.md": "0a48e32c64ba663b0eebf04c699eb09815ecbf014173e139c2f0b64878f747f7",
+      "docs/handoff/mvp-20260927/REAL_SECRET_CORE_PLAN.md": "92f876d9f21e01d6539186bb5f0e35125cd9b96796df2a4120762a873b35fd4d",
+      "docs/handoff/mvp-20260927/SERVICE_READINESS_2026-10-03.md": "255bc152e262bb058cea24918f12296ef41cae75e9b7c74ad22aa12749232c1e",
+      "docs/handoff/mvp-20260927/SESSION_HANDOFF.md": "a5340792ec304b6794e31d198de3619f088742204d4fed1c85a41b83cc9b1afb",
+      "docs/handoff/mvp-20260927/START_HERE.md": "d187928deb15a754e3690614ee0dc8595448b604847066459ffa9e993d5cc58c",
+      "docs/handoff/mvp-20260927/T1_RELEASE_BASELINE_AND_ARTIFACT_PLAN_2026-10-04.md": "d470df0eb04a36ee12a6d61cfa1cb1003b68f4e976da40dc6e6e4905d2be4608",
+      "docs/privacy/mvp/2026-10-03-korea-data-handling-draft.md": "c592681f541d228d2439522958b39ef04eeef9bbc7097fc147bcdc6e3891cdfb",
+      "docs/verification/mvp-integration/2026-09-30-cloud-lead-review.md": "72a5d458e54ff33b2897a3474d49edc7e53474104ebec47ebd7257e063c48a66",
+      "docs/verification/mvp-integration/2026-10-03-cloud-catalog-client.md": "b927e8ef0ca4f2115f17ae238ee467aedca5855e856fdf7467cf9039ac4a0c39",
+      "docs/verification/mvp-integration/2026-10-03-cloud-continuation.md": "7fae5c8894332dd02b0b47b7502031a88e747a74803e8a53c3a33e8a2b189e0c",
+      "docs/verification/mvp-integration/2026-10-03-cloud-discovery-integration.md": "f14cbb2a27379dc92623830b9ee186a62d1c12f1360e37b01f7364a602a2c9bb",
+      "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-qa.md": "6dfca009ff2c05034346753df45fe5651cd2c62e351bc3de37cbd4e0649eae73",
+      "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-source-manifest.json": "2da274ab72ca979f4fe0745ba9188958f23d338d83da2d1f1fd32e4c53671bcf",
+      "docs/verification/mvp-integration/2026-10-03-cloud-source-manifest.json": "47e6369f65e32fbd6022bb9f839ae50f9c85dbacf5db8d6baafecc50c04fde7a",
+      "docs/verification/mvp-integration/2026-10-04-cloud-shell-qa.md": "4d0bf18548894a03c7ba2d7637e28803606d20a11b1c16c31c9ba580849bd605",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json": "fca1b5c5d318f8d956542ba568804ed42f06044e18db6d84d3c140310b1eb775"
+    }
+  },
+  "source_contract_fixture_qa": {
+    "file_count": 60,
+    "files": {
+      "apps/benefits-web/src/components/mvp-demo/AttentionList.tsx": "4e95308dd2d3c58d5fe6309502bd07cab3c2f38a57b0e7a41fe2bdf02b8b6510",
+      "apps/benefits-web/src/components/mvp-demo/ServiceList.tsx": "d2b3dceb25f92c4e35446f0f76d15ce2e3fc8061da27ee346b41a1afba23529c",
+      "apps/benefits-web/src/domain/catalog-client/client.ts": "0c6dee89b9413ed2007cd331104bfc60d9d6c643031b83e9db3c07bf5bf984a6",
+      "apps/benefits-web/src/domain/catalog-client/index.ts": "d2f69aada6cd6a13461bde3375d8d21b7d9302335eed2d22194bba9fbf20097f",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts": "a6bcd6209074d6a3336a1d6a153e245d9ba1be3eea59fe0aea5ae0f7f7b19d66",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts": "a4c8931612b9d34a96434c20baf7d53ba7fc82ac7074e99a8246a9158a8dc139",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts": "b720a7637435832d78e279d6208b445a9ba51c9bfad5df702ade3642348b7f46",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts": "579c72a996bb6cd9f8b4dc89418d03ff4537621983bde5b1e488757870908a3e",
+      "apps/benefits-web/tests/catalog-client.test.ts": "e6adbd5835d9cd81b3652bfca9c66b5b1a040bc226eeff3f51ccb24b41a73758",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts": "dbe86fc961b2eed1408b89c30d7db2d222942c2601e7dc46c72ebed04b1783a4",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts": "be769d39f325b1fb0069500c191cb5903e5d99b284edcb24b17e6a93970465fa",
+      "apps/benefits-web/tests/verify_synthetic_browser.py": "ad463d75452ebf7e86d5832673a30668ebc1358adac8bf04a1254894a75fecf8",
+      "apps/web/signup-mail-discovery.html": "756db99fa5572ebe8dddb4ce955636d9f31d535227a1164315db3419e79e4480",
+      "apps/web/src/App.tsx": "1d189da72b9d0811d1829df73390a05461a338bf0d265f7a40aca7c7ff28b7ae",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx": "c2a5460c8db4fe5f5f0690ce0e203fcd0c19d08d3950d7a044ad13d580acc696",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx": "c5f3a3acdf02edc15c69650c7c4755768dc84b8a547eb520a4029db04889475d",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css": "777e18fbb2639f231bb34c9b10e2a587ec375b4b35587662bc5416ed574e8ec2",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts": "a5cc13642124b6bf67567d5225abdbcfc7e11a508a7f7d17d8f58672ee495228",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts": "3c1ae6d75a7485de5467e4e6d990c7a34070f253a23b64c64fd6ef4613aa4a1d",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts": "476c1e0b5f5f35c5bd3c25cb08704f2ed7607dd80f33b3fb786fc1a995cef91d",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py": "83d9cb6f62e3758c7715e91da8783ba40c4bda98e14f909c3e1f4019f77aa318",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx": "a6c46d04c626447752e67a3e59c55d5afdd8043063244855721e31116b6a4241",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx": "3a32ce62d902ac482b9e695dd88b9b6537589e3d49e5ae6d225ef3d6f28d4875",
+      "apps/web/src/features/identity-map/identity-map.css": "7dd6023ba3cb512b8f957d5000b2be7eb1cdeec547228d387a37a746f3b62085",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts": "81a8b248d83bd47236d76a6eba69c44777edf9c94b0a9728a62722495864414d",
+      "apps/web/src/features/identity-map/identityMapModel.ts": "0acc2816d4b12a5e263617a04b957c01d223e6a61900e90210a34ca83aa4ddc9",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts": "67a9988e73a3697f8eea401a48e6040c6c0b80bac9002c4ad3a31ce37abd9e33",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py": "ab68b17d960880930877b7ddcdde6f6a6d8fcb33ede7c03161007386b79aabdf",
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx": "069ac1ecac07994a67673881a339c15a877feb4bfddf617fe6b5d82f6651da5a",
+      "apps/web/src/features/local-vault/SyntheticBackupPanel.tsx": "87ecfd530a0bc877fcdb187e8506ba8f147cee896be902520ba1035461662751",
+      "apps/web/src/features/local-vault/SyntheticConflictReviewPanel.tsx": "a3ab43d53723fb64f220ab210c27bc6f180d7227f353511c0d9f76c5a801e1b4",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.interaction.test.tsx": "a1310df048b0937453adc3f0f7a3d0eee859dbf744cf6412fa88b1eafd665ca7",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.tsx": "60e70bf9aa7bb038e6058cf71dd8a2dfb6eb4f0b29e99260ca6755d2f85a63ae",
+      "apps/web/src/features/local-vault/local-vault.css": "cebba7dc4fb2de3bc2989f4886a4bd7180051d44d7399a5586931e5c2a92f5b8",
+      "apps/web/src/features/local-vault/verifyVaultLifecycleBrowser.py": "64f435c085e2b31ae5b0cd0d80c198839ac02612d400c7a6718852f78397c7d4",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx": "03517699b46ae1ebd22f0e2079d8a281b4ddee4f6770a36912e33807a403cef7",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx": "617db7b77c5a2c086f8cb15ea65301517f6158dd68d1d3e391e9498760e683ad",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx": "dba9c58567c4a5a4acddd5f57a7827f147dc7755ef07207c1c111c69eef09b4d",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css": "baa968778038d03dc8242c03e6c805b394f4d859197b0798de262d01456b7178",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts": "019dcf7eb7ed29e17edf98c7a29cffb787800b59280b6348a0d475aa40e64b08",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts": "901f41effcda2c6ae3299a8071eb1abc99d46fa7a76e84b553fe37191839776f",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts": "a6dce85ae94fada05f82818e1e496cedb0d20a784014a731d9d79deb2c05b2ff",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts": "e335431a899f58ca5ba3109b17383527bcffa63a5738fa6743fab4ec18512b06",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py": "06bf071032c08031b9d766562724dbbf8a68736d20e70ad378639a68acad61fc",
+      "apps/web/src/main.tsx": "d19361c4605d773c7567a93a53e0d59a23d7c2048f6a7bb527fd15f81da9cdfe",
+      "apps/web/src/ui/shell/AppShell.test.tsx": "e21ff4a80681a72bed5a48ff04a3f7aa3924037e8c60a941d018f6f09461facc",
+      "apps/web/src/ui/shell/AppShell.tsx": "d398a2406d531dc172340a3153af39042a63b038fa526fe9b278b21514fcefb7",
+      "apps/web/src/ui/shell/SyntheticAppShell.test.tsx": "ad2ce076f92a8626e8db6fc91e25c4bf20b0ef7fd2a316ef93bded69c63911e9",
+      "apps/web/src/ui/shell/SyntheticAppShell.tsx": "1350839f8f48e1560dc75956068341635e3bf0d5e4d6fbc0762ddd19274fec03",
+      "apps/web/src/ui/shell/shell.css": "dcc0efac80fe6aa07f9a7403b328f638a20409d3c75e75806028e6b944586ba9",
+      "apps/web/src/ui/shell/synthetic-shell.css": "6c4655f3224ba15aa7b196e98b6005c3ccf1715754ae61a12a07a17595b28c6f",
+      "apps/web/src/ui/tokens/tokens.css": "3b586694e9df1eb8354e1bb28e3ec935eee442e227a94691dc89e205f4d75371",
+      "apps/web/src/ui/tokens/tokens.test.ts": "a69e2bb1299478c9ab25200d1c390efaec5b8c11108a90f391d1be38a7e5c628",
+      "apps/web/src/ui/tokens/tokens.ts": "fd80b92781c91626cb43487f9f7deed3bc49c4aee689f289fb6d305274716eda",
+      "apps/web/tests/mvp-browser/verify_app_shell.py": "8937ef8eb7764e5b2b7e35633d1c9ba38ced9353419e7df5b5f53cbf32b4b1dd",
+      "apps/web/tests/mvp-browser/verify_mail_page_lifecycle.py": "f6e548d0998d8b22ca0766905114f87229dc504afe91f7ebf616e3539189f002",
+      "contracts/local-v1/signup-mail-discovery-v1.md": "c2d4effb05a63c3c65a6e277dca54ee201ac61cffaa00ca7b458ef56b92aca19",
+      "crates/vault-local-platform-windows/src/lib.rs": "a717ad50e64e9873d695f1936e07bfe6c89a627730b94ece36e6350204770a76",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json": "fca1b5c5d318f8d956542ba568804ed42f06044e18db6d84d3c140310b1eb775"
+    },
+    "aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c",
+    "aggregate_algorithm": "sha256(sorted(path + NUL + sha256 + LF))",
+    "not_git_commit_sha": true
+  },
+  "preservation": {
+    "before_file_count": 70,
+    "preserved_paths": [
+      "apps/benefits-web/README.md",
+      "apps/benefits-web/src/components/mvp-demo/AttentionList.tsx",
+      "apps/benefits-web/src/components/mvp-demo/ServiceList.tsx",
+      "apps/benefits-web/src/domain/catalog-client/client.ts",
+      "apps/benefits-web/src/domain/catalog-client/index.ts",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts",
+      "apps/benefits-web/tests/catalog-client.test.ts",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts",
+      "apps/benefits-web/tests/verify_synthetic_browser.py",
+      "apps/web/README.md",
+      "apps/web/signup-mail-discovery.html",
+      "apps/web/src/App.tsx",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx",
+      "apps/web/src/features/identity-map/identity-map.css",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts",
+      "apps/web/src/features/identity-map/identityMapModel.ts",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py",
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx",
+      "apps/web/src/features/local-vault/SyntheticBackupPanel.tsx",
+      "apps/web/src/features/local-vault/SyntheticConflictReviewPanel.tsx",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.interaction.test.tsx",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.tsx",
+      "apps/web/src/features/local-vault/local-vault.css",
+      "apps/web/src/features/local-vault/verifyVaultLifecycleBrowser.py",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+      "contracts/local-v1/signup-mail-discovery-v1.md",
+      "crates/vault-local-platform-windows/src/lib.rs",
+      "docs/deployment/mvp/2026-10-03-release-operations-draft.md",
+      "docs/handoff/mvp-20260927/CLOUD_DELEGATION_2026-09-30.md",
+      "docs/handoff/mvp-20260927/CLOUD_LEAD_HANDOFF_2026-09-30.md",
+      "docs/handoff/mvp-20260927/DOMAIN_CONTRACT_REVIEW_2026-10-03.md",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-03.md",
+      "docs/handoff/mvp-20260927/PROVIDER_ADAPTER_PLAN.md",
+      "docs/handoff/mvp-20260927/R5A_AUTHORITY_AND_OAUTH_DESIGN_2026-10-03.md",
+      "docs/handoff/mvp-20260927/R5A_PURPOSE_AND_ACCEPTANCE_2026-10-03.md",
+      "docs/handoff/mvp-20260927/R5A_TRANSACTION_AND_DELETION_DESIGN_2026-10-03.md",
+      "docs/handoff/mvp-20260927/REAL_SECRET_CORE_PLAN.md",
+      "docs/handoff/mvp-20260927/SERVICE_READINESS_2026-10-03.md",
+      "docs/privacy/mvp/2026-10-03-korea-data-handling-draft.md",
+      "docs/verification/mvp-integration/2026-09-30-cloud-lead-review.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-catalog-client.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-continuation.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-discovery-integration.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-qa.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-source-manifest.json",
+      "docs/verification/mvp-integration/2026-10-03-cloud-source-manifest.json",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json"
+    ],
+    "intentionally_changed_paths": [
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx",
+      "apps/web/src/main.tsx"
+    ],
+    "new_paths": [
+      "apps/web/src/ui/shell/AppShell.test.tsx",
+      "apps/web/src/ui/shell/AppShell.tsx",
+      "apps/web/src/ui/shell/SyntheticAppShell.test.tsx",
+      "apps/web/src/ui/shell/SyntheticAppShell.tsx",
+      "apps/web/src/ui/shell/shell.css",
+      "apps/web/src/ui/shell/synthetic-shell.css",
+      "apps/web/src/ui/tokens/tokens.css",
+      "apps/web/src/ui/tokens/tokens.test.ts",
+      "apps/web/src/ui/tokens/tokens.ts",
+      "apps/web/tests/mvp-browser/verify_app_shell.py",
+      "apps/web/tests/mvp-browser/verify_mail_page_lifecycle.py",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-04.md",
+      "docs/handoff/mvp-20260927/SESSION_HANDOFF.md",
+      "docs/handoff/mvp-20260927/START_HERE.md",
+      "docs/handoff/mvp-20260927/T1_RELEASE_BASELINE_AND_ARTIFACT_PLAN_2026-10-04.md",
+      "docs/verification/mvp-integration/2026-10-04-cloud-shell-qa.md",
+      "docs/verification/mvp-integration/2026-10-04-cloud-shell-source-manifest.json"
+    ],
+    "cloud_client_nine_preserved": true,
+    "local_readiness_nine_files": "NOT_RECEIVED"
+  },
+  "pr5_reuse": {
+    "source_sha": "b9ec53dc31e2b2af3c9666381b9c19d2b6322668",
+    "selected_files": {
+      "apps/web/src/ui/shell/AppShell.tsx": {
+        "original_sha256": "cc5efb4f6ef6749c43b399584501e1ee4cd58906d24ac0db4ff5d5c995e6a89f",
+        "selected_sha256": "cc5efb4f6ef6749c43b399584501e1ee4cd58906d24ac0db4ff5d5c995e6a89f",
+        "transformed_only": null
+      },
+      "apps/web/src/ui/shell/shell.css": {
+        "original_sha256": "dcc0efac80fe6aa07f9a7403b328f638a20409d3c75e75806028e6b944586ba9",
+        "selected_sha256": "dcc0efac80fe6aa07f9a7403b328f638a20409d3c75e75806028e6b944586ba9",
+        "transformed_only": null
+      },
+      "apps/web/src/ui/tokens/tokens.ts": {
+        "original_sha256": "fd80b92781c91626cb43487f9f7deed3bc49c4aee689f289fb6d305274716eda",
+        "selected_sha256": "fd80b92781c91626cb43487f9f7deed3bc49c4aee689f289fb6d305274716eda",
+        "transformed_only": null
+      },
+      "apps/web/src/ui/shell/AppShell.test.tsx": {
+        "original_sha256": "f37896da59b872892a0324b4203fe4fdadda1e7facd083599c1f7975e9f102a5",
+        "selected_sha256": "4dc3a46a393b4e1cb2d67df072805ac85fbf388de1cadf8fbc3ae4c50ff7e71f",
+        "transformed_only": "navigation label literal removes unused copy catalog dependency"
+      },
+      "apps/web/src/ui/tokens/tokens.css": {
+        "original_sha256": "3b586694e9df1eb8354e1bb28e3ec935eee442e227a94691dc89e205f4d75371",
+        "selected_sha256": "3b586694e9df1eb8354e1bb28e3ec935eee442e227a94691dc89e205f4d75371",
+        "transformed_only": null
+      },
+      "apps/web/src/ui/tokens/tokens.test.ts": {
+        "original_sha256": "a69e2bb1299478c9ab25200d1c390efaec5b8c11108a90f391d1be38a7e5c628",
+        "selected_sha256": "a69e2bb1299478c9ab25200d1c390efaec5b8c11108a90f391d1be38a7e5c628",
+        "transformed_only": null
+      }
+    },
+    "byte_identical_current_files": [
+      "apps/web/src/ui/shell/shell.css",
+      "apps/web/src/ui/tokens/tokens.ts",
+      "apps/web/src/ui/tokens/tokens.css",
+      "apps/web/src/ui/tokens/tokens.test.ts"
+    ],
+    "adapted_current_files": [
+      "apps/web/src/ui/shell/AppShell.tsx",
+      "apps/web/src/ui/shell/AppShell.test.tsx"
+    ]
+  },
+  "current_command_records": {
+    "web-pagehide-tests": {
+      "command": [
+        "npm",
+        "test"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 36.13,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "web-pagehide-final-typecheck": {
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 1.86,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "web-pagehide-final-build": {
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 1.77,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "shell-pagehide-final": {
+      "command": [
+        "python",
+        "tests/mvp-browser/verify_app_shell.py",
+        "--dist",
+        "dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/shell-pagehide-final"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 11.07,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "mail-lifecycle-after": {
+      "command": [
+        "python",
+        "tests/mvp-browser/verify_mail_page_lifecycle.py",
+        "--dist",
+        "dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/mail-lifecycle-after"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 7.01,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "mail-pagehide-entry-final": {
+      "command": [
+        "python",
+        "src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+        "--view",
+        "integrated",
+        "--timezone",
+        "UTC",
+        "--dist",
+        "dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/mail-pagehide-entry-final"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 4.99,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "mail-standalone-pagehide-final": {
+      "command": [
+        "python",
+        "src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+        "--view",
+        "standalone",
+        "--timezone",
+        "Asia/Seoul",
+        "--dist",
+        "/tmp/keyatlas-one-hour-20261004/c06-pagehide-standalone-dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/mail-standalone-pagehide-final"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 3.84,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "standalone-pagehide-build": {
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import { build } from \"vite\"; await build({ build: { outDir: \"/tmp/keyatlas-one-hour-20261004/c06-pagehide-standalone-dist\", rollupOptions: { input: \"signup-mail-discovery.html\" } } });"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 0.47,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "lifecycle-pagehide-final": {
+      "command": [
+        "python",
+        "src/features/local-vault/verifyVaultLifecycleBrowser.py",
+        "--dist",
+        "dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/lifecycle-pagehide-final",
+        "--mode",
+        "all"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 955.9,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    },
+    "native-bfcache-immediate-final": {
+      "command": [
+        "python",
+        "/tmp/keyatlas-one-hour-20261004/verify_native_bfcache_immediate.py",
+        "--dist",
+        "/workspace/secure-vault/apps/web/dist",
+        "--output",
+        "/tmp/keyatlas-one-hour-20261004/native-bfcache-immediate-final"
+      ],
+      "cwd": "/workspace/secure-vault",
+      "exit_code": 0,
+      "elapsed_seconds": 7.01,
+      "source_aggregate_sha256": "20efe70cf9e4004fc431bd404f172140b556f70a1ed9a36800749ed2a754c63c"
+    }
+  },
+  "current_browser_proof": [
+    {
+      "name": "shell-pagehide-final",
+      "record": "/tmp/keyatlas-one-hour-20261004/shell-pagehide-final/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 24,
+      "result": "PASS",
+      "errors": []
+    },
+    {
+      "name": "mail-lifecycle-after",
+      "record": "/tmp/keyatlas-one-hour-20261004/mail-lifecycle-after/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 5,
+      "result": "PASS",
+      "errors": []
+    },
+    {
+      "name": "mail-pagehide-entry-final",
+      "record": "/tmp/keyatlas-one-hour-20261004/mail-pagehide-entry-final/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 12,
+      "result": "PASS",
+      "errors": []
+    },
+    {
+      "name": "mail-standalone-pagehide-final",
+      "record": "/tmp/keyatlas-one-hour-20261004/mail-standalone-pagehide-final/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 12,
+      "result": "PASS",
+      "errors": []
+    },
+    {
+      "name": "lifecycle-pagehide-final",
+      "record": "/tmp/keyatlas-one-hour-20261004/lifecycle-pagehide-final/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 19,
+      "result": "PASS",
+      "errors": []
+    },
+    {
+      "name": "native-bfcache-immediate-final",
+      "record": "/tmp/keyatlas-one-hour-20261004/native-bfcache-immediate-final/results.json",
+      "browser": "151.0.7922.173",
+      "check_count": 4,
+      "result": "PASS",
+      "errors": []
+    }
+  ],
+  "production_artifacts_ignored_not_in_patch": {
+    "apps/web/dist": {
+      "assets/index-BAj0UoCj.css": {
+        "bytes": 13175,
+        "sha256": "9c14a1bb8c20b8af3281fe81412999491cf31806d93310351cec9ada19e91f90"
+      },
+      "assets/index-DpaCXqLO.js": {
+        "bytes": 362433,
+        "sha256": "ddf425955f245748682a746a3637ae004e8bb554f25a0b35013c43447ae09591"
+      },
+      "assets/syntheticVault.worker-CM-kg07Q.js": {
+        "bytes": 30230,
+        "sha256": "ecd1eb28d6e8f454d04482ca08ef1a673839d1251f210e67ecc21495c3d23960"
+      },
+      "assets/vault_client_wasm_bg-CIa2BHIS.wasm": {
+        "bytes": 485994,
+        "sha256": "6ba2327edf28846a2ded4e8d904498570c284e7cc39b404ae352d5c1ac27cebc"
+      },
+      "index.html": {
+        "bytes": 496,
+        "sha256": "c306d179a63dadc6ca3240afb069bb75379ea4d142cad7f0093597045fb60c27"
+      }
+    }
+  },
+  "standalone_artifacts_ignored_not_in_patch": {
+    "assets/demo-icon-dmB_Oi0t.svg": {
+      "bytes": 284,
+      "sha256": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d"
+    },
+    "assets/signup-mail-discovery-Ct2PQphZ.js": {
+      "bytes": 234075,
+      "sha256": "9412b105459e99b940a268696801a46d65d0c8c6865a9c65e0bbf968455e5649"
+    },
+    "assets/signup-mail-discovery-DDPaEoUd.css": {
+      "bytes": 2364,
+      "sha256": "9f6e6ee5982f9aa1d4801f8e9d40d44408c5d1f1c875073f4d320acddbb42a5d"
+    },
+    "signup-mail-discovery.html": {
+      "bytes": 831,
+      "sha256": "34868ce6c60953d692ff223cebbdee93f3ce376a20704a3944da7c4397b71fa3"
+    }
+  },
+  "actual_native_bfcache": {
+    "mail_cases": "mail-lifecycle-after/results.json",
+    "initial_pageshow_dom": "native-bfcache-immediate-final/results.json",
+    "immediate_probe_sha256": "8be728db6c785ae9f544469eb727831009bc43ea2231e4995ec170f1d0b848a6",
+    "scripted_event_cases_are_separate": true,
+    "heap_erasure_or_os_sleep_not_claimed": true
+  },
+  "old_evidence_not_current": {
+    "two_hour_manifest": "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-source-manifest.json",
+    "old_source_aggregate": "ea2f2def6aebb788b1918066feeba530d972ea2465e98a9293ab58c32a8dab2a",
+    "shell_before_pagehide_aggregate": "eac7806137be23c9a8231147486d80c96bbc7e9fb81b2594c101da70469ce2a3",
+    "old_source_records_preserved": true,
+    "benefits_test_1354_is_prior_same_source_evidence_not_rerun_this_hour": true
+  },
+  "postfreeze_records_local_only": {
+    "secret_scan": "/tmp/keyatlas-one-hour-20261004/repository-secret-scan-frozen.json",
+    "integrity": "/tmp/keyatlas-one-hour-20261004/final-integrity.json",
+    "patch_restore": "/tmp/keyatlas-one-hour-20261004/patch-validation.json",
+    "review_bundle": "/tmp/keyatlas-one-hour-20261004/review-bundle-validation.json",
+    "completed_timebox": "/tmp/keyatlas-one-hour-20261004/goal-completion.json"
+  },
+  "permission_holds": {
+    "actual_secret_auth_db_gmail_ai_infra_deployment": true,
+    "commit_push_pr_merge_force_push": true,
+    "other_ai_sessions_or_messages": true
+  },
+  "remaining_limits": [
+    "local readiness nine files NOT_RECEIVED",
+    "prior Rust workspace verifier FAIL 101/Linux SQLite 19 failures/one existing ignored",
+    "native Windows, Firefox/WebKit, real mobile/screen reader, manual OS dialog NOT_RUN",
+    "Node browser runner BLOCKED 2, Pester unavailable, scanner Windows regression failure remain separate",
+    "latest PR/Issue/CI API state unverified; native git refs are not merge/CI evidence",
+    "no actual auth/DB/Gmail/AI/Secret/environment/deployment/independent security acceptance"
+  ],
+  "verification_document": "docs/verification/mvp-integration/2026-10-04-cloud-shell-qa.md",
+  "assignment_document": "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-04.md",
+  "evidence_root": "/tmp/keyatlas-one-hour-20261004"
+}

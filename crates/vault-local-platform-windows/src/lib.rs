@@ -6,7 +6,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::fs::File;
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StableFileIdentityV1 {
@@ -86,6 +88,7 @@ pub fn trusted_local_app_data_root_v1() -> Result<PathBuf, TrustedLocalAppDataEr
     Err(TrustedLocalAppDataErrorV1::UnsupportedPlatform)
 }
 
+#[cfg(any(windows, test))]
 fn drive_type_is_trusted_local_v1(drive_type: u32) -> bool {
     const DRIVE_FIXED: u32 = 3;
     drive_type == DRIVE_FIXED
@@ -100,14 +103,6 @@ fn windows_path_is_trusted_local_v1(
         return false;
     };
     drive_type_is_trusted_local_v1(query_drive_type(&root))
-}
-
-#[cfg(not(windows))]
-fn windows_path_is_trusted_local_v1(
-    _path: &Path,
-    _query_drive_type: impl FnOnce(&[u16]) -> u32,
-) -> bool {
-    false
 }
 
 #[cfg(windows)]
@@ -187,7 +182,9 @@ mod tests {
     #[cfg(windows)]
     use std::path::Path;
 
-    use super::{drive_type_is_trusted_local_v1, windows_path_is_trusted_local_v1};
+    use super::drive_type_is_trusted_local_v1;
+    #[cfg(windows)]
+    use super::windows_path_is_trusted_local_v1;
 
     const DRIVE_UNKNOWN: u32 = 0;
     const DRIVE_NO_ROOT_DIR: u32 = 1;

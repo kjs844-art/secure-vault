@@ -1,0 +1,1368 @@
+{
+  "schema": "keyatlas.cloud-owned-review.v1",
+  "status": "LOCAL_SYNTHETIC_CHECKS_COMPLETE",
+  "real_secret_gate": "CLOSED",
+  "git": {
+    "head": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+    "branch": "codex/firstvibe-cloud-catalog-client-fix-20261003",
+    "origin_main_observed": "65d10dceb13039dc69cf2368aa0e31d7ad5cc6b2",
+    "merge_base": "ceca9f43c4f92b3b0e4081d84be8612b10f03582",
+    "staged_files": [],
+    "commit_created": false,
+    "pushed": false,
+    "pr_created": false,
+    "main_merged": false
+  },
+  "timebox": {
+    "started_utc": "2026-10-03 15:36:19 UTC",
+    "requested_end_utc": "2026-10-03 17:36:19 UTC"
+  },
+  "scope": {
+    "synthetic_local_only": true,
+    "actual_provider_db_infra_deployment": false,
+    "other_ai_sessions_or_messages": false,
+    "local_readiness_nine_files": "NOT_RECEIVED"
+  },
+  "owned_overlay": {
+    "file_count_including_this_manifest": 70,
+    "tracked_modified_count": 13,
+    "untracked_count_including_this_manifest": 57,
+    "self_hash_excluded": "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-source-manifest.json",
+    "files_excluding_self": {
+      "apps/benefits-web/README.md": "1716d254ff19e9fb0279e0f035036cbf4a1e292ff7ed2c35cd89cca9f15e3ecf",
+      "apps/benefits-web/src/components/mvp-demo/AttentionList.tsx": "4e95308dd2d3c58d5fe6309502bd07cab3c2f38a57b0e7a41fe2bdf02b8b6510",
+      "apps/benefits-web/src/components/mvp-demo/ServiceList.tsx": "d2b3dceb25f92c4e35446f0f76d15ce2e3fc8061da27ee346b41a1afba23529c",
+      "apps/benefits-web/src/domain/catalog-client/client.ts": "0c6dee89b9413ed2007cd331104bfc60d9d6c643031b83e9db3c07bf5bf984a6",
+      "apps/benefits-web/src/domain/catalog-client/index.ts": "d2f69aada6cd6a13461bde3375d8d21b7d9302335eed2d22194bba9fbf20097f",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts": "a6bcd6209074d6a3336a1d6a153e245d9ba1be3eea59fe0aea5ae0f7f7b19d66",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts": "a4c8931612b9d34a96434c20baf7d53ba7fc82ac7074e99a8246a9158a8dc139",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts": "b720a7637435832d78e279d6208b445a9ba51c9bfad5df702ade3642348b7f46",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts": "579c72a996bb6cd9f8b4dc89418d03ff4537621983bde5b1e488757870908a3e",
+      "apps/benefits-web/tests/catalog-client.test.ts": "e6adbd5835d9cd81b3652bfca9c66b5b1a040bc226eeff3f51ccb24b41a73758",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts": "dbe86fc961b2eed1408b89c30d7db2d222942c2601e7dc46c72ebed04b1783a4",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts": "be769d39f325b1fb0069500c191cb5903e5d99b284edcb24b17e6a93970465fa",
+      "apps/benefits-web/tests/verify_synthetic_browser.py": "ad463d75452ebf7e86d5832673a30668ebc1358adac8bf04a1254894a75fecf8",
+      "apps/web/README.md": "f992bccd5945ccfe3271bf064844fbe6bbab120124545d344cfbd305d0959f3b",
+      "apps/web/signup-mail-discovery.html": "756db99fa5572ebe8dddb4ce955636d9f31d535227a1164315db3419e79e4480",
+      "apps/web/src/App.tsx": "1d189da72b9d0811d1829df73390a05461a338bf0d265f7a40aca7c7ff28b7ae",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx": "c2a5460c8db4fe5f5f0690ce0e203fcd0c19d08d3950d7a044ad13d580acc696",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx": "c5f3a3acdf02edc15c69650c7c4755768dc84b8a547eb520a4029db04889475d",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css": "777e18fbb2639f231bb34c9b10e2a587ec375b4b35587662bc5416ed574e8ec2",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts": "a5cc13642124b6bf67567d5225abdbcfc7e11a508a7f7d17d8f58672ee495228",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts": "3c1ae6d75a7485de5467e4e6d990c7a34070f253a23b64c64fd6ef4613aa4a1d",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts": "476c1e0b5f5f35c5bd3c25cb08704f2ed7607dd80f33b3fb786fc1a995cef91d",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py": "83d9cb6f62e3758c7715e91da8783ba40c4bda98e14f909c3e1f4019f77aa318",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx": "a6c46d04c626447752e67a3e59c55d5afdd8043063244855721e31116b6a4241",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx": "3a32ce62d902ac482b9e695dd88b9b6537589e3d49e5ae6d225ef3d6f28d4875",
+      "apps/web/src/features/identity-map/identity-map.css": "7dd6023ba3cb512b8f957d5000b2be7eb1cdeec547228d387a37a746f3b62085",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts": "81a8b248d83bd47236d76a6eba69c44777edf9c94b0a9728a62722495864414d",
+      "apps/web/src/features/identity-map/identityMapModel.ts": "0acc2816d4b12a5e263617a04b957c01d223e6a61900e90210a34ca83aa4ddc9",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts": "67a9988e73a3697f8eea401a48e6040c6c0b80bac9002c4ad3a31ce37abd9e33",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py": "ab68b17d960880930877b7ddcdde6f6a6d8fcb33ede7c03161007386b79aabdf",
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx": "069ac1ecac07994a67673881a339c15a877feb4bfddf617fe6b5d82f6651da5a",
+      "apps/web/src/features/local-vault/SyntheticBackupPanel.tsx": "87ecfd530a0bc877fcdb187e8506ba8f147cee896be902520ba1035461662751",
+      "apps/web/src/features/local-vault/SyntheticConflictReviewPanel.tsx": "a3ab43d53723fb64f220ab210c27bc6f180d7227f353511c0d9f76c5a801e1b4",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.interaction.test.tsx": "a1310df048b0937453adc3f0f7a3d0eee859dbf744cf6412fa88b1eafd665ca7",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.tsx": "60e70bf9aa7bb038e6058cf71dd8a2dfb6eb4f0b29e99260ca6755d2f85a63ae",
+      "apps/web/src/features/local-vault/local-vault.css": "cebba7dc4fb2de3bc2989f4886a4bd7180051d44d7399a5586931e5c2a92f5b8",
+      "apps/web/src/features/local-vault/verifyVaultLifecycleBrowser.py": "64f435c085e2b31ae5b0cd0d80c198839ac02612d400c7a6718852f78397c7d4",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx": "03517699b46ae1ebd22f0e2079d8a281b4ddee4f6770a36912e33807a403cef7",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx": "7a56bd48ab3295c85f18da9405c5073fca131af57af4e3783586fee6548b5b1f",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx": "dba9c58567c4a5a4acddd5f57a7827f147dc7755ef07207c1c111c69eef09b4d",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css": "baa968778038d03dc8242c03e6c805b394f4d859197b0798de262d01456b7178",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts": "019dcf7eb7ed29e17edf98c7a29cffb787800b59280b6348a0d475aa40e64b08",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts": "901f41effcda2c6ae3299a8071eb1abc99d46fa7a76e84b553fe37191839776f",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts": "a6dce85ae94fada05f82818e1e496cedb0d20a784014a731d9d79deb2c05b2ff",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts": "e335431a899f58ca5ba3109b17383527bcffa63a5738fa6743fab4ec18512b06",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py": "06bf071032c08031b9d766562724dbbf8a68736d20e70ad378639a68acad61fc",
+      "apps/web/src/main.tsx": "2693d4da9e02297fa5a02c1a307909b50a3e2fcc035421c4989723bb1825255d",
+      "contracts/local-v1/signup-mail-discovery-v1.md": "c2d4effb05a63c3c65a6e277dca54ee201ac61cffaa00ca7b458ef56b92aca19",
+      "crates/vault-local-platform-windows/src/lib.rs": "a717ad50e64e9873d695f1936e07bfe6c89a627730b94ece36e6350204770a76",
+      "docs/deployment/mvp/2026-10-03-release-operations-draft.md": "7129685244002c11fd78f2a7ac7e52de4b265ee7c625d6a819039c1a966964dc",
+      "docs/handoff/mvp-20260927/CLOUD_DELEGATION_2026-09-30.md": "272a9e5c33d9ca0870b34c6561a8a0d16742a9fad10b21a3e8026cb98a69d591",
+      "docs/handoff/mvp-20260927/CLOUD_LEAD_HANDOFF_2026-09-30.md": "fc2748cfa1f825c01a6c8994a4208374b622f71548bbf5efc93211d8d84a425a",
+      "docs/handoff/mvp-20260927/DOMAIN_CONTRACT_REVIEW_2026-10-03.md": "51691ff788c76e2813262b5036ad6627d8296d67c921c20a521d20edacc3379e",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-03.md": "775fe52a49b844ec374f7bb27b2624ed43495932cf0230e7061a97c99bddd407",
+      "docs/handoff/mvp-20260927/PROVIDER_ADAPTER_PLAN.md": "6b739c465f8f96815cbfa71b01654ef730c35f1657cbf4cb1983ef88e1a17d31",
+      "docs/handoff/mvp-20260927/R5A_AUTHORITY_AND_OAUTH_DESIGN_2026-10-03.md": "9705662d770a3ed90a5b74c3bbbd64398db39d3bde0addbf3c695dff1b2b468c",
+      "docs/handoff/mvp-20260927/R5A_PURPOSE_AND_ACCEPTANCE_2026-10-03.md": "acca19679ecc2771896c48bff126c071ab95ae1ddf240cbe9c8c3340a3b5c374",
+      "docs/handoff/mvp-20260927/R5A_TRANSACTION_AND_DELETION_DESIGN_2026-10-03.md": "0a48e32c64ba663b0eebf04c699eb09815ecbf014173e139c2f0b64878f747f7",
+      "docs/handoff/mvp-20260927/REAL_SECRET_CORE_PLAN.md": "92f876d9f21e01d6539186bb5f0e35125cd9b96796df2a4120762a873b35fd4d",
+      "docs/handoff/mvp-20260927/SERVICE_READINESS_2026-10-03.md": "255bc152e262bb058cea24918f12296ef41cae75e9b7c74ad22aa12749232c1e",
+      "docs/privacy/mvp/2026-10-03-korea-data-handling-draft.md": "c592681f541d228d2439522958b39ef04eeef9bbc7097fc147bcdc6e3891cdfb",
+      "docs/verification/mvp-integration/2026-09-30-cloud-lead-review.md": "72a5d458e54ff33b2897a3474d49edc7e53474104ebec47ebd7257e063c48a66",
+      "docs/verification/mvp-integration/2026-10-03-cloud-catalog-client.md": "b927e8ef0ca4f2115f17ae238ee467aedca5855e856fdf7467cf9039ac4a0c39",
+      "docs/verification/mvp-integration/2026-10-03-cloud-continuation.md": "7fae5c8894332dd02b0b47b7502031a88e747a74803e8a53c3a33e8a2b189e0c",
+      "docs/verification/mvp-integration/2026-10-03-cloud-discovery-integration.md": "f14cbb2a27379dc92623830b9ee186a62d1c12f1360e37b01f7364a602a2c9bb",
+      "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-qa.md": "6dfca009ff2c05034346753df45fe5651cd2c62e351bc3de37cbd4e0649eae73",
+      "docs/verification/mvp-integration/2026-10-03-cloud-source-manifest.json": "47e6369f65e32fbd6022bb9f839ae50f9c85dbacf5db8d6baafecc50c04fde7a",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json": "fca1b5c5d318f8d956542ba568804ed42f06044e18db6d84d3c140310b1eb775"
+    }
+  },
+  "source_contract_fixture_qa": {
+    "file_count": 49,
+    "aggregate_algorithm": "sha256(sorted(path + NUL + sha256 + LF))",
+    "aggregate_sha256": "ea2f2def6aebb788b1918066feeba530d972ea2465e98a9293ab58c32a8dab2a",
+    "files": {
+      "apps/benefits-web/src/components/mvp-demo/AttentionList.tsx": "4e95308dd2d3c58d5fe6309502bd07cab3c2f38a57b0e7a41fe2bdf02b8b6510",
+      "apps/benefits-web/src/components/mvp-demo/ServiceList.tsx": "d2b3dceb25f92c4e35446f0f76d15ce2e3fc8061da27ee346b41a1afba23529c",
+      "apps/benefits-web/src/domain/catalog-client/client.ts": "0c6dee89b9413ed2007cd331104bfc60d9d6c643031b83e9db3c07bf5bf984a6",
+      "apps/benefits-web/src/domain/catalog-client/index.ts": "d2f69aada6cd6a13461bde3375d8d21b7d9302335eed2d22194bba9fbf20097f",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts": "a6bcd6209074d6a3336a1d6a153e245d9ba1be3eea59fe0aea5ae0f7f7b19d66",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts": "a4c8931612b9d34a96434c20baf7d53ba7fc82ac7074e99a8246a9158a8dc139",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts": "b720a7637435832d78e279d6208b445a9ba51c9bfad5df702ade3642348b7f46",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts": "579c72a996bb6cd9f8b4dc89418d03ff4537621983bde5b1e488757870908a3e",
+      "apps/benefits-web/tests/catalog-client.test.ts": "e6adbd5835d9cd81b3652bfca9c66b5b1a040bc226eeff3f51ccb24b41a73758",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts": "dbe86fc961b2eed1408b89c30d7db2d222942c2601e7dc46c72ebed04b1783a4",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts": "be769d39f325b1fb0069500c191cb5903e5d99b284edcb24b17e6a93970465fa",
+      "apps/benefits-web/tests/verify_synthetic_browser.py": "ad463d75452ebf7e86d5832673a30668ebc1358adac8bf04a1254894a75fecf8",
+      "apps/web/signup-mail-discovery.html": "756db99fa5572ebe8dddb4ce955636d9f31d535227a1164315db3419e79e4480",
+      "apps/web/src/App.tsx": "1d189da72b9d0811d1829df73390a05461a338bf0d265f7a40aca7c7ff28b7ae",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx": "c2a5460c8db4fe5f5f0690ce0e203fcd0c19d08d3950d7a044ad13d580acc696",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx": "c5f3a3acdf02edc15c69650c7c4755768dc84b8a547eb520a4029db04889475d",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css": "777e18fbb2639f231bb34c9b10e2a587ec375b4b35587662bc5416ed574e8ec2",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts": "a5cc13642124b6bf67567d5225abdbcfc7e11a508a7f7d17d8f58672ee495228",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts": "3c1ae6d75a7485de5467e4e6d990c7a34070f253a23b64c64fd6ef4613aa4a1d",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts": "476c1e0b5f5f35c5bd3c25cb08704f2ed7607dd80f33b3fb786fc1a995cef91d",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py": "83d9cb6f62e3758c7715e91da8783ba40c4bda98e14f909c3e1f4019f77aa318",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx": "a6c46d04c626447752e67a3e59c55d5afdd8043063244855721e31116b6a4241",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx": "3a32ce62d902ac482b9e695dd88b9b6537589e3d49e5ae6d225ef3d6f28d4875",
+      "apps/web/src/features/identity-map/identity-map.css": "7dd6023ba3cb512b8f957d5000b2be7eb1cdeec547228d387a37a746f3b62085",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts": "81a8b248d83bd47236d76a6eba69c44777edf9c94b0a9728a62722495864414d",
+      "apps/web/src/features/identity-map/identityMapModel.ts": "0acc2816d4b12a5e263617a04b957c01d223e6a61900e90210a34ca83aa4ddc9",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts": "67a9988e73a3697f8eea401a48e6040c6c0b80bac9002c4ad3a31ce37abd9e33",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py": "ab68b17d960880930877b7ddcdde6f6a6d8fcb33ede7c03161007386b79aabdf",
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx": "069ac1ecac07994a67673881a339c15a877feb4bfddf617fe6b5d82f6651da5a",
+      "apps/web/src/features/local-vault/SyntheticBackupPanel.tsx": "87ecfd530a0bc877fcdb187e8506ba8f147cee896be902520ba1035461662751",
+      "apps/web/src/features/local-vault/SyntheticConflictReviewPanel.tsx": "a3ab43d53723fb64f220ab210c27bc6f180d7227f353511c0d9f76c5a801e1b4",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.interaction.test.tsx": "a1310df048b0937453adc3f0f7a3d0eee859dbf744cf6412fa88b1eafd665ca7",
+      "apps/web/src/features/local-vault/SyntheticRotationStagePanel.tsx": "60e70bf9aa7bb038e6058cf71dd8a2dfb6eb4f0b29e99260ca6755d2f85a63ae",
+      "apps/web/src/features/local-vault/local-vault.css": "cebba7dc4fb2de3bc2989f4886a4bd7180051d44d7399a5586931e5c2a92f5b8",
+      "apps/web/src/features/local-vault/verifyVaultLifecycleBrowser.py": "64f435c085e2b31ae5b0cd0d80c198839ac02612d400c7a6718852f78397c7d4",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx": "03517699b46ae1ebd22f0e2079d8a281b4ddee4f6770a36912e33807a403cef7",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx": "7a56bd48ab3295c85f18da9405c5073fca131af57af4e3783586fee6548b5b1f",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx": "dba9c58567c4a5a4acddd5f57a7827f147dc7755ef07207c1c111c69eef09b4d",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css": "baa968778038d03dc8242c03e6c805b394f4d859197b0798de262d01456b7178",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts": "019dcf7eb7ed29e17edf98c7a29cffb787800b59280b6348a0d475aa40e64b08",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts": "901f41effcda2c6ae3299a8071eb1abc99d46fa7a76e84b553fe37191839776f",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts": "a6dce85ae94fada05f82818e1e496cedb0d20a784014a731d9d79deb2c05b2ff",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts": "e335431a899f58ca5ba3109b17383527bcffa63a5738fa6743fab4ec18512b06",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py": "06bf071032c08031b9d766562724dbbf8a68736d20e70ad378639a68acad61fc",
+      "apps/web/src/main.tsx": "2693d4da9e02297fa5a02c1a307909b50a3e2fcc035421c4989723bb1825255d",
+      "contracts/local-v1/signup-mail-discovery-v1.md": "c2d4effb05a63c3c65a6e277dca54ee201ac61cffaa00ca7b458ef56b92aca19",
+      "crates/vault-local-platform-windows/src/lib.rs": "a717ad50e64e9873d695f1936e07bfe6c89a627730b94ece36e6350204770a76",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json": "fca1b5c5d318f8d956542ba568804ed42f06044e18db6d84d3c140310b1eb775"
+    },
+    "excludes": [
+      "docs/**",
+      "**/README.md"
+    ],
+    "matches_final_browser_execution_source_exactly": true
+  },
+  "earlier_browser_run": {
+    "command_record": "/tmp/keyatlas-two-hour-20261003/lifecycle-controlled-all.json",
+    "aggregate_sha256": "7eaec80b39abf337934ce69db6e0242b58b23dbbbeb7fbaae6fede4606f15ba1",
+    "result": "PASS",
+    "check_count": 19,
+    "not_current_source": true,
+    "later_changes": [
+      "QA module docstring describing owned profiles, executable AST unchanged",
+      "conflict UI foreground/body focus guard"
+    ]
+  },
+  "preservation": {
+    "before_file_count": 55,
+    "preserved_paths": [
+      "apps/benefits-web/src/domain/catalog-client/client.ts",
+      "apps/benefits-web/src/domain/catalog-client/index.ts",
+      "apps/benefits-web/src/domain/catalog-client/requests.ts",
+      "apps/benefits-web/src/domain/catalog-client/responses.ts",
+      "apps/benefits-web/tests/catalog-client-http-integration.test.ts",
+      "apps/benefits-web/tests/catalog-client-lifetime.test.ts",
+      "apps/benefits-web/tests/catalog-client.test.ts",
+      "apps/benefits-web/tests/catalog-http-loopback.test.ts",
+      "apps/benefits-web/tests/support/catalog-http-loopback.ts",
+      "apps/web/signup-mail-discovery.html",
+      "apps/web/src/App.tsx",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.test.tsx",
+      "apps/web/src/features/discovery-inbox/DiscoveryInboxPanel.tsx",
+      "apps/web/src/features/discovery-inbox/discovery-inbox.css",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.test.ts",
+      "apps/web/src/features/discovery-inbox/discoveryInboxModel.ts",
+      "apps/web/src/features/discovery-inbox/syntheticDiscoveryInboxFixture.ts",
+      "apps/web/src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py",
+      "apps/web/src/features/identity-map/IdentityMapPanel.test.tsx",
+      "apps/web/src/features/identity-map/IdentityMapPanel.tsx",
+      "apps/web/src/features/identity-map/identity-map.css",
+      "apps/web/src/features/identity-map/identityMapModel.test.ts",
+      "apps/web/src/features/identity-map/identityMapModel.ts",
+      "apps/web/src/features/identity-map/syntheticIdentityMapFixture.ts",
+      "apps/web/src/features/identity-map/verifyIdentityMapBrowser.py",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.test.tsx",
+      "apps/web/src/features/signup-mail-discovery/SyntheticSignupMailDiscoveryPanel.tsx",
+      "apps/web/src/features/signup-mail-discovery/demo-icon.svg",
+      "apps/web/src/features/signup-mail-discovery/demo.tsx",
+      "apps/web/src/features/signup-mail-discovery/signup-mail-discovery.css",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.test.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailAccessPolicy.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.test.ts",
+      "apps/web/src/features/signup-mail-discovery/signupMailDiscovery.ts",
+      "apps/web/src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+      "apps/web/src/main.tsx",
+      "contracts/local-v1/signup-mail-discovery-v1.md",
+      "crates/vault-local-platform-windows/src/lib.rs",
+      "docs/handoff/mvp-20260927/CLOUD_DELEGATION_2026-09-30.md",
+      "docs/handoff/mvp-20260927/CLOUD_LEAD_HANDOFF_2026-09-30.md",
+      "docs/handoff/mvp-20260927/DOMAIN_CONTRACT_REVIEW_2026-10-03.md",
+      "docs/handoff/mvp-20260927/REAL_SECRET_CORE_PLAN.md",
+      "docs/verification/mvp-integration/2026-09-30-cloud-lead-review.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-catalog-client.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-continuation.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-discovery-integration.md",
+      "docs/verification/mvp-integration/2026-10-03-cloud-source-manifest.json",
+      "tests/fixtures/synthetic/signup-mail-discovery-v1.json"
+    ],
+    "intentionally_changed_paths": [
+      "apps/web/src/features/local-vault/LocalVaultPanel.tsx",
+      "docs/deployment/mvp/2026-10-03-release-operations-draft.md",
+      "docs/handoff/mvp-20260927/NEXT_ASSIGNMENTS_2026-10-03.md",
+      "docs/handoff/mvp-20260927/PROVIDER_ADAPTER_PLAN.md",
+      "docs/handoff/mvp-20260927/R5A_PURPOSE_AND_ACCEPTANCE_2026-10-03.md",
+      "docs/handoff/mvp-20260927/SERVICE_READINESS_2026-10-03.md",
+      "docs/privacy/mvp/2026-10-03-korea-data-handling-draft.md"
+    ],
+    "historical_39_source_manifest": "docs/verification/mvp-integration/2026-10-03-cloud-source-manifest.json"
+  },
+  "production_artifacts_ignored_not_in_patch": {
+    "apps/web/dist": {
+      "assets/index-B5bb1SvG.css": {
+        "bytes": 10070,
+        "sha256": "370e8ca803f239e89e1861c342ce2aad8ed0975ae5faf935c6c641483022371b"
+      },
+      "assets/index-C5kbfn9X.js": {
+        "bytes": 358081,
+        "sha256": "fcde289f5d4d0b5e82d4ef0f59403e66976ea9fc07b1e204e03713d5aa4e950e"
+      },
+      "assets/syntheticVault.worker-CM-kg07Q.js": {
+        "bytes": 30230,
+        "sha256": "ecd1eb28d6e8f454d04482ca08ef1a673839d1251f210e67ecc21495c3d23960"
+      },
+      "assets/vault_client_wasm_bg-CIa2BHIS.wasm": {
+        "bytes": 485994,
+        "sha256": "6ba2327edf28846a2ded4e8d904498570c284e7cc39b404ae352d5c1ac27cebc"
+      },
+      "index.html": {
+        "bytes": 496,
+        "sha256": "f0dc01e231771979e8874d2b8e24fb496bbcf00a9f2689af5346ee898e40432f"
+      }
+    },
+    "apps/benefits-web/.output/public": {
+      "assets/demo-CJGUj8H5.js": {
+        "bytes": 19397,
+        "sha256": "2ccf81688293d6c934898af95c6f94ea6fc13b4ad721e302aa4bc178aadbc8b0"
+      },
+      "assets/index-SYJcPUqz.js": {
+        "bytes": 269850,
+        "sha256": "106566b49320a95ac544d2cbdbb870fce14b91742a765ed3421995386a6fb5b5"
+      },
+      "assets/link-NdYen1LI.js": {
+        "bytes": 35175,
+        "sha256": "8083c9f59f368dbe60c292d54b438a4b5588bb00d3c5ed1214146487e56de7ee"
+      },
+      "assets/preload-helper-37UPr5k0.js": {
+        "bytes": 6199,
+        "sha256": "f01cec2d4a4557b3f47ee8160a435787e7fb81fe00b759c525f9a7f53229e25b"
+      },
+      "assets/routes-CXQH2UVe.js": {
+        "bytes": 1154,
+        "sha256": "9c7d7ad0d34e64069583df5105238cd5e195356816f9c50697b9d3b536d80b69"
+      },
+      "assets/status-KIUtSuAc.js": {
+        "bytes": 1003,
+        "sha256": "a2bf8c699cc03a90527bcca7628d8889e013eae7a27f0f7fc29b3d515e0b4382"
+      },
+      "assets/status-_AavlcEb.js": {
+        "bytes": 40133,
+        "sha256": "88c01781fd3e01bdabab7cb670ad2385b242e97f3eaf8e84aa1e5bcd53b46eb9"
+      },
+      "assets/styles-ncyC2OLk.css": {
+        "bytes": 774,
+        "sha256": "e85ca1b819443168bfde2d8e308db338591839ae06fb643b1371325939c566e0"
+      }
+    },
+    "apps/benefits-web/.output/server": {
+      "_chunks/ssr-renderer.mjs": {
+        "bytes": 602,
+        "sha256": "b999ea64e06dbe877573eb098a27d9fc8a7cf6481ace500263355a40bf058aa2"
+      },
+      "_libs/@tanstack/react-router+[...].mjs": {
+        "bytes": 670599,
+        "sha256": "d4a278779766105ee79e320501494a6738f6836f3b575912528a53c73804a583"
+      },
+      "_libs/@tanstack/router-core+[...].mjs": {
+        "bytes": 124993,
+        "sha256": "e656ab09657124d5c0acbafb93b9d51d23386110d44c795ee88b86e037d74533"
+      },
+      "_libs/h3+rou3+srvx.mjs": {
+        "bytes": 27337,
+        "sha256": "0c1e0466762a4b1b6fa5b468f844c3b9adc86d63a67bd95d22aa13190370eeb9"
+      },
+      "_libs/h3-v2+rou3+srvx.mjs": {
+        "bytes": 41615,
+        "sha256": "4a9295c56b785f0e9209e572228fec8accfe9b22fb551f9203150822a8e5a276"
+      },
+      "_libs/react+tanstack__react-query.mjs": {
+        "bytes": 17590,
+        "sha256": "6f2195e6b99db3041bea91c1b4076aae3fcd2bd00b3cd0bccef64fb2a7bd793f"
+      },
+      "_libs/tanstack__history.mjs": {
+        "bytes": 12095,
+        "sha256": "883138451adcb7f8876a01dfeb1d868b869a8d7f18a1796de5a0efce5df5e2ca"
+      },
+      "_libs/tanstack__query-core.mjs": {
+        "bytes": 48176,
+        "sha256": "effea260e482396e7e689f1f2a674b91c3003ec34bbb302573de114c6d62ba54"
+      },
+      "_libs/ufo.mjs": {
+        "bytes": 2215,
+        "sha256": "e32d7c881afd564f29de9afb70d25af9ba6791b215ede863e867dcfc9df2fccc"
+      },
+      "_runtime.mjs": {
+        "bytes": 1542,
+        "sha256": "23e60abe122cecb4d39a6b79cefbc008105da1c083a100bef7462550caa58fbf"
+      },
+      "_ssr/createCsrfMiddleware-B2To0gPJ.mjs": {
+        "bytes": 3110,
+        "sha256": "6990834af3ac396edb71f27ed2aa71953c920dffe9f8b71db28e64134ef82c92"
+      },
+      "_ssr/demo-CZBxhCyV.mjs": {
+        "bytes": 31988,
+        "sha256": "ed1d06e5fcf574a703b1181b68f6b2b21985f4dfc090ac3e3bdd935ba4d19e23"
+      },
+      "_ssr/demo-hfH6lwOO.mjs": {
+        "bytes": 444,
+        "sha256": "0b8107d9ff3d928f6c4c7dd292bc964fef456e79f7fe4aeed031864027e22c03"
+      },
+      "_ssr/empty-plugin-adapters-D9UWiqvJ.mjs": {
+        "bytes": 230,
+        "sha256": "ee1957ac485b923838aecb47c3427e91eb7275698cefcda4a6c9018e6cdb1c9e"
+      },
+      "_ssr/router-j9UrqDvK.mjs": {
+        "bytes": 3070,
+        "sha256": "a6f25926a48a41457f485cb2880a34f64f6f53045d72bc4a310e7e07efa60647"
+      },
+      "_ssr/routes-Cz2FDkaJ.mjs": {
+        "bytes": 2133,
+        "sha256": "3d350682b8cc12d404df15d1a380d078077759ff9a12c3d50a139530ad21de7a"
+      },
+      "_ssr/ssr.mjs": {
+        "bytes": 63689,
+        "sha256": "dddd665236211b938b2fe088c16ee423fb0004712df93bf9333964e7315b9095"
+      },
+      "_ssr/start-pZjVp7pV.mjs": {
+        "bytes": 1078,
+        "sha256": "1a6f50a36b70b697dc67956541ac6f68cffc8eb056efb548e10f8278ed24d35f"
+      },
+      "_ssr/status-C7YfYQtK.mjs": {
+        "bytes": 1013,
+        "sha256": "50310afcb78a720a4f6125cbd240ef5c4fbf4e27817a5dc21f1a4145f157a428"
+      },
+      "_ssr/status-DUMAtD-Q.mjs": {
+        "bytes": 842,
+        "sha256": "5d5ec608729950acd2954ae023454a2feac3376cfd482e88d492e998b8487869"
+      },
+      "_ssr/status-fjPrfSCI.mjs": {
+        "bytes": 2155,
+        "sha256": "ddae523441bcc032d764fbaab7eee104f47c4b48d58d5b5b3ccc3928ba801b99"
+      },
+      "_tanstack-start-manifest_v-C-xPlsS9.mjs": {
+        "bytes": 1052,
+        "sha256": "5de3a66da2b855d0bbed4d4f10d6d52f6423481ed7e21716b92c7ae3aa7b4413"
+      },
+      "index.mjs": {
+        "bytes": 11931,
+        "sha256": "cf51478154bcc557648d5e0d61defa821bdfc2d9e6b105a2f2df70585f92ea1e"
+      }
+    }
+  },
+  "command_records": {
+    "web-final-focus-guard-checks.json": [
+      {
+        "command": [
+          "npm",
+          "test"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 28.23
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 1.44
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 2.05
+      }
+    ],
+    "benefits-full-checks-after-targets.json": [
+      {
+        "command": [
+          "npm",
+          "test"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 5.98
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 5.04
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 6.62
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "check:boundaries"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 0.89
+      },
+      {
+        "command": [
+          "npm",
+          "run",
+          "test:smoke"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 5.84
+      }
+    ],
+    "bounded-json-current-repeat.json": [
+      {
+        "iteration": 1,
+        "command": [
+          "node",
+          "--import",
+          "tsx",
+          "--test",
+          "tests/bounded-json.test.ts"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 0.6
+      },
+      {
+        "iteration": 2,
+        "command": [
+          "node",
+          "--import",
+          "tsx",
+          "--test",
+          "tests/bounded-json.test.ts"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 0.47
+      },
+      {
+        "iteration": 3,
+        "command": [
+          "node",
+          "--import",
+          "tsx",
+          "--test",
+          "tests/bounded-json.test.ts"
+        ],
+        "cwd": "/workspace/secure-vault/apps/benefits-web",
+        "exit_code": 0,
+        "elapsed_seconds": 0.5
+      }
+    ],
+    "qa-offline-baseline.json": {
+      "command": [
+        "node",
+        "--test",
+        "tests/mvp-browser/qa-core.node-test.mjs",
+        "tests/mvp-browser/synthetic-idb-probe.node-test.mjs",
+        "tests/mvp-browser/qa-lifecycle.node-test.mjs",
+        "tests/mvp-browser/runner-config.node-test.mjs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.46,
+      "summary": [
+        "ℹ tests 180",
+        "ℹ pass 180",
+        "ℹ fail 0",
+        "ℹ cancelled 0",
+        "ℹ skipped 0"
+      ]
+    },
+    "node-browser-runner-baseline.json": {
+      "status": "BLOCKED",
+      "code": "BROWSER_RUNTIME_UNAVAILABLE",
+      "exitCode": 2,
+      "reportPath": "/tmp/keyatlas-m05a-synthetic-L5JZ1I/report.json",
+      "command": [
+        "node",
+        "tests/mvp-browser/local-vault-qa.mjs",
+        "--synthetic-only"
+      ],
+      "actual_exit_code": 2,
+      "details": {
+        "schema": "keyatlas.synthetic-browser-qa.v2",
+        "runId": "935328d3-ff32-4adc-bf3b-f1553f015114",
+        "startedAt": "2026-10-03T15:39:38.920Z",
+        "finishedAt": "2026-10-03T15:39:38.943Z",
+        "baseUrl": "http://127.0.0.1:4173/?view=local-vault",
+        "sourceHead": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+        "sourceDirty": true,
+        "nodeVersion": "v24.19.0",
+        "browserVersion": null,
+        "playwrightVersion": null,
+        "cleanupConfirmed": true,
+        "status": "BLOCKED",
+        "code": "BROWSER_RUNTIME_UNAVAILABLE",
+        "exitCode": 2,
+        "scenarios": [
+          {
+            "id": "S1",
+            "status": "NOT_RUN",
+            "code": "NOT_STARTED",
+            "evidence": null
+          },
+          {
+            "id": "S2",
+            "status": "NOT_RUN",
+            "code": "NOT_STARTED",
+            "evidence": null
+          },
+          {
+            "id": "S3",
+            "status": "NOT_RUN",
+            "code": "NOT_STARTED",
+            "evidence": null
+          },
+          {
+            "id": "S4",
+            "status": "NOT_RUN",
+            "code": "NOT_STARTED",
+            "evidence": null
+          },
+          {
+            "id": "S5",
+            "status": "NOT_RUN",
+            "code": "NOT_STARTED",
+            "evidence": null
+          }
+        ],
+        "notVerified": [
+          "B05-disk-download-and-fresh-profile-restore",
+          "heap-zeroization",
+          "actual-mobile-and-biometrics",
+          "five-minute-and-background-auto-lock",
+          "multiwriter-and-general-upgrade-rollback",
+          "benefits-ui-and-M03-V2",
+          "served-build-to-source-binding",
+          "real-secrets-and-production"
+        ]
+      }
+    },
+    "github-readonly-refresh.json": [
+      {
+        "name": "issue-30",
+        "url": "https://api.github.com/repos/kjs844-art/secure-vault/issues/30",
+        "method": "GET",
+        "authentication_header_sent": false,
+        "result": "BLOCKED",
+        "failure_type": "URLError",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "name": "pulls",
+        "url": "https://api.github.com/repos/kjs844-art/secure-vault/pulls?state=all&per_page=100",
+        "method": "GET",
+        "authentication_header_sent": false,
+        "result": "BLOCKED",
+        "failure_type": "URLError",
+        "elapsed_seconds": 0.03
+      }
+    ],
+    "lifecycle-final-guard-all.json": {
+      "command": [
+        "python",
+        "src/features/local-vault/verifyVaultLifecycleBrowser.py",
+        "--dist",
+        "dist",
+        "--output",
+        "/tmp/keyatlas-two-hour-20261003/lifecycle-final-guard-all",
+        "--mode",
+        "all"
+      ],
+      "cwd": "/workspace/secure-vault/apps/web",
+      "exit_code": 0,
+      "elapsed_seconds": 951.78,
+      "source_manifest": "final-guard-all-source-at-start.json",
+      "source_aggregate_sha256": "ea2f2def6aebb788b1918066feeba530d972ea2465e98a9293ab58c32a8dab2a"
+    },
+    "integration-current-bundle-checks.json": [
+      {
+        "command": [
+          "python",
+          "src/features/identity-map/verifyIdentityMapBrowser.py",
+          "--dist",
+          "dist",
+          "--output",
+          "/tmp/keyatlas-two-hour-20261003/identity-map-current-bundle"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 7.13
+      },
+      {
+        "command": [
+          "python",
+          "src/features/discovery-inbox/verifyDiscoveryInboxBrowser.py",
+          "--dist",
+          "dist",
+          "--output",
+          "/tmp/keyatlas-two-hour-20261003/discovery-inbox-current-bundle"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 6.63
+      },
+      {
+        "command": [
+          "python",
+          "src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+          "--view",
+          "integrated",
+          "--timezone",
+          "UTC",
+          "--dist",
+          "dist",
+          "--output",
+          "/tmp/keyatlas-two-hour-20261003/signup-mail-current-integrated"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 4.15
+      },
+      {
+        "command": [
+          "python",
+          "src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+          "--view",
+          "standalone",
+          "--timezone",
+          "Asia/Seoul",
+          "--dist",
+          "dist",
+          "--output",
+          "/tmp/keyatlas-two-hour-20261003/signup-mail-current-standalone"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 1,
+        "elapsed_seconds": 0.15
+      }
+    ],
+    "repository-secret-scan-final.json": {
+      "command": [
+        "/tmp/keyatlas-powershell-tools/extracted/opt/microsoft/powershell/7/pwsh",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        "./scripts/check-repository-secrets.ps1",
+        "-Root",
+        "/workspace/secure-vault"
+      ],
+      "cwd": "/workspace/secure-vault",
+      "exit_code": 0,
+      "elapsed_seconds": 11.14,
+      "xdg_directories": {
+        "XDG_CACHE_HOME": "/tmp/keyatlas-powershell-tools/xdg-cache",
+        "XDG_CONFIG_HOME": "/tmp/keyatlas-powershell-tools/xdg-config",
+        "XDG_DATA_HOME": "/tmp/keyatlas-powershell-tools/xdg-data"
+      }
+    },
+    "c06-standalone-corrected-checks.json": [
+      {
+        "command": [
+          "node",
+          "--input-type=module",
+          "-e",
+          "import { build } from \"vite\"; await build({ build: { outDir: \"/tmp/keyatlas-two-hour-20261003/c06-standalone-current-dist\", rollupOptions: { input: \"signup-mail-discovery.html\" } } });"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 0.55
+      },
+      {
+        "command": [
+          "python",
+          "src/features/signup-mail-discovery/verifySignupMailBrowser.py",
+          "--view",
+          "standalone",
+          "--timezone",
+          "Asia/Seoul",
+          "--dist",
+          "/tmp/keyatlas-two-hour-20261003/c06-standalone-current-dist",
+          "--output",
+          "/tmp/keyatlas-two-hour-20261003/signup-mail-current-standalone-corrected"
+        ],
+        "cwd": "/workspace/secure-vault/apps/web",
+        "exit_code": 0,
+        "elapsed_seconds": 3.91
+      }
+    ],
+    "remote-ref-final-review.json": {
+      "command": [
+        "git",
+        "ls-remote",
+        "origin",
+        "refs/heads/main",
+        "refs/heads/codex/firstvibe-benefit-history-20260929",
+        "refs/heads/codex/firstvibe-cloud-catalog-client-fix-20261003",
+        "refs/heads/codex/firstvibe-mvp-readiness-20260930",
+        "refs/pull/4/head",
+        "refs/pull/5/head",
+        "refs/pull/6/head",
+        "refs/pull/7/head",
+        "refs/pull/8/head",
+        "refs/pull/9/head",
+        "refs/pull/13/head",
+        "refs/pull/16/head",
+        "refs/pull/17/head",
+        "refs/pull/18/head",
+        "refs/pull/19/head",
+        "refs/pull/20/head",
+        "refs/pull/21/head",
+        "refs/pull/22/head",
+        "refs/pull/23/head",
+        "refs/pull/24/head",
+        "refs/pull/25/head",
+        "refs/pull/26/head",
+        "refs/pull/27/head",
+        "refs/pull/29/head"
+      ],
+      "cwd": "/workspace/secure-vault",
+      "exit_code": 0,
+      "refs": {
+        "refs/heads/codex/firstvibe-benefit-history-20260929": "ee557c8e81807f1af88fff0e40ed949089b9337f",
+        "refs/heads/main": "65d10dceb13039dc69cf2368aa0e31d7ad5cc6b2",
+        "refs/pull/13/head": "e6695a086859b4c621b39505dabb44739937b077",
+        "refs/pull/16/head": "08c40b1d194ab92ca1b3cabbc069336ac51ad69e",
+        "refs/pull/17/head": "5fecb0f29ce56b2959b5350913247114ded8e8cf",
+        "refs/pull/18/head": "e6e5700d5931a1ce37f93f83049e5cc145e46021",
+        "refs/pull/19/head": "babe05be8f59bf952b856ea1494e33003de17d46",
+        "refs/pull/20/head": "e032e49593d64c4917aedaa89454fcace264a202",
+        "refs/pull/21/head": "e19ae37872a1cb2324d4c227593fbf57f8731667",
+        "refs/pull/22/head": "3230b1ae6fa9b062f1804c04e8439a9a99f14575",
+        "refs/pull/23/head": "11591798c2f771691804cf52413bc9d454f2d0d7",
+        "refs/pull/24/head": "34f81d62ca1b7bf880fddaaf662f14387049c305",
+        "refs/pull/25/head": "a72a6817ef1970c271850af18415b6fb9f5550c7",
+        "refs/pull/26/head": "d017a9da5969ae2cd723eb72cbd56ef08e63fb0f",
+        "refs/pull/27/head": "9dc9af3d980ba574ab0afb8715b5bd0c2239d036",
+        "refs/pull/29/head": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+        "refs/pull/4/head": "ce518ee71c203dc7cb70b7c448a9338cd3129ebb",
+        "refs/pull/5/head": "b9ec53dc31e2b2af3c9666381b9c19d2b6322668",
+        "refs/pull/6/head": "d9c66661db7d7b66f6453e94e467c424107cba66",
+        "refs/pull/7/head": "090c7313a4ec0b6bd181d9889d7282f1ae7c1caf",
+        "refs/pull/8/head": "8f834d1d5f87214d76399e6739856dfab23071b2",
+        "refs/pull/9/head": "594824ddb9a55bd736d8dd93fd26f60f7ca58a2c"
+      },
+      "rows": [
+        {
+          "pr": 4,
+          "remote_head": "ce518ee71c203dc7cb70b7c448a9338cd3129ebb",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 5,
+          "remote_head": "b9ec53dc31e2b2af3c9666381b9c19d2b6322668",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 6,
+          "remote_head": "d9c66661db7d7b66f6453e94e467c424107cba66",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": true,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 7,
+          "remote_head": "090c7313a4ec0b6bd181d9889d7282f1ae7c1caf",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 8,
+          "remote_head": "8f834d1d5f87214d76399e6739856dfab23071b2",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 9,
+          "remote_head": "594824ddb9a55bd736d8dd93fd26f60f7ca58a2c",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 13,
+          "remote_head": "e6695a086859b4c621b39505dabb44739937b077",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 16,
+          "remote_head": "08c40b1d194ab92ca1b3cabbc069336ac51ad69e",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 17,
+          "remote_head": "5fecb0f29ce56b2959b5350913247114ded8e8cf",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 18,
+          "remote_head": "e6e5700d5931a1ce37f93f83049e5cc145e46021",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 19,
+          "remote_head": "babe05be8f59bf952b856ea1494e33003de17d46",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": true,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 20,
+          "remote_head": "e032e49593d64c4917aedaa89454fcace264a202",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 21,
+          "remote_head": "e19ae37872a1cb2324d4c227593fbf57f8731667",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 22,
+          "remote_head": "3230b1ae6fa9b062f1804c04e8439a9a99f14575",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 23,
+          "remote_head": "11591798c2f771691804cf52413bc9d454f2d0d7",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 24,
+          "remote_head": "34f81d62ca1b7bf880fddaaf662f14387049c305",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 25,
+          "remote_head": "a72a6817ef1970c271850af18415b6fb9f5550c7",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 26,
+          "remote_head": "d017a9da5969ae2cd723eb72cbd56ef08e63fb0f",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 27,
+          "remote_head": "9dc9af3d980ba574ab0afb8715b5bd0c2239d036",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": false,
+          "ancestor_of_observed_main": false
+        },
+        {
+          "pr": 29,
+          "remote_head": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+          "live_api_status": "UNKNOWN/API_BLOCKED",
+          "object_available_locally": true,
+          "ancestor_of_cloud_head": true,
+          "ancestor_of_observed_main": false
+        }
+      ],
+      "work_branch_remote_present": false,
+      "local_readiness_remote_present": false,
+      "no_merge_or_ci_inference": true
+    },
+    "repository-secret-scan-after-oauth-design.json": {
+      "command": [
+        "/tmp/keyatlas-powershell-tools/extracted/opt/microsoft/powershell/7/pwsh",
+        "-NoProfile",
+        "-NonInteractive",
+        "-File",
+        "./scripts/check-repository-secrets.ps1",
+        "-Root",
+        "/workspace/secure-vault"
+      ],
+      "cwd": "/workspace/secure-vault",
+      "exit_code": 0,
+      "elapsed_seconds": 13.42,
+      "xdg_directories": {
+        "XDG_CACHE_HOME": "/tmp/keyatlas-powershell-tools/xdg-cache",
+        "XDG_CONFIG_HOME": "/tmp/keyatlas-powershell-tools/xdg-config",
+        "XDG_DATA_HOME": "/tmp/keyatlas-powershell-tools/xdg-data"
+      },
+      "owned_file_count": 70,
+      "unchanged_during_scan": true
+    },
+    "oauth-design-consistency.json": {
+      "scope": "documentation consistency only; not runtime auth/DB/provider/security acceptance",
+      "checks": [
+        {
+          "case": "design-only-status-and-no-implementation-claim",
+          "pass": true
+        },
+        {
+          "case": "existing-authority-field-names",
+          "pass": true
+        },
+        {
+          "case": "existing-mail-authority-field-names",
+          "pass": true
+        },
+        {
+          "case": "proposal-differentiates-metadata-full-and-external-analysis",
+          "pass": true
+        },
+        {
+          "case": "app-mail-vault-authority-separation-and-unknown-cleanup",
+          "pass": true
+        }
+      ],
+      "exit_code": 0
+    },
+    "git-current-final-metadata.json": {
+      "commands": [
+        {
+          "command": [
+            "git",
+            "branch",
+            "--show-current"
+          ],
+          "exit_code": 0,
+          "result": "codex/firstvibe-cloud-catalog-client-fix-20261003"
+        },
+        {
+          "command": [
+            "git",
+            "rev-parse",
+            "HEAD"
+          ],
+          "exit_code": 0,
+          "result": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d"
+        },
+        {
+          "command": [
+            "git",
+            "merge-base",
+            "HEAD",
+            "origin/main"
+          ],
+          "exit_code": 0,
+          "result": "ceca9f43c4f92b3b0e4081d84be8612b10f03582"
+        },
+        {
+          "command": [
+            "git",
+            "rev-list",
+            "--count",
+            "origin/main..HEAD"
+          ],
+          "exit_code": 0,
+          "result": "63"
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--cached",
+            "--name-only"
+          ],
+          "exit_code": 0,
+          "result": ""
+        }
+      ],
+      "main_difference_is_not_unpushed_commits": true,
+      "cloud_head_remote_pr29_tip": "afbc0fbc4dd41669e468d8658965ef8f5f10ee7d",
+      "new_commits_created_this_timebox": 0
+    }
+  },
+  "synthetic_browser_results": [
+    {
+      "case": "lifecycle-final-guard-all",
+      "result": "PASS",
+      "check_count": 19,
+      "errors": [],
+      "details": [
+        {
+          "case": "ordered-competing-tabs-preserve-stale-candidate",
+          "result": "PASS",
+          "evidence": {
+            "before": {
+              "archive": {
+                "bytes": 3892,
+                "sha256": "368524bddfd933d30a079179772c9931f462e40d6c1294a3766887d9d5c3d53a"
+              },
+              "conflicts": []
+            },
+            "after": {
+              "archive": {
+                "bytes": 5136,
+                "sha256": "e4a8e662e6dc38bcf0b1fecd50d12896f4b68a0e518938becbf6dbd3e8caa9e1"
+              },
+              "conflicts": [
+                {
+                  "bytes": 5136,
+                  "sha256": "bcb00bebba9509b676548994b2693c0687721dce56068b3302339a6d7de4b75f"
+                }
+              ]
+            },
+            "actual_visibility": "both visible in headless Chromium",
+            "actual_simultaneous_race": false
+          }
+        },
+        {
+          "case": "unresolved-conflict-blocks-export-without-discard-or-head-change",
+          "result": "PASS",
+          "evidence": {
+            "conflict_count": 1
+          }
+        },
+        {
+          "case": "explicit-conflict-review-cancel-and-two-step-discard",
+          "result": "PASS",
+          "evidence": {
+            "head_preserved": true,
+            "conflict_count": 0
+          }
+        },
+        {
+          "case": "resolved-backup-preparation-and-explicit-clear-preserve-storage",
+          "result": "PASS",
+          "evidence": {
+            "actual_disk_download": false
+          }
+        },
+        {
+          "case": "actual-navigation-and-back-require-explicit-reopen",
+          "result": "PASS",
+          "evidence": {
+            "ciphertext_unchanged": true,
+            "no_claim_of_os_sleep_or_background_tab": true
+          }
+        },
+        {
+          "case": "accelerated-idle-restores-lost-focus-and-manual-lock-preserves-button-focus",
+          "result": "PASS",
+          "evidence": {
+            "clock_mock": true,
+            "ciphertext_unchanged": true
+          }
+        },
+        {
+          "case": "prepared-backup-idle-expiry-revokes-actual-url-and-clears-acknowledgement",
+          "result": "PASS",
+          "evidence": {
+            "clock_mock": true,
+            "native_resource_counts": {
+              "created": 1,
+              "revoked": 1,
+              "active": 0,
+              "duplicateRevokes": 0,
+              "unknownRevokes": 0,
+              "fileReads": 0
+            },
+            "ciphertext_unchanged": true
+          }
+        },
+        {
+          "case": "actual-file-chooser-enforces-size-before-read-and-rejects-invalid-content-without-overwrite",
+          "result": "PASS",
+          "evidence": {
+            "native_file_reads": 1,
+            "accepted_boundary_bytes": 524288,
+            "rejected_oversize_bytes": 524289,
+            "filename_not_rendered": true,
+            "ciphertext_unchanged": true
+          }
+        },
+        {
+          "case": "rotation-pending-progress-survives-reload-without-restoring-cutover-consent",
+          "result": "PASS",
+          "evidence": {
+            "synthetic_provider_assumptions_only": true,
+            "ciphertext_preserved_after_reload": true
+          }
+        },
+        {
+          "case": "rotation-cutover-requires-saved-reviewed-matching-progress-and-fresh-consent",
+          "result": "PASS",
+          "evidence": {
+            "current_catalog_count": 3,
+            "real_provider_revocation_verified": false,
+            "consumed_stage_not_reapplied": true,
+            "selection_change_clears_consent": true
+          }
+        },
+        {
+          "case": "v2-disk-download-native-file-chooser-fresh-profile-restore-and-browser-restart",
+          "result": "PASS",
+          "evidence": {
+            "actual_disk_download": true,
+            "encrypted_bytes": {
+              "bytes": 5136,
+              "sha256": "327ac73e85ddbe7d5a74be592ab3cd874fbbaec263055e38b08b61af425d335b"
+            },
+            "source_and_restored_current_count": 4,
+            "restore_requires_explicit_reopen": true,
+            "existing_archive_not_overwritten": true,
+            "manual_os_file_dialog": "NOT_RUN"
+          }
+        },
+        {
+          "case": "owned-wasm-load-failure-preserves-storage-and-recovers-only-after-explicit-reopen",
+          "result": "PASS",
+          "evidence": {
+            "intentionally_blocked_owned_wasm_requests": 1,
+            "no_automatic_retry_observed_seconds": 2,
+            "ciphertext_unchanged": true,
+            "no_claim_about_all_bridge_failure_causes": true
+          }
+        },
+        {
+          "case": "overlapping-two-tab-registration-has-one-current-head-and-one-authenticated-candidate",
+          "result": "PASS",
+          "evidence": {
+            "overlap_ms": 1073.6,
+            "simultaneous_clicks": true,
+            "winner_index": 0,
+            "actual_visibility": "headless Chromium",
+            "current_count": 4,
+            "authenticated_conflicts": 1
+          }
+        },
+        {
+          "case": "eight-candidate-outbox-refuses-ninth-stale-write-without-eviction-or-head-change",
+          "result": "PASS",
+          "evidence": {
+            "current_count": 4,
+            "authenticated_conflicts": 8,
+            "rejected_ninth": true,
+            "existing_candidate_bytes_unchanged": true
+          }
+        },
+        {
+          "case": "real-clock-backup-download-url-revoked",
+          "result": "PASS",
+          "evidence": {
+            "elapsed_seconds": 301.5,
+            "no_clock_mock": true,
+            "native_resource_counts": {
+              "created": 1,
+              "revoked": 1,
+              "active": 0,
+              "duplicateRevokes": 0,
+              "unknownRevokes": 0,
+              "fileReads": 0
+            },
+            "ciphertext_unchanged": true,
+            "no_claim_of_heap_erasure": true
+          }
+        },
+        {
+          "case": "real-clock-backup-selected-file-cleared-without-read",
+          "result": "PASS",
+          "evidence": {
+            "elapsed_seconds": 301.47,
+            "no_clock_mock": true,
+            "native_resource_counts": {
+              "created": 0,
+              "revoked": 0,
+              "active": 0,
+              "duplicateRevokes": 0,
+              "unknownRevokes": 0,
+              "fileReads": 0
+            },
+            "ciphertext_unchanged": true,
+            "no_claim_of_heap_erasure": true
+          }
+        },
+        {
+          "case": "real-clock-untrusted-input-does-not-renew-idle",
+          "result": "PASS",
+          "evidence": {
+            "elapsed_seconds": 299.52,
+            "trusted_renewal": false,
+            "untrusted_input": true,
+            "no_clock_mock": true,
+            "ciphertext_unchanged": true,
+            "foreground_focus_checked": true,
+            "focus_after_lock": "P"
+          }
+        },
+        {
+          "case": "real-clock-five-minute-idle",
+          "result": "PASS",
+          "evidence": {
+            "elapsed_seconds": 299.59,
+            "trusted_renewal": false,
+            "untrusted_input": false,
+            "no_clock_mock": true,
+            "ciphertext_unchanged": true,
+            "foreground_focus_checked": true,
+            "focus_after_lock": "P"
+          }
+        },
+        {
+          "case": "real-clock-trusted-input-renews-idle",
+          "result": "PASS",
+          "evidence": {
+            "elapsed_seconds": 541.82,
+            "trusted_renewal": true,
+            "untrusted_input": false,
+            "no_clock_mock": true,
+            "ciphertext_unchanged": true,
+            "foreground_focus_checked": true,
+            "focus_after_lock": "P"
+          }
+        }
+      ],
+      "browser": "151.0.7922.173"
+    },
+    {
+      "case": "benefits-mobile-target-after",
+      "result": "PASS",
+      "check_count": 7,
+      "errors": [],
+      "details": [
+        "landing-to-hydrated-demo-preserves-synthetic-and-default-history-boundaries",
+        "opt-in-history-renders-two-records-without-spendable-meters",
+        "return-to-current-view-keeps-unknown-and-observation-date-meaning",
+        "hydrated-keyboard-arrows-attention-action-and-skip-link",
+        "360-pixel-current-and-history-views-have-no-horizontal-overflow-and-current-buttons-have-44-pixel-targets",
+        "client-navigation-to-protected-status-keeps-integrations-disconnected",
+        "owned-static-assets-match-build-and-no-browser-storage-cookie-or-external-request"
+      ],
+      "browser": "151.0.7922.173"
+    }
+  ],
+  "separate_c06_standalone_artifact": {
+    "assets/demo-icon-dmB_Oi0t.svg": {
+      "bytes": 284,
+      "sha256": "80282f3a6189dfb718b2cf826ddf04e2770a898fa037ee735d98fe794407ea4d"
+    },
+    "assets/signup-mail-discovery-DDPaEoUd.css": {
+      "bytes": 2364,
+      "sha256": "9f6e6ee5982f9aa1d4801f8e9d40d44408c5d1f1c875073f4d320acddbb42a5d"
+    },
+    "assets/signup-mail-discovery-VDttSz8c.js": {
+      "bytes": 233888,
+      "sha256": "cc6d27abfc6f469ea26f6c7f72a7625226bdbfafc7966ac53acdca5bdd03959e"
+    },
+    "signup-mail-discovery.html": {
+      "bytes": 831,
+      "sha256": "b7f58146db782740025544340e469fae1469ffad59bcdf9365057ee6aa05fd43"
+    }
+  },
+  "evidence_location": "/tmp/keyatlas-two-hour-20261003; local temporary evidence, not a published attachment or commit",
+  "postfreeze_validation_records_local_only": {
+    "integrity": "/tmp/keyatlas-two-hour-20261003/integrity-current.json",
+    "patch": "/tmp/keyatlas-two-hour-20261003/patch-validation-final.json",
+    "secret_scan": "/tmp/keyatlas-two-hour-20261003/repository-secret-scan-frozen.json"
+  },
+  "verification_document": "docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-qa.md",
+  "remaining_limits": [
+    "Rust workspace verifier FAIL 101 with reproduced Linux SQLite 19 failures and existing 1 ignored",
+    "native Windows, manual OS dialog, background/OS sleep, Firefox/WebKit, real mobile/screen reader NOT_RUN",
+    "Node browser runner BLOCKED exit 2; Python fallback does not turn it into a pass",
+    "Pester module unavailable and scanner Windows fixture failure remain separate from repository scan",
+    "latest GitHub PR/Issue/CI public API BLOCKED; remote git refs are not CI/merge evidence",
+    "no actual Secret, auth, DB, Gmail, AI, hosting, deployment or independent security acceptance"
+  ]
+}

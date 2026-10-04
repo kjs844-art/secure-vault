@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { LocalCatalogResults } from "./LocalCatalogSearch";
 import type { SyntheticVaultSession } from "./SyntheticVaultSession";
 
@@ -12,17 +12,38 @@ export function SyntheticConflictReviewPanel({ session, vaultGeneration }: {
   );
   const busy = state.phase === "loading" || state.phase === "discarding";
   const canLoad = state.phase === "idle" || state.phase === "discarded" || state.phase === "error";
+  const panel = useRef<HTMLElement>(null);
+  const status = useRef<HTMLParagraphElement>(null);
+  const pendingFocus = useRef<{ readonly target: "status" } | {
+    readonly target: "candidate";
+    readonly reviewVersion: number;
+    readonly reference: number;
+  } | null>(null);
+  useEffect(() => {
+    const request = pendingFocus.current;
+    if (request === null) return;
+    pendingFocus.current = null;
+    if (document.hidden || !document.hasFocus() || document.activeElement !== document.body) return;
+    if (request.target === "status") {
+      status.current?.focus();
+    } else if (request.reviewVersion === state.reviewVersion) {
+      const heading = Array.from(panel.current?.querySelectorAll<HTMLHeadingElement>("h3[data-conflict-reference]") ?? [])
+        .find((element) => element.dataset.conflictReference === String(request.reference));
+      heading?.focus();
+    }
+  }, [state.phase, state.reviewVersion, state.pendingReference]);
 
   return (
-    <section aria-labelledby="conflict-review-heading" data-testid="conflict-review">
+    <section ref={panel} aria-labelledby="conflict-review-heading" data-testid="conflict-review">
       <h2 id="conflict-review-heading">보존된 합성 충돌 후보 검토</h2>
       <p>다른 탭과 저장이 겹쳐 현재 금고가 되지 못한 암호문 후보를 직접 확인합니다. 후보 번호는 생성 시각 순서가 아니며, 현재 금고를 바꾸거나 후보를 자동 병합하지 않습니다.</p>
       {canLoad && <div className="vault-actions">
         <button type="button" disabled={busy} onClick={() => {
+          pendingFocus.current = { target: "status" };
           void session.loadConflictReviews(vaultGeneration);
         }}>후보 목록 확인</button>
       </div>}
-      <p role="status" aria-live="polite" className="vault-status" data-testid="conflict-review-status">
+      <p ref={status} tabIndex={-1} role="status" aria-live="polite" className="vault-status" data-testid="conflict-review-status">
         {state.phase === "idle" && "아직 후보 목록을 읽지 않았습니다."}
         {state.phase === "loading" && "후보 전체를 인증하는 중입니다. 모두 끝나기 전에는 어떤 목록도 표시하지 않습니다."}
         {state.phase === "ready" && (state.items.length === 0
@@ -38,18 +59,21 @@ export function SyntheticConflictReviewPanel({ session, vaultGeneration }: {
         && state.items.map((item) => {
           const pending = state.pendingReference === item.reference;
           return <article key={item.reference} aria-labelledby={`conflict-review-${item.reference}`}>
-            <h3 id={`conflict-review-${item.reference}`}>보존 후보 {item.reference + 1}</h3>
+            <h3 tabIndex={-1} data-conflict-reference={item.reference} id={`conflict-review-${item.reference}`}>보존 후보 {item.reference + 1}</h3>
             <p>인증된 합성 catalog {item.entries.length}개 항목입니다. 후보 번호는 이 화면에서만 유효합니다.</p>
             <LocalCatalogResults entries={item.entries} />
             {state.phase === "ready" && <button type="button" onClick={() => {
+              pendingFocus.current = { target: "candidate", reviewVersion: state.reviewVersion, reference: item.reference };
               session.requestConflictDiscard(state.reviewVersion, item.reference);
             }}>이 후보 폐기 검토</button>}
             {state.phase === "confirm-discard" && pending && <div className="vault-actions">
               <p><strong>이 작업은 보존 후보만 영구 삭제합니다.</strong> 현재 금고로 승격하거나 병합하지 않습니다.</p>
               <button type="button" onClick={() => {
+                pendingFocus.current = { target: "candidate", reviewVersion: state.reviewVersion, reference: item.reference };
                 session.cancelConflictDiscard(state.reviewVersion);
               }}>취소</button>
               <button type="button" onClick={() => {
+                pendingFocus.current = { target: "status" };
                 void session.confirmConflictDiscard(state.reviewVersion, item.reference);
               }}>확인하고 후보 폐기</button>
             </div>}

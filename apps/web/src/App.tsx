@@ -36,7 +36,10 @@ export function App() {
       <section>
         <h2>합성 관계 / 로컬 저장 테스트</h2>
         <p>Rust/WASM으로 만든 합성 암호문을 브라우저에 저장하고, 다시 열어 연결 관계를 확인합니다.</p>
-        <a href="/?view=local-vault">로컬 합성 금고 열기 →</a>
+        <p><a href="/?view=local-vault">로컬 합성 금고 열기 →</a></p>
+        <p><a href="/?view=identity-map">계정 · 발급처 · 사용처 둘러보기 →</a></p>
+        <p><a href="/?view=discovery-inbox">가입 흔적 검토 연습 →</a></p>
+        <p><a href="/?view=signup-mail-discovery">합성 메일 가입 흔적 탐색 →</a></p>
       </section>
 
       <section aria-labelledby="inventory-heading">

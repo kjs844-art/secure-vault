@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
 import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
 import { SYNTHETIC_BACKUP_FILENAME, SyntheticVaultBackup } from "./SyntheticVaultBackup";
@@ -18,9 +18,24 @@ export function SyntheticBackupPanel() {
   );
   useEffect(() => bindVaultAutoLock(session), [session]);
   const busy = state.phase === "busy";
+  const generation = session.viewGeneration;
+  const statusElement = useRef<HTMLParagraphElement>(null);
+  const lastFocusedElement = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const previous = lastFocusedElement.current;
+    if (previous === null) return;
+    const removed = !previous.isConnected;
+    if (removed) lastFocusedElement.current = null;
+    if ((removed || previous.matches(":disabled")) && !document.hidden && document.hasFocus()
+        && document.activeElement === document.body) {
+      statusElement.current?.focus();
+    }
+  }, [state.phase, generation]);
 
   return (
-    <main className="local-vault synthetic-backup">
+    <main className="local-vault synthetic-backup" onFocusCapture={(event) => {
+      if (event.target instanceof HTMLElement) lastFocusedElement.current = event.target;
+    }}>
       <header>
         <p className="eyebrow">KeyAtlas · synthetic backup drill</p>
         <h1>합성 금고 백업 · 복원 연습</h1>
@@ -60,7 +75,7 @@ export function SyntheticBackupPanel() {
       </section>
       <section aria-labelledby="backup-state-heading">
         <h2 id="backup-state-heading">작업 상태</h2>
-        <p role="status" aria-live="polite" data-testid="backup-status">{state.message}</p>
+        <p ref={statusElement} tabIndex={-1} role="status" aria-live="polite" data-testid="backup-status">{state.message}</p>
         <button type="button" onClick={() => session.lock()}>작업 취소 · 준비 파일 비우기</button>
         <p><small>탭을 숨기거나 페이지를 떠나거나 5분 동안 입력이 없으면 연산·선택한 파일·다운로드 링크·사용 확인을 해제합니다. 절전 복귀와 시계 오류 시에도 해제될 수 있습니다. 이미 시작된 암호문 저장이나 브라우저 다운로드는 취소되지 않을 수 있습니다. 파일 검증은 신뢰할 수 있는 출처·최신 버전·실제 복구 수단의 보증이 아닙니다.</small></p>
       </section>

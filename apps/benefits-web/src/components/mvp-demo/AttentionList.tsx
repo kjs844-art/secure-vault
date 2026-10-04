@@ -42,7 +42,17 @@ export function AttentionList({
           <p style={{ margin: "0.2rem 0 0", fontWeight: 700 }}>{item.title}</p>
           <p style={{ margin: "0.2rem 0 0", fontSize: "0.9rem" }}>{item.detail}</p>
           <p style={{ margin: "0.45rem 0 0" }}>
-            <button type="button" onClick={() => onFocusService(item.serviceId)}>
+            <button type="button" onClick={() => onFocusService(item.serviceId)} style={{
+              minWidth: "44px",
+              minHeight: "44px",
+              padding: "0.45rem 0.75rem",
+              font: "inherit",
+              color: "inherit",
+              background: "transparent",
+              border: "1px solid currentColor",
+              borderRadius: "0.5rem",
+              cursor: "pointer",
+            }}>
               해당 서비스 보기
             </button>
           </p>

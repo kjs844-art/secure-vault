@@ -1,0 +1,24 @@
+{
+  "now": 1790769600000,
+  "request": {
+    "version": 1,
+    "provider": "synthetic_fixture",
+    "scopes": [],
+    "serviceIds": ["aurora-demo", "cedar-demo", "harbor-demo"],
+    "from": 1788177600000,
+    "to": 1790769600000,
+    "maxHeaders": 50
+  },
+  "metadata": {
+    "version": 1,
+    "syntheticOnly": true,
+    "headers": [
+      { "senderDomain": "accounts.aurora.invalid", "subject": "Welcome to Aurora, synthetic-only-private-canary", "receivedAt": 1790596800000 },
+      { "senderDomain": "accounts.aurora.invalid", "subject": "Verify your email address", "receivedAt": 1790683200000 },
+      { "senderDomain": "accounts.cedar.invalid", "subject": "회원가입 완료 — 합성 예제", "receivedAt": 1790510400000 },
+      { "senderDomain": "accounts.harbor.invalid", "subject": "Password reset requested", "receivedAt": 1790596800000 },
+      { "senderDomain": "newsletter.aurora.invalid", "subject": "Welcome to our newsletter", "receivedAt": 1790596800000 },
+      { "senderDomain": "accounts.harbor.invalid", "subject": "Account created", "receivedAt": 1785499200000 }
+    ]
+  }
+}

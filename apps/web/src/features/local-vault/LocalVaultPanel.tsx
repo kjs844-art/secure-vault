@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createSyntheticCiphertextStore } from "../../storage/SyntheticCiphertextStore";
 import { SyntheticVaultSession } from "./SyntheticVaultSession";
 import { BrowserSyntheticVaultWorker } from "./SyntheticVaultWorkerClient";
@@ -8,6 +8,7 @@ import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import { SyntheticConflictReviewPanel } from "./SyntheticConflictReviewPanel";
 import { SyntheticRotationStagePanel } from "./SyntheticRotationStagePanel";
+import { IdentityMapPanel } from "../identity-map/IdentityMapPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
@@ -24,14 +25,30 @@ export function LocalVaultPanel() {
 
   const busy = state.phase === "busy";
   const generation = session.viewGeneration;
+  const statusElement = useRef<HTMLParagraphElement>(null);
+  const lastFocusedElement = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const previous = lastFocusedElement.current;
+    if (previous === null) return;
+    const removed = !previous.isConnected;
+    if (removed) lastFocusedElement.current = null;
+    if ((removed || previous.matches(":disabled")) && !document.hidden && document.hasFocus()
+        && document.activeElement === document.body) {
+      statusElement.current?.focus();
+    }
+  }, [state.phase, generation]);
   return (
-    <main className="local-vault">
+    <main className="local-vault" onFocusCapture={(event) => {
+      if (event.target instanceof HTMLElement) lastFocusedElement.current = event.target;
+    }}>
       <header>
         <p className="eyebrow">KeyAtlas · synthetic local vault</p>
         <h1>저장해 두고, 연결까지 다시 찾기</h1>
         <p>서비스별 API 키·비밀번호를 보관하고, API 키는 연결된 도구까지 기록합니다. 가상 데이터로 로컬 저장과 복원을 확인하는 기능 화면입니다.</p>
         <p className="demo-warning"><strong>실제 비밀번호·API 키 입력 금지.</strong> 공개된 테스트 비밀번호를 사용하는 데모입니다. 암호화 흐름을 시험하지만 실제 비밀정보를 보호할 수 있는 제품은 아닙니다.</p>
         <a href="/">기존 합성 목록 화면</a>
+        {" · "}
+        <a href="/?view=discovery-inbox">합성 가입 흔적 검토 연습</a>
       </header>
 
       <section aria-labelledby="storage-heading">
@@ -42,7 +59,7 @@ export function LocalVaultPanel() {
           <button type="button" disabled={busy} onClick={() => { void session.open(); }}>저장된 합성 금고 열기</button>
           <button type="button" onClick={() => session.lock()}>잠그기 / 작업 취소</button>
         </div>
-        <p role="status" aria-live="polite" data-testid="vault-status" className="vault-status">
+        <p ref={statusElement} tabIndex={-1} role="status" aria-live="polite" data-testid="vault-status" className="vault-status">
           {state.phase === "locked" && "잠김 · 저장된 암호문은 그대로 두고 화면 내용을 비웠습니다."}
           {state.phase === "busy" && "처리 중 · 이 기기에서 암호화 또는 복호화하고 있습니다. 잠그면 화면과 연산을 중단하지만, 이미 시작된 암호문 저장은 완료될 수 있습니다."}
           {state.phase === "empty" && "저장된 합성 금고가 없습니다. ‘합성 금고 만들기’를 눌러 시작하세요."}
@@ -65,6 +82,7 @@ export function LocalVaultPanel() {
       />}
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}
+      {state.phase === "open" && <IdentityMapPanel key={`identity-map-${generation}`} embedded entries={state.entries} sourceLabel="열린 합성 금고의 표시 스냅샷" />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">
         <h2 id="local-explanation-heading">로컬 저장은 ‘이 브라우저 안 서랍’이에요</h2>

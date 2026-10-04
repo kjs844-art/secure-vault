@@ -17,10 +17,15 @@ React + TypeScript + Vite 기능 골격과 Rust/WASM 합성 로컬 금고입니�
 - 기존 데이터 덮어쓰기, 오류 시 자동 삭제, 자동 마이그레이션, 임시 저장 대체 없음
 - `/?view=synthetic-backup`: 합성 암호문 파일 준비, 명시적 확인 후 크기 제한 검증, 빈 저장소에만 복원
 - 백업 화면에도 5분/탭 숨김/페이지 이탈 자동 잠금 적용: 확인란·File 참조·다운로드 URL 및 늦은 결과 해제
+- `/?view=identity-map`: 합성 계정 → 발급처 → 사용처 탐색. 열린 금고에도 표시 projection만 연결
+- `/?view=discovery-inbox`: 고정 합성 가입 흔적의 수동 분류·필터·오탐 검토
+- `/?view=signup-mail-discovery`: 제한된 합성 메일 fixture의 범위 미리보기·명시 동의·후보 검토
 
-기존 `/` 화면은 메모리 전용입니다. 세 화면 모두 실제 AI 전송은 하지 않습니다.
+기존 `/` 화면은 메모리 전용입니다. 모든 화면에서 실제 AI 전송은 하지 않습니다.
 새로운 관계 목록은 기존 AI payload 변환기에 연결하지 않았습니다. 연결 이름과
 서비스명도 사적인 정보이므로 로컬 표시 전용이며 로그·분석으로 보내지 않습니다.
+메일 후보와 가입 흔적 화면은 실제 Gmail·금고·server 근거 저장에 연결하지 않았습니다.
+‘확인됨’은 검토 표시이며 실제 가입·계정 소유를 인증하지 않습니다.
 
 ## 절대 금지
 
@@ -105,10 +110,37 @@ readback 순서입니다. 기존·손상된 금고의 자동 삭제/덮어쓰기
 Worker의 표시 메타데이터 응답은 메인 스레드로 전달된 뒤 백업 코드에서 폐기되며,
 이 화면은 목록/키 원문/파일명을 상태로 보관하거나 표시하지 않습니다.
 
-통합 검사: 349 tests와 타입 검사·빌드 통과. 실제 브라우저의 File/DataTransfer를 통한
+2026-09-15 당시 통합 검사: 349 tests와 타입 검사·빌드 통과. 실제 브라우저의 File/DataTransfer를 통한
 별도 저장소 복원·재열기·기존 값 보존은 확인했습니다. 그러나 테스트 Chrome의
 디스크 다운로드가 `Download error`로 실패했으므로 **네이티브 파일 선택과 실제
-디스크 백업 왕복은 미검증**입니다. [검증 기록](../../docs/verification/2026-09-15-backup-session-integration.md)을 참고하세요.
+디스크 백업 왕복은 당시 미검증**입니다. [당시 검증 기록](../../docs/verification/2026-09-15-backup-session-integration.md)을 참고하세요.
+
+2026-10-03 cloud에서는 실제 Chromium 디스크 다운로드 → 새 테스트 profile의 자동화
+FileChooser → 빈 저장소 복원 → browser 재시작 후 byte equality를 확인했습니다.
+추가 등록한 v2 합성 archive도 현재 UI에서 왕복하고 기존 금고 덮어쓰기를 거부했습니다.
+OS 파일 dialog의 수동 조작·실제 사용자 profile·실제 비밀정보·복구/rollback 보증은 미검증입니다.
+현재 소스는 미커밋 overlay이며 [후속 browser 검증](../../docs/verification/mvp-integration/2026-10-03-cloud-lifecycle-qa.md)에 정확한 범위와 명령을 기록합니다.
+
+## cloud의 추가 브라우저 회귀
+
+앱 의존성/lockfile/CI를 바꾸지 않고 이미 설치된 Python Playwright와 system Chromium을
+사용하는 선택 검사입니다. 두 도구가 없는 환경에서는 별도 **NOT_RUN/BLOCKED**로 보고하며,
+이 검사를 일반 `npm test` 또는 기존 Node browser runner의 PASS로 세지 않습니다.
+
+```bash
+# apps/web, production build와 합성 WASM이 준비된 Linux cloud 환경
+python src/features/local-vault/verifyVaultLifecycleBrowser.py \
+  --dist dist --output /tmp/keyatlas-lifecycle-qa-fresh --mode quick
+# --mode contention / rotation-stage / disk-backup / runtime-failure / real-timing /
+# backup-real-timing / all 로 범위를 선택할 수 있습니다.
+```
+
+output 경로는 새로 만드는 전용 경로여야 합니다. runner는 build를 그 경로에 복사하고
+127.0.0.1에서만 제공하며, 자신이 만든 browser context/profile/server만 정리합니다.
+archive 상태는 정확한 합성 DB의 readonly transaction에서 크기·digest만 비교합니다.
+실제 시간 검사와 가속 시계 검사를 구분하며, 다중 탭 저장·충돌 후보 한도·백업 차단·
+취소·원본 보존·초점과 실제 파일 왕복을 검사합니다. 산출물/profile/합성 백업은 Git에 넣지 않습니다.
+현재 Node runner는 cloud browser runtime 부족으로 BLOCKED이며 이 선택 검사로 승격하지 않습니다.
 
 ## 로컬 도구 동작 확인
 

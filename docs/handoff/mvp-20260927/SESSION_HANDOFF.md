@@ -1,5 +1,25 @@
 # 세션 인계 — 2026-09-27
 
+## 최신 cloud 후속 — 2026-10-04 KST
+
+현재 cloud checkout은 `codex/firstvibe-cloud-catalog-client-fix-20261003`, HEAD는
+`afbc0fbc4dd41669e468d8658965ef8f5f10ee7d`다. 수정은 미커밋 overlay이며
+commit/push/PR/main merge·실제 auth/DB/Gmail/Secret·배포는 실행하지 않았다.
+`REAL_SECRET_GATE=CLOSED`. 로컬 readiness의 미푸시 9개 파일은 NOT_RECEIVED다.
+
+기존 PR #22/#23 client/HTTP QA, #24/#26/C06 화면을 선택 재사용한 후속이 있다.
+이번에는 #5 AppShell/tokens를 재사용해 여섯 합성 화면의 제목·메뉴·본문 바로가기를
+연결했고, 320px file input 넘침과 C06 native bfcache 복귀 시 후보/동의 잔존을 보완했다.
+최신 웹 1,858·셸 24·C06 native cache 5·금고 lifecycle 19 등 해당 합성 검사가 통과했다.
+Rust 전체 FAIL/101·native Windows/실제 연결·독립 보안/실환경 검증의 한계는 유지한다.
+
+현재 기준은 [10/4 검증](../../verification/mvp-integration/2026-10-04-cloud-shell-qa.md)과
+[현재 manifest](../../verification/mvp-integration/2026-10-04-cloud-shell-source-manifest.json),
+[후속 배정/복사 prompt](NEXT_ASSIGNMENTS_2026-10-04.md),
+[T1 기준·artifact 계획](T1_RELEASE_BASELINE_AND_ARTIFACT_PLAN_2026-10-04.md)을 따른다.
+HEAD만으로 같은 source가 아니며 10/3 ZIP/manifest는 당시 이력이다. 다른 AI에게 실제로
+전송하거나 새 세션을 생성하지 않았다. 아래 날짜별 내용은 보존한 과거 체크포인트다.
+
 ## 최신: 기존 작업에서 개발 재개 / 혜택 이력 (2026-09-30)
 
 - 사용자가 기존 작업 `01a07f4f-3a43-7890-bf89-ed2bf7339f76`으로 돌아와 미완성 변경을

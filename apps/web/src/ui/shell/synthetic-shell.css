@@ -1,0 +1,75 @@
+.synthetic-app-shell {
+  color-scheme: light;
+}
+
+.synthetic-app-shell .ka-shell__header {
+  margin-bottom: 0;
+  border-radius: 0;
+}
+
+.synthetic-app-shell .ka-shell__brand a,
+.synthetic-view-links a {
+  color: var(--ka-color-text);
+}
+
+.synthetic-app-shell .ka-shell__brand a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* Grid items must be allowed to shrink below a native file input's width. */
+.synthetic-app-shell .ka-shell__main input[type="file"] {
+  min-width: 0;
+  width: 100%;
+}
+
+.synthetic-view-links {
+  display: grid;
+  gap: var(--ka-space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.synthetic-view-links a {
+  display: flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--ka-space-sm) var(--ka-space-md);
+  border: 1px solid var(--ka-color-border);
+  border-radius: var(--ka-radius-sm);
+  background: var(--ka-color-surface);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.synthetic-view-links a[aria-current="page"] {
+  border-color: var(--ka-color-accent);
+  font-weight: var(--ka-font-weight-strong);
+}
+
+.synthetic-app-shell .ka-shell__brand a:focus-visible,
+.synthetic-view-links a:focus-visible,
+.synthetic-skip-link:focus-visible {
+  outline: 3px solid var(--ka-color-focus-ring);
+  outline-offset: 3px;
+}
+
+.synthetic-skip-link {
+  position: fixed;
+  top: var(--ka-space-md);
+  left: var(--ka-space-md);
+  z-index: 1000;
+  padding: var(--ka-space-md) var(--ka-space-lg);
+  transform: translateY(-200%);
+  border: 1px solid var(--ka-color-focus-ring);
+  border-radius: var(--ka-radius-sm);
+  background: var(--ka-color-surface);
+  color: var(--ka-color-text);
+}
+
+.synthetic-skip-link:focus {
+  transform: none;
+}

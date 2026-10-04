@@ -10,6 +10,9 @@ const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0 }));
 vi.mock("react", async (original) => ({
   ...await original<typeof import("react")>(),
   useId: () => "stage-unit",
+  // Focus/lifecycle effects are covered by the actual Chromium regression;
+  // this harness deliberately exercises event callbacks without a DOM.
+  useEffect: vi.fn(),
   useState<T,>(initial: T | (() => T)) {
     const slot = hooks.cursor++;
     if (slot >= hooks.values.length) hooks.values.push(typeof initial === "function" ? (initial as () => T)() : initial);

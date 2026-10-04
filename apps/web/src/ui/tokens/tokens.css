@@ -1,0 +1,97 @@
+/*
+ * Mirrors src/ui/tokens/tokens.ts. Edit tokens.ts first, then update this
+ * file; tokens.test.ts fails when the two disagree.
+ */
+
+:root {
+  color-scheme: light;
+  --ka-space-xs: 4px;
+  --ka-space-sm: 8px;
+  --ka-space-md: 12px;
+  --ka-space-lg: 16px;
+  --ka-space-xl: 24px;
+  --ka-space-xxl: 40px;
+  --ka-radius-sm: 6px;
+  --ka-radius-md: 12px;
+  --ka-radius-lg: 16px;
+  --ka-radius-pill: 999px;
+  --ka-font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  --ka-font-family-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "D2Coding", monospace;
+  --ka-font-size-sm: 0.875rem;
+  --ka-font-size-md: 1rem;
+  --ka-font-size-lg: 1.25rem;
+  --ka-font-size-xl: 1.75rem;
+  --ka-font-weight-regular: 400;
+  --ka-font-weight-strong: 700;
+  --ka-font-line-height: 1.6;
+  --ka-color-canvas: #f4f6f8;
+  --ka-color-surface: #ffffff;
+  --ka-color-surface-sunken: #eef2f5;
+  --ka-color-border: #dce2e8;
+  --ka-color-border-strong: #768593;
+  --ka-color-text: #17202a;
+  --ka-color-text-muted: #496273;
+  --ka-color-accent: #1d5fa8;
+  --ka-color-accent-text: #ffffff;
+  --ka-color-focus-ring: #1d5fa8;
+  --ka-color-neutral-bg: #eef2f5;
+  --ka-color-neutral-text: #33434f;
+  --ka-color-info-bg: #e3eefb;
+  --ka-color-info-text: #174f8c;
+  --ka-color-success-bg: #e2f4e8;
+  --ka-color-success-text: #1c5f35;
+  --ka-color-warning-bg: #fdf0d8;
+  --ka-color-warning-text: #7a4a00;
+  --ka-color-danger-bg: #fbe4e4;
+  --ka-color-danger-text: #9b1c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ka-color-canvas: #0f151b;
+    --ka-color-surface: #17202a;
+    --ka-color-surface-sunken: #121a22;
+    --ka-color-border: #2c3945;
+    --ka-color-border-strong: #5c6d7b;
+    --ka-color-text: #e8edf1;
+    --ka-color-text-muted: #a5b4c0;
+    --ka-color-accent: #7fb2ee;
+    --ka-color-accent-text: #0f151b;
+    --ka-color-focus-ring: #7fb2ee;
+    --ka-color-neutral-bg: #24303b;
+    --ka-color-neutral-text: #d3dce3;
+    --ka-color-info-bg: #15304d;
+    --ka-color-info-text: #a9cdf5;
+    --ka-color-success-bg: #143322;
+    --ka-color-success-text: #9ad8ae;
+    --ka-color-warning-bg: #3a2a0c;
+    --ka-color-warning-text: #f2c879;
+    --ka-color-danger-bg: #3f1717;
+    --ka-color-danger-text: #f3a9a9;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ka-color-canvas: #0f151b;
+  --ka-color-surface: #17202a;
+  --ka-color-surface-sunken: #121a22;
+  --ka-color-border: #2c3945;
+  --ka-color-border-strong: #5c6d7b;
+  --ka-color-text: #e8edf1;
+  --ka-color-text-muted: #a5b4c0;
+  --ka-color-accent: #7fb2ee;
+  --ka-color-accent-text: #0f151b;
+  --ka-color-focus-ring: #7fb2ee;
+  --ka-color-neutral-bg: #24303b;
+  --ka-color-neutral-text: #d3dce3;
+  --ka-color-info-bg: #15304d;
+  --ka-color-info-text: #a9cdf5;
+  --ka-color-success-bg: #143322;
+  --ka-color-success-text: #9ad8ae;
+  --ka-color-warning-bg: #3a2a0c;
+  --ka-color-warning-text: #f2c879;
+  --ka-color-danger-bg: #3f1717;
+  --ka-color-danger-text: #f3a9a9;
+}

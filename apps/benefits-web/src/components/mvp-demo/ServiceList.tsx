@@ -115,6 +115,8 @@ function ServiceBlock({
                 font: "inherit",
                 fontWeight: 700,
                 cursor: "pointer",
+                minWidth: "44px",
+                minHeight: "44px",
                 padding: "0.15rem 0.25rem",
               }}
             >
