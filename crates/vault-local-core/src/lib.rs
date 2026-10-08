@@ -27,10 +27,14 @@
 mod catalog;
 mod codec;
 mod connection_edit;
+mod consent;
+mod consent_synthetic;
 mod credential_commands;
 mod credential_history;
 mod error;
 mod ids;
+mod login_method;
+mod login_method_synthetic;
 mod model;
 mod persistence;
 mod record;
@@ -100,5 +104,11 @@ pub use synthetic_password::{
 pub(crate) use record::{SyntheticFutureVersion, open_synthetic_future_version_v1};
 
 #[cfg(test)]
+#[path = "consent_tests.rs"]
+mod consent_tests;
+#[cfg(test)]
 #[path = "future_version_tests.rs"]
 mod future_version_tests;
+#[cfg(test)]
+#[path = "login_method_tests.rs"]
+mod login_method_tests;
