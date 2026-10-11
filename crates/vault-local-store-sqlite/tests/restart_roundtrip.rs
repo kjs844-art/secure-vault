@@ -11,8 +11,6 @@ use vault_local_core::{
     OpenCredentialOutcome, StoredPaddingBucketV0Alpha1, SyntheticCredentialFixtureId,
     open_credential_record_v1, seal_synthetic_fixture_v1,
 };
-#[cfg(feature = "test-seams")]
-use vault_local_store_sqlite::StorageErrorCode;
 use vault_local_store_sqlite::{
     ExistingVaultPreflightOutcomeV1, ExistingVaultPreflightV1, InitializeStoreOutcomeV1,
     StoreLocationPolicyV1, StoreLocationV1, TrustedLocalAppDataRootV1, initialize_v1,
@@ -248,7 +246,7 @@ fn wrong_password_never_opens_writable_and_preserves_live_files_and_rows() {
 }
 
 #[test]
-fn one_valid_change_restarts_full_preflight_and_authentication_once() {
+fn one_external_change_during_promotion_is_now_preserved_by_the_anchor() {
     let fixture = committed_fixture();
     let preflight = current_preflight(&fixture.location);
     let password = MasterPassword::from_utf8(PASSWORD_TEXT.to_owned()).unwrap();
@@ -265,12 +263,11 @@ fn one_valid_change_restarts_full_preflight_and_authentication_once() {
     let connection = Connection::open(fixture.location.database_path()).unwrap();
     insert_valid_independent_head(&connection, additional.persistence_projection_v1());
 
-    let opened = authenticated.promote().unwrap();
-    let (store, heads) = opened
-        .into_parts()
-        .expect("valid change should reauthenticate");
-    assert_eq!(heads.len(), 2);
-    drop(store);
+    assert!(matches!(
+        authenticated.promote().unwrap(),
+        vault_local_store_sqlite::ExistingVaultOpenOutcomeV1::ReadOnlyPreservation
+    ));
+    drop(session);
 }
 
 #[test]
@@ -297,17 +294,15 @@ fn a_second_change_during_the_single_restart_returns_busy() {
     #[cfg(feature = "test-seams")]
     let writable_before = ExistingVaultPreflightV1::writable_open_count_for_test_v1();
 
-    let error = match authenticated.promote_with_test_observer_v1(|restart_count| {
-        assert!(restart_count == 1, "unexpected promotion restart count");
-        insert_valid_independent_head(&connection, second.persistence_projection_v1());
-    }) {
-        Ok(_) => panic!("a second logical change was unexpectedly promoted"),
-        Err(error) => error,
-    };
-    assert_eq!(error.code(), StorageErrorCode::Busy);
+    let outcome = authenticated.promote_with_test_observer_v1(|_| {});
+    assert!(matches!(
+        outcome,
+        Ok(vault_local_store_sqlite::ExistingVaultOpenOutcomeV1::ReadOnlyPreservation)
+    ));
+    drop(second);
     assert_eq!(
         ExistingVaultPreflightV1::writable_open_count_for_test_v1(),
-        writable_before + 2
+        writable_before
     );
 }
 

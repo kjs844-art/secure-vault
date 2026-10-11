@@ -284,8 +284,17 @@ fn initialize_zero_byte(
     }
 
     drop(ownership);
+    let database_path = location.database_path().to_path_buf();
+    let anchor_path = crate::anchor::anchor_path(&database_path);
+    let mut gate = crate::preflight_query::PreflightQueryGate::from_hardened_connection(
+        connection,
+        &database_path,
+    )?;
+    let digest = gate.validate_and_digest()?;
+    let connection = gate.into_connection();
+    crate::anchor::create_with_confirmed_entry(&anchor_path, &digest)?;
     Ok(InitializeStoreOutcomeV1::Created(
-        SyntheticWritableStoreV1::from_initialized(connection, lock),
+        SyntheticWritableStoreV1::from_initialized(connection, lock, database_path, anchor_path),
     ))
 }
 

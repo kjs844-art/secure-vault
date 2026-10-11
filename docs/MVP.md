@@ -24,7 +24,7 @@ OpenAI, Claude, Manus, Grok, Meta, Supabase 등 여러 개발·AI 서비스를 �
 
 **실제 비밀번호, API 키, Secret, 복구 코드 또는 사용자 데이터를 입력하거나 가져오는 것은 금지합니다.**
 
-실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합, Web/Android UI, 지원되는 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 탐지하지 못합니다.
+실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합, Web/Android UI, 지원되는 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS는 정상 API의 stale writer를, sidecar anchor ledger는 유효한 과거 DB/WAL 전체 복원·canonical head rollback·완전한 row 누락을 각각 다룹니다. anchor 파일 자체의 운영 정책(최대 레코드 수·백업·훈련 시나리오)은 아직 검토 중입니다.
 
 실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 

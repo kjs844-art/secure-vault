@@ -22,6 +22,7 @@
 - DB를 닫고 다시 연 뒤 현재 head 관계를 인증·복원하는 재시작 흐름과 wrong-password 무쓰기 검증
 - future schema/wire의 upgrade-required 보존, current 손상의 store-wide 읽기 전용 보존, 저장 파일 합성 marker scan
 - transaction 전·후 process 종료 원자성 및 secret-bearing API compile-fail 경계
+- 과거 백업 복원·row 누락을 잡는 sidecar rollback/누락 anchor ledger와 crash tentative 회복
 
 다음 기능은 **아직 구현되지 않았습니다**: 실제 자격 증명 입력·가져오기, 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Web/Android UI, 결제, 앱스토어 출시, plugin/MCP 실행, 지원되는 backup/export와 실제 Secret 지원.
 
@@ -95,6 +96,7 @@ pwsh -NoProfile -File .\tests\verification\verify-fixture-isolation.Tests.ps1
 - [합성 자격 증명 로컬 코어 검증 기록](docs/verification/synthetic-credential-local-core.md)
 - [암호문 SQLite 로컬 저장소](crates/vault-local-store-sqlite/README.md)
 - [암호문 SQLite 로컬 저장소 검증 기록](docs/verification/ciphertext-sqlite-local-store.md)
+- [rollback·누락 anchor 저장 경계 검증 기록](docs/verification/2026-10-12-rollback-anchor.md)
 
 ## 개발 상태
 
