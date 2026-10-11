@@ -84,6 +84,12 @@ struct RetainedPreOpenFile {
     identity: UnixFileIdentity,
 }
 
+impl RetainedPreOpenFile {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 #[cfg(unix)]
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct UnixFileIdentity {
@@ -447,6 +453,23 @@ impl PreflightQueryGate {
             pre_open_files,
         })
     }
+    pub(crate) fn from_hardened_connection(
+        connection: Connection,
+        database_path: &Path,
+    ) -> Result<Self, StorageError> {
+        let size_limits = StorageSizeLimits::production();
+        let pre_open_files = Box::new(PreOpenFilesSnapshot::capture(
+            database_path,
+            size_limits,
+            true,
+        )?);
+        Ok(Self {
+            connection,
+            limits: ScanLimits::production(),
+            observer: PreflightObserver::active(),
+            pre_open_files,
+        })
+    }
 
     pub(crate) fn begin_immediate(&self) -> Result<(), StorageError> {
         self.connection
@@ -460,6 +483,9 @@ impl PreflightQueryGate {
             .map_err(|_| StorageError::new(StorageErrorCode::Io))
     }
 
+    pub(crate) fn database_path(&self) -> &Path {
+        self.pre_open_files.main.path()
+    }
     pub(crate) fn into_connection(self) -> Connection {
         self.connection
     }

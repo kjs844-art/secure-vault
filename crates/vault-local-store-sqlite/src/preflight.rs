@@ -15,6 +15,7 @@ use vault_local_core::{
     StoredPaddingBucketV0Alpha1,
 };
 
+use crate::anchor;
 use crate::preflight_query::PreflightQueryGate;
 use crate::rows::AuthenticatedRevisionNodeV1;
 use crate::schema_contract::{self, APPLICATION_ID, STORAGE_SCHEMA_VERSION};
@@ -219,6 +220,17 @@ impl ExistingVaultPreflightV1 {
             Ok(digest) if digest == self.logical_digest => {}
             _ => return Ok(PreflightAuthenticationOutcomeV1::ReadOnlyPreservation),
         }
+        match anchor::classify(
+            &anchor::load(self.gate.database_path())?,
+            &self.logical_digest,
+        ) {
+            anchor::AnchorJudgment::Bootstrap
+            | anchor::AnchorJudgment::Current
+            | anchor::AnchorJudgment::ConfirmTentative => {}
+            anchor::AnchorJudgment::Rollback | anchor::AnchorJudgment::Unknown => {
+                return Ok(PreflightAuthenticationOutcomeV1::ReadOnlyPreservation);
+            }
+        }
 
         Ok(PreflightAuthenticationOutcomeV1::Current(
             AuthenticatedVaultPreflightV1 {
@@ -283,8 +295,15 @@ impl AuthenticatedVaultPreflightV1<'_> {
                     ..
                 } if observed_digest == logical_digest => {
                     gate.commit_immediate()?;
+                    let anchor_path = anchor::anchor_path(&database_path);
+                    anchor::adopt_for_promotion(&anchor_path, &observed_digest)?;
                     let connection = gate.into_connection();
-                    let store = SyntheticWritableStoreV1::from_initialized(connection, lock);
+                    let store = SyntheticWritableStoreV1::from_initialized(
+                        connection,
+                        lock,
+                        database_path,
+                        anchor_path,
+                    );
                     return Ok(ExistingVaultOpenOutcomeV1::opened(
                         store,
                         self.current_heads,

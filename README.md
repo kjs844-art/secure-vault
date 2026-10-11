@@ -23,7 +23,7 @@
 - future schema/wire의 upgrade-required 보존, current 손상의 store-wide 읽기 전용 보존, 저장 파일 합성 marker scan
 - transaction 전·후 process 종료 원자성 및 secret-bearing API compile-fail 경계
 - 합성 Web IndexedDB의 원자적 CAS와 최대 8개 암호문 충돌 후보 보존(outbox). 충돌 후보는 아직 화면에서 조회·해결할 수 없습니다.
-
+- 과거 백업 복원·row 누락을 잡는 sidecar rollback/누락 anchor ledger와 crash tentative 회복
 다음 기능은 **아직 구현되지 않았습니다**: 실제 자격 증명 입력·가져오기와 실제 Secret 검색, 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화, Android UI, 운영용 Web 인증·잠금 해제, 결제, 앱스토어 출시, plugin/MCP 실행, 지원되는 실사용 backup/export와 실제 Secret 지원. React Web에는 합성 데이터 전용 로컬 금고·메모리 검색·등록·연결 편집·백업 연습 화면이 연결되어 있지만, 이를 실사용 비밀번호 관리자로 해석하면 안 됩니다.
 
 실제 자격 증명을 다루려면 rollback/누락 탐지 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트, backup/export 복구 훈련을 모두 완료해야 합니다. 이 게이트들이 끝나기 전에는 실제 비밀번호나 API 키를 이 알파에 입력하면 안 됩니다.
@@ -101,6 +101,7 @@ Secret 패턴 검사 통과는 정확히 제외된 `.git`·`target`·`node_modul
 - [합성 자격 증명 로컬 코어 검증 기록](docs/verification/synthetic-credential-local-core.md)
 - [암호문 SQLite 로컬 저장소](crates/vault-local-store-sqlite/README.md)
 - [암호문 SQLite 로컬 저장소 검증 기록](docs/verification/ciphertext-sqlite-local-store.md)
+- [rollback·누락 anchor 저장 경계 검증 기록](docs/verification/2026-10-12-rollback-anchor.md)
 
 ## 개발 상태
 

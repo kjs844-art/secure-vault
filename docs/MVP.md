@@ -73,7 +73,7 @@ Google·카카오·네이버 계정 같은 로그인 수단, 가입한 서비스
 
 [합성 등록 저장 경로 증거](verification/2026-09-15-synthetic-registration-storage.md)는 v1/v2 백업과 실제 WASM/Node 세션 재열기를 포함합니다. 후속 [등록 화면·issuer 검색 증거](verification/2026-09-15-synthetic-registration-ui.md)는 선택형 폼, 실제 Comet의 0/1/3 연결 등록과 순서 보존, 검색·잠금·재열기·새로고침·탭 전환 검사를 포함합니다. 임의 자격 증명 등록이나 실제 모바일 검증은 아닙니다.
 
-실제 자격 증명 입력·가져오기, 자유 입력 Password 웹 등록, 제품용 검색, optional 연결의 실제 provider 확인을 포함한 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS와 합성 history는 정상 API의 stale writer 및 caller가 제공한 체인을 다룰 뿐, 유효한 과거 DB/WAL 전체 복원·canonical latest head rollback·완전한 row 누락을 탐지하지 못합니다. 등록의 candidate 사전 인증과 conflict outbox 보존은 구현했지만 실제 브라우저 멀티탭 증거는 별도입니다. 닫힌 Password fixture가 archive와 UI에 존재할 수 있다는 것은 사용자 비밀번호 입력·복사·회전 지원을 의미하지 않습니다.
+실제 자격 증명 입력·가져오기, 자유 입력 Password 웹 등록, 제품용 검색, optional 연결의 실제 provider 확인을 포함한 키 회전 workflow, recovery Key Slot, 기기 폐기·철회, 동기화/checkpoint, Android 통합/UI, 지원되는 실제 데이터용 backup/export, 결제, 스토어 출시, plugin/MCP 실행과 실제 Secret 지원은 아직 구현되지 않았습니다. 현재 CAS와 합성 history는 정상 API의 stale writer 및 caller가 제공한 체인을, sidecar anchor ledger는 유효한 과거 DB/WAL 전체 복원·canonical latest head rollback·완전한 row 누락을 각각 다룹니다. anchor 파일 자체의 운영 정책(최대 레코드 수·백업·훈련 시나리오)은 아직 검토 중입니다. 등록의 candidate 사전 인증과 conflict outbox 보존은 구현했지만 실제 브라우저 멀티탭 증거는 별도입니다. 닫힌 Password fixture가 archive와 UI에 존재할 수 있다는 것은 사용자 비밀번호 입력·복사·회전 지원을 의미하지 않습니다.
 
 실제 Secret gate는 rollback/누락 anchor, recovery Key Slot, hardware-backed 기기 키·생체 인증 흐름, Android 통합, sync/checkpoint, 독립 암호 검토, 침투 테스트와 backup/export 복구 훈련이 모두 끝날 때까지 닫혀 있습니다.
 
