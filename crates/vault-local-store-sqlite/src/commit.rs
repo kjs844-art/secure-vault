@@ -5,6 +5,7 @@ use vault_crypto::{
 };
 use vault_local_core::{CredentialCommitPersistenceProjectionV1, StoredPaddingBucketV0Alpha1};
 
+use crate::anchor;
 use crate::{StorageError, StorageErrorCode, SyntheticWritableStoreV1};
 
 #[cfg(test)]
@@ -132,6 +133,11 @@ impl SyntheticWritableStoreV1 {
                     self.preservation_latched = true;
                     return Err(StorageError::new(StorageErrorCode::Io));
                 }
+                let committed_digest = self.digest_after_commit()?;
+                if let Err(error) = anchor::append_confirmed(&self.anchor_path, &committed_digest) {
+                    self.preservation_latched = true;
+                    return Err(error);
+                }
                 #[cfg(test)]
                 observe_transaction_boundary(candidate, &result, false);
                 Ok(result.outcome)
@@ -146,6 +152,12 @@ impl SyntheticWritableStoreV1 {
                 Err(StorageError::new(StorageErrorCode::InvariantViolation))
             }
         }
+    }
+
+    fn digest_after_commit(&self) -> Result<[u8; 32], StorageError> {
+        let mut gate =
+            crate::preflight_query::PreflightQueryGate::open_read_only(&self.database_path)?;
+        gate.validate_and_digest()
     }
 }
 

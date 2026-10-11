@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use rusqlite::Connection;
 use vault_local_core::OwnedRehydratedCredentialV1;
 
@@ -8,16 +10,25 @@ pub struct SyntheticWritableStoreV1 {
     pub(crate) connection: Connection,
     #[allow(dead_code, reason = "the owned guard enforces the store lock lifetime")]
     pub(crate) lock: StoreLockV1,
+    pub(crate) database_path: PathBuf,
+    pub(crate) anchor_path: PathBuf,
     pub(crate) preservation_latched: bool,
     #[cfg(test)]
     pub(crate) sql_access_count: usize,
 }
 
 impl SyntheticWritableStoreV1 {
-    pub(crate) fn from_initialized(connection: Connection, lock: StoreLockV1) -> Self {
+    pub(crate) fn from_initialized(
+        connection: Connection,
+        lock: StoreLockV1,
+        database_path: PathBuf,
+        anchor_path: PathBuf,
+    ) -> Self {
         Self {
             connection,
             lock,
+            database_path,
+            anchor_path,
             preservation_latched: false,
             #[cfg(test)]
             sql_access_count: 0,
