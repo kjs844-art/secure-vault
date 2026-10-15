@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { IdentityMapPanel } from "./features/identity-map/IdentityMapPanel";
+import { DiscoveryInboxPanel } from "./features/discovery-inbox/DiscoveryInboxPanel";
 import { LocalVaultPanel } from "./features/local-vault/LocalVaultPanel";
 import { SyntheticBackupPanel } from "./features/local-vault/SyntheticBackupPanel";
 
@@ -17,6 +18,7 @@ createRoot(rootElement).render(
   <StrictMode>
     {view === "local-vault" ? <LocalVaultPanel />
       : view === "synthetic-backup" ? <SyntheticBackupPanel />
-      : view === "identity-map" ? <IdentityMapPanel /> : <App />}
+      : view === "identity-map" ? <IdentityMapPanel />
+      : view === "discovery-inbox" ? <DiscoveryInboxPanel /> : <App />}
   </StrictMode>,
 );

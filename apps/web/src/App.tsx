@@ -38,6 +38,7 @@ export function App() {
         <p>Rust/WASM으로 만든 합성 암호문을 브라우저에 저장하고, 다시 열어 연결 관계를 확인합니다.</p>
         <p><a href="/?view=local-vault">로컬 합성 금고 열기 →</a></p>
         <p><a href="/?view=identity-map">Identity Map 3단계 탐색 →</a></p>
+        <p><a href="/?view=discovery-inbox">가입 흔적 Discovery Inbox →</a></p>
       </section>
 
       <section aria-labelledby="inventory-heading">

@@ -33,6 +33,8 @@ export function LocalVaultPanel() {
         <a href="/">기존 합성 목록 화면</a>
         {" · "}
         <a href="/?view=identity-map">Identity Map 3단계</a>
+        {" · "}
+        <a href="/?view=discovery-inbox">가입 흔적 Inbox</a>
       </header>
 
       <section aria-labelledby="storage-heading">
