@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@200;300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0b0d10; font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; }
+    a { color: #f0b429; text-decoration: none; }
+    a:hover { color: #ffc94d; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+    @keyframes plateSpin { to { transform: rotate(360deg); } }
+    @keyframes drift1 { 0%, 100% { transform: translate3d(0, 0, 130px); } 50% { transform: translate3d(10px, -22px, 130px); } }
+    @keyframes drift2 { 0%, 100% { transform: translate3d(0, 0, 190px); } 50% { transform: translate3d(-14px, 16px, 190px); } }
+    @keyframes drift3 { 0%, 100% { transform: translate3d(0, 0, 90px); } 50% { transform: translate3d(8px, 20px, 90px); } }
+    @keyframes breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+    @keyframes scrollNudge { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(6px); opacity: 1; } }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 960px; position: relative; background: #0b0d10; color: #e8eaef; overflow: hidden;">
+
+  <!-- 3D STAGE: 기울어진 궤도판 -->
+  <div style="position: absolute; left: 516px; top: 96px; width: 980px; height: 980px; perspective: 1500px;">
+    <div style="position: absolute; inset: 0; transform: rotateX(63deg); transform-style: preserve-3d;">
+      <svg width="980" height="980" viewBox="0 0 980 980" style="animation: plateSpin 88s linear infinite;">
+        <defs>
+          <filter id="nglow" x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation="4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <circle cx="490" cy="490" r="165" fill="none" stroke="#333b49" stroke-width="1"/>
+        <circle cx="490" cy="490" r="295" fill="none" stroke="#262d39" stroke-width="1"/>
+        <circle cx="490" cy="490" r="425" fill="none" stroke="#1c222c" stroke-width="1" stroke-dasharray="3 7"/>
+
+        <g stroke="#f0b429" stroke-width="1.2" opacity="0.34">
+          <path d="M490 490 655 490"/><path d="M490 490 573 633"/><path d="M490 490 408 633"/>
+          <path d="M490 490 325 490"/><path d="M490 490 408 347"/><path d="M490 490 573 347"/>
+        </g>
+        <g stroke="#7f8899" stroke-width="1" opacity="0.15">
+          <path d="M490 490 771 581"/><path d="M490 490 663 729"/><path d="M490 490 490 785"/>
+          <path d="M490 490 317 729"/><path d="M490 490 209 581"/><path d="M490 490 209 399"/>
+          <path d="M490 490 317 251"/><path d="M490 490 490 195"/><path d="M490 490 663 251"/>
+          <path d="M490 490 771 399"/>
+        </g>
+        <g stroke="#5a6373" stroke-width="1" opacity="0.06" stroke-dasharray="2 6">
+          <path d="M490 490 904 586"/><path d="M490 490 306 107"/><path d="M490 490 157 755"/>
+        </g>
+
+        <g fill="#f0b429" filter="url(#nglow)">
+          <circle cx="655" cy="490" r="7"/><circle cx="573" cy="633" r="7"/><circle cx="408" cy="633" r="7"/>
+          <circle cx="325" cy="490" r="7"/><circle cx="408" cy="347" r="7"/><circle cx="573" cy="347" r="7"/>
+        </g>
+        <g fill="#8a7338">
+          <circle cx="771" cy="581" r="5"/><circle cx="663" cy="729" r="5"/><circle cx="490" cy="785" r="5"/>
+          <circle cx="317" cy="729" r="5"/><circle cx="209" cy="581" r="5"/><circle cx="209" cy="399" r="5"/>
+          <circle cx="317" cy="251" r="5"/><circle cx="490" cy="195" r="5"/><circle cx="663" cy="251" r="5"/>
+          <circle cx="771" cy="399" r="5"/>
+        </g>
+        <g fill="none" stroke="#39414f" stroke-width="1.4">
+          <circle cx="904" cy="586" r="4"/><circle cx="822" cy="756" r="4"/><circle cx="674" cy="873" r="4"/>
+          <circle cx="489" cy="915" r="4"/><circle cx="305" cy="873" r="4"/><circle cx="157" cy="755" r="4"/>
+          <circle cx="76" cy="584" r="4"/><circle cx="76" cy="396" r="4"/><circle cx="158" cy="225" r="4"/>
+          <circle cx="306" cy="107" r="4"/><circle cx="490" cy="65" r="4"/><circle cx="674" cy="107" r="4"/>
+          <circle cx="822" cy="225" r="4"/><circle cx="904" cy="395" r="4"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 떠 있는 고아 노드: 궤도에 붙지 못한 것들 -->
+    <div style="position: absolute; left: 300px; top: 250px; width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #4a5263; animation: drift1 11s ease-in-out infinite;"></div>
+    <div style="position: absolute; left: 760px; top: 300px; width: 7px; height: 7px; border-radius: 50%; border: 1.4px solid #3f4754; animation: drift2 14s ease-in-out infinite;"></div>
+    <div style="position: absolute; left: 640px; top: 690px; width: 8px; height: 8px; border-radius: 50%; border: 1.4px solid #454e5c; animation: drift3 13s ease-in-out infinite;"></div>
+    <div style="position: absolute; left: 250px; top: 620px; width: 6px; height: 6px; border-radius: 50%; border: 1.4px solid #3a4250; animation: drift2 16s ease-in-out infinite;"></div>
+
+    <!-- 중심: 나 -->
+    <div style="position: absolute; left: 490px; top: 490px; transform: translate(-50%, -50%);">
+      <div style="width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(240,180,41,0.22) 0%, rgba(240,180,41,0.05) 45%, rgba(240,180,41,0) 70%);"></div>
+      <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(240,180,41,0.30);"></div>
+      <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 15px; height: 15px; border-radius: 50%; background: #f0b429; box-shadow: 0 0 24px 7px rgba(240,180,41,0.5);"></div>
+      <div class="mono" style="position: absolute; left: 50%; top: 50%; transform: translate(34px, -8px); font-size: 11px; letter-spacing: 1.6px; color: #f0b429;">ME</div>
+    </div>
+  </div>
+
+  <!-- 좌측 가독성 스크림 + 비네트 + 그레인 -->
+  <div style="position: absolute; inset: 0; background: linear-gradient(101deg, #0b0d10 0%, #0b0d10 30%, rgba(11,13,16,0.86) 44%, rgba(11,13,16,0.2) 62%, rgba(11,13,16,0) 72%); pointer-events: none;"></div>
+  <div style="position: absolute; inset: 0; background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 40%, rgba(11,13,16,0.75) 100%); pointer-events: none;"></div>
+  <svg style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.055; pointer-events: none; mix-blend-mode: overlay;">
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="3"/></filter>
+    <rect width="100%" height="100%" filter="url(#grain)"/>
+  </svg>
+
+  <!-- v0alpha1 경고 배너 -->
+  <div style="position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 0 40px; height: 38px; background: rgba(42,31,12,0.86); border-bottom: 1px solid #5c4413; color: #f0b429; font-size: 12.5px;">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M10 3.2 2.6 16.2h14.8L10 3.2Z"/><path d="M10 8v3.4"/><path d="M10 13.8h.01"/></svg>
+    <span style="font-weight: 600;">v0alpha1 · 실험</span>
+    <span style="color: #b5903a;">합성 데이터 전용입니다. 실제 비밀번호 · API 키 · 복구 키 · MCP 토큰을 입력하지 마세요.</span>
+  </div>
+
+  <!-- 내비게이션 -->
+  <div style="position: absolute; top: 38px; left: 0; right: 0; display: flex; align-items: center; height: 72px; padding: 0 40px;">
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <div style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #f0b429; border-radius: 6px; color: #f0b429;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 4 5v4.5c0 3.5 2.4 6.6 6 8 3.6-1.4 6-4.5 6-8V5l-6-2.5Z"/></svg>
+      </div>
+      <span class="mono" style="font-size: 12.5px; font-weight: 600; letter-spacing: 2.2px; color: #e8eaef;">SECURE VAULT</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 30px; margin-left: 56px; font-size: 13.5px; color: #8a92a2;">
+      <span>연결 지도</span><span>금고</span><span>보안 설계</span><span>가격</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+      <span style="font-size: 13.5px; color: #8a92a2;">로그인</span>
+      <button style="height: 36px; padding: 0 18px; background: transparent; border: 1px solid #f0b429; border-radius: 7px; color: #f0b429; font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;">무료로 시작</button>
+    </div>
+  </div>
+
+  <!-- 헤드라인 -->
+  <div style="position: absolute; left: 90px; top: 216px; width: 610px;">
+    <div class="mono" style="display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: 2.4px; color: #f0b429; margin-bottom: 26px;">
+      <span style="width: 26px; height: 1px; background: #f0b429; display: inline-block;"></span>
+      IDENTITY &amp; SECRETS · ZERO-KNOWLEDGE
+    </div>
+    <h1 style="margin: 0; font-size: 60px; line-height: 1.16; font-weight: 600; letter-spacing: -2.2px; color: #f4f6fa; text-wrap: pretty;">당신은 지금 몇 개의<br>사이트에 가입되어<br>있습니까?</h1>
+    <p style="margin: 30px 0 0; font-size: 16px; line-height: 1.82; color: #949cac; max-width: 540px; text-wrap: pretty;">구글 · 카카오 · 네이버로 로그인한 곳, 이메일로 가입한 곳, 발급받고 잊어버린 API 키. 흩어진 것들을 한 장의 지도로 모읍니다. 그리고 <b style="color: #c3c9d4; font-weight: 500;">서버는 그중 아무것도 읽지 못합니다.</b></p>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 40px;">
+      <button style="display: flex; align-items: center; gap: 9px; height: 52px; padding: 0 26px; background: #f0b429; border: none; border-radius: 8px; color: #1a1305; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;">
+        내 연결 지도 만들기
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4 6 6-6 6"/></svg>
+      </button>
+      <button style="height: 52px; padding: 0 24px; background: transparent; border: 1px solid #2c323e; border-radius: 8px; color: #c3c9d4; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer;">보안 설계 문서</button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 16px; margin-top: 26px; font-size: 12.5px; color: #5c6473;">
+      <span>클라이언트 암호화</span>
+      <span style="color: #2c323e;">·</span>
+      <span>서버는 암호문만 보관</span>
+      <span style="color: #2c323e;">·</span>
+      <span>오픈소스</span>
+    </div>
+  </div>
+
+  <!-- 범례: 그림을 읽는 법 -->
+  <div style="position: absolute; right: 40px; bottom: 40px; display: flex; flex-direction: column; gap: 11px; padding: 17px 19px; background: rgba(17,20,25,0.72); border: 1px solid #22262f; border-radius: 9px; backdrop-filter: blur(8px);">
+    <div class="mono" style="font-size: 10px; letter-spacing: 1.6px; color: #5c6473;">그림 읽는 법</div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="width: 9px; height: 9px; border-radius: 50%; background: #f0b429; box-shadow: 0 0 9px rgba(240,180,41,0.6); flex-shrink: 0;"></span>
+      <span style="font-size: 12.5px; color: #c3c9d4;">기억하고 관리 중</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="width: 9px; height: 9px; border-radius: 50%; background: #8a7338; flex-shrink: 0;"></span>
+      <span style="font-size: 12.5px; color: #949cac;">연결돼 있지만 방치됨</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #4a5263; flex-shrink: 0;"></span>
+      <span style="font-size: 12.5px; color: #6f7889;">존재조차 잊어버린 것</span>
+    </div>
+  </div>
+
+  <!-- 스크롤 힌트 -->
+  <div style="position: absolute; left: 90px; bottom: 44px; display: flex; align-items: center; gap: 11px; color: #5c6473;">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="animation: scrollNudge 2.4s ease-in-out infinite;"><path d="M10 4v12m0 0 4.5-4.5M10 16l-4.5-4.5"/></svg>
+    <span class="mono" style="font-size: 11px; letter-spacing: 1.6px;">SCROLL</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

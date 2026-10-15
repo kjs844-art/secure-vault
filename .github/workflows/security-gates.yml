@@ -52,6 +52,42 @@ jobs:
         shell: pwsh
         run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\check-repository-secrets.Tests.ps1
 
+      # The manifest tool has a cooperative elapsed budget. These runner-owned
+      # step limits are the hard process timeout if a managed OS call stalls.
+      - name: Exercise release artifact manifest regressions with PowerShell 7
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $testOutput = @(& pwsh -NoProfile -NonInteractive -File .\tests\verification\new-release-artifact-manifest.Tests.ps1 2>&1)
+          $testExit = $LASTEXITCODE
+          $testLines = @($testOutput | ForEach-Object { [string]$_ })
+          $testLines | ForEach-Object { Write-Output $_ }
+          if (($null -eq $testExit) -or ($testExit -ne 0)) {
+            if ($null -eq $testExit) { exit 1 }
+            exit $testExit
+          }
+          if (@($testLines | Where-Object { $_ -ceq 'RELEASE_MANIFEST_TESTS_PASSED=10' }).Count -ne 1) {
+            throw 'The PowerShell 7 release manifest tests did not emit exactly one success marker.'
+          }
+
+      - name: Exercise release artifact manifest regressions with Windows PowerShell 5.1
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $testOutput = @(& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\new-release-artifact-manifest.Tests.ps1 2>&1)
+          $testExit = $LASTEXITCODE
+          $testLines = @($testOutput | ForEach-Object { [string]$_ })
+          $testLines | ForEach-Object { Write-Output $_ }
+          if (($null -eq $testExit) -or ($testExit -ne 0)) {
+            if ($null -eq $testExit) { exit 1 }
+            exit $testExit
+          }
+          if (@($testLines | Where-Object { $_ -ceq 'RELEASE_MANIFEST_TESTS_PASSED=10' }).Count -ne 1) {
+            throw 'The Windows PowerShell 5.1 release manifest tests did not emit exactly one success marker.'
+          }
+
       - name: Ensure the default PowerShell Gallery registration
         shell: pwsh
         run: .\scripts\ensure-ci-psgallery.ps1
@@ -159,8 +195,18 @@ jobs:
         working-directory: apps/benefits-web
         run: npm run test:smoke
 
+      - name: Install locked landing dependencies without lifecycle scripts
+        shell: pwsh
+        working-directory: apps/landing
+        run: npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org
+
+      - name: Type-check and build the landing app
+        shell: pwsh
+        working-directory: apps/landing
+        run: npm run build
+
       # Generated bundles do not exist in a clean checkout. Scan them only
-      # after both app builds, while retaining the same closed boundary.
+      # after all app builds, while retaining the same closed boundary.
       - name: Re-scan repository and generated artifacts after both app builds
         shell: pwsh
         run: |

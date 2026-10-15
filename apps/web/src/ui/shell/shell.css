@@ -1,0 +1,94 @@
+/*
+ * Responsive app shell. Mobile first: one column, navigation above content.
+ * The breakpoint mirrors appShellWideMinWidthPx in AppShell.tsx.
+ */
+
+.ka-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--ka-color-canvas);
+  color: var(--ka-color-text);
+  font-family: var(--ka-font-family);
+  line-height: var(--ka-font-line-height);
+}
+
+.ka-shell__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ka-space-md);
+  padding: var(--ka-space-md) var(--ka-space-lg);
+  /* Line the header content up with the centred 1200px body. */
+  padding-inline: max(var(--ka-space-lg), calc((100% - 1200px) / 2 + var(--ka-space-lg)));
+  border-bottom: 1px solid var(--ka-color-border);
+  background: var(--ka-color-surface);
+}
+
+.ka-shell__brand {
+  min-width: 0;
+  font-weight: var(--ka-font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.ka-shell__header-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ka-space-sm);
+}
+
+.ka-shell__notice {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--ka-space-lg) var(--ka-space-lg) 0;
+  box-sizing: border-box;
+}
+
+.ka-shell__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ka-space-lg);
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--ka-space-lg);
+  box-sizing: border-box;
+}
+
+.ka-shell__nav,
+.ka-shell__main {
+  min-width: 0;
+}
+
+.ka-shell__main:focus {
+  outline: none;
+}
+
+.ka-shell__main:focus-visible {
+  outline: 2px solid var(--ka-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.ka-shell__footer {
+  padding: var(--ka-space-md) var(--ka-space-lg);
+  padding-inline: max(var(--ka-space-lg), calc((100% - 1200px) / 2 + var(--ka-space-lg)));
+  border-top: 1px solid var(--ka-color-border);
+  color: var(--ka-color-text-muted);
+  font-size: var(--ka-font-size-sm);
+}
+
+@media (min-width: 960px) {
+  .ka-shell--with-nav .ka-shell__body {
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ka-shell--with-nav .ka-shell__nav {
+    position: sticky;
+    top: var(--ka-space-lg);
+  }
+}
