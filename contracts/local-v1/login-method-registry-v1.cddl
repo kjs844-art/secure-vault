@@ -1,0 +1,24 @@
+login-method-registry-v1 = [
+  schema_version: 1,
+  accounts: [* account-login-record-v1]
+]
+
+account-login-record-v1 = [
+  account_id: bstr .size 16,
+  service_name: tstr,
+  account_identifier: tstr / null,
+  login_methods: [* login-method-v1],
+  notes: tstr / null
+]
+
+login-method-v1 = [
+  method_id: bstr .size 16,
+  method: 0..5,
+  provenance: 0..2,
+  recorded_at: utc-timestamp,
+  last_observed_at: utc-timestamp / null,
+  status: 0..2,
+  notes: tstr / null
+]
+
+utc-timestamp = tstr .size 20

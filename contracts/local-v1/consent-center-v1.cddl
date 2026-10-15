@@ -1,0 +1,37 @@
+consent-center-v1 = [
+  schema_version: 1,
+  consent_grants: [* consent-grant-v1],
+  subscriptions: [* subscription-v1]
+]
+
+consent-grant-v1 = [
+  consent_id: bstr .size 16,
+  subject: 0..2,
+  granted_at: utc-timestamp,
+  channel: 0..3,
+  policy_version: tstr,
+  notification_scope: [* tstr],
+  state: 0..1,
+  withdrawn_at: utc-timestamp / null,
+  evidence: evidence-v1,
+  notes: tstr / null
+]
+
+evidence-v1 = [
+  source: 0..2,
+  observed_at: utc-timestamp / null,
+  confidence: 0..2
+]
+
+subscription-v1 = [
+  subscription_id: bstr .size 16,
+  provider_name: tstr,
+  plan: 0..2,
+  status: 0..4,
+  started_at: utc-timestamp / null,
+  ended_at: utc-timestamp / null,
+  consent_refs: [* bstr .size 16],
+  notes: tstr / null
+]
+
+utc-timestamp = tstr .size 20
