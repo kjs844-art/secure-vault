@@ -1,6 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   SYNTHETIC_TOOL_QUERY_MAX_BYTES,
+  getSyntheticToolQueryUtf8Length,
+  isSyntheticToolQueryWithinLimit,
+  isSyntheticToolQueryWellFormed,
   type SyntheticToolFilterV1,
 } from "../../bridge/syntheticToolProtocol";
 import { LocalCatalogResults } from "./LocalCatalogSearch";
@@ -11,8 +14,25 @@ import type { SyntheticVaultSession } from "./SyntheticVaultSession";
 export function SyntheticToolPanel({ session }: { readonly session: SyntheticVaultSession }) {
   const [tools] = useState(() => new SyntheticVaultTools(session));
   const [query, setQuery] = useState("");
-  const state = useSyncExternalStore((listener) => tools.subscribe(listener), () => tools.state);
+  const state = useSyncExternalStore(
+    (listener) => tools.subscribe(listener),
+    () => tools.state,
+    () => tools.state,
+  );
   useEffect(() => tools.bindToSession(), [tools]);
+  const queryByteLength = getSyntheticToolQueryUtf8Length(query);
+  const queryOverLimit = !isSyntheticToolQueryWithinLimit(query);
+  // The input is length-bounded by the browser. Keep the UI aligned with the
+  // protocol so malformed UTF-16 is blocked before dispatch as well.
+  const queryMalformed = query.length <= SYNTHETIC_TOOL_QUERY_MAX_BYTES
+    && !isSyntheticToolQueryWellFormed(query);
+  const queryInvalid = queryOverLimit || queryMalformed;
+  const queryDescription = [
+    "local-tool-privacy",
+    "local-tool-query-count",
+    queryOverLimit ? "local-tool-query-limit" : null,
+    queryMalformed ? "local-tool-query-malformed" : null,
+  ].filter((id): id is string => id !== null).join(" ");
 
   const filter = (value: SyntheticToolFilterV1) => {
     void tools.executeTool({ op: "filter_catalog", filter: value });
@@ -24,13 +44,23 @@ export function SyntheticToolPanel({ session }: { readonly session: SyntheticVau
       키 원문 조회·복사, 외부 서비스 실행, 자동 등록 기능은 없습니다.</p>
     <form className="local-catalog-controls" onSubmit={(event) => {
       event.preventDefault();
+      if (queryInvalid) return;
       void tools.executeTool({ op: "search_catalog", query });
     }}>
       <label htmlFor="local-tool-query">로컬 도구 검색어</label>
       <input id="local-tool-query" type="search" value={query}
         maxLength={SYNTHETIC_TOOL_QUERY_MAX_BYTES} autoComplete="off" spellCheck={false}
-        aria-describedby="local-tool-privacy" onChange={(event) => setQuery(event.currentTarget.value)} />
-      <button type="submit">검색 도구 실행</button>
+        aria-invalid={queryInvalid}
+        aria-describedby={queryDescription}
+        onChange={(event) => setQuery(event.currentTarget.value)} />
+      <p id="local-tool-query-count">검색어 {queryByteLength}/{SYNTHETIC_TOOL_QUERY_MAX_BYTES} UTF-8 bytes</p>
+      {queryOverLimit && <p id="local-tool-query-limit" role="alert">
+        128 UTF-8 바이트 한도를 넘었습니다. 검색어를 줄여 주세요.
+      </p>}
+      {queryMalformed && <p id="local-tool-query-malformed" role="alert">
+        올바르지 않은 유니코드 문자가 있습니다. 검색어를 다시 입력해 주세요.
+      </p>}
+      <button type="submit" disabled={queryInvalid}>검색 도구 실행</button>
     </form>
     <div className="vault-actions" aria-label="로컬 분류 도구">
       <button type="button" onClick={() => filter("all")}>도구: 전체</button>

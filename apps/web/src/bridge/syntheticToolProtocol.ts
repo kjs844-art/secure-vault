@@ -33,7 +33,18 @@ export type ParsedSyntheticToolActionV1 =
 const encoder = new TextEncoder();
 const fail = (code: SyntheticToolErrorCodeV1): ParsedSyntheticToolActionV1 => Object.freeze({ ok: false, code });
 
-function wellFormed(value: string): boolean {
+/** Counts the same UTF-8 bytes used by the local tool protocol boundary. */
+export function getSyntheticToolQueryUtf8Length(query: string): number {
+  return encoder.encode(query).byteLength;
+}
+
+export function isSyntheticToolQueryWithinLimit(query: string): boolean {
+  return query.length <= SYNTHETIC_TOOL_QUERY_MAX_BYTES
+    && getSyntheticToolQueryUtf8Length(query) <= SYNTHETIC_TOOL_QUERY_MAX_BYTES;
+}
+
+/** Rejects isolated UTF-16 surrogates before TextEncoder can replace them. */
+export function isSyntheticToolQueryWellFormed(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code >= 0xd800 && code <= 0xdbff) {
@@ -74,8 +85,8 @@ export function parseSyntheticToolAction(input: unknown): ParsedSyntheticToolAct
       // Bound work before scanning or allocating. The protocol limit is UTF-8
       // bytes; UTF-16 length is only a cheap first rejection for long input.
       if (query.length > SYNTHETIC_TOOL_QUERY_MAX_BYTES) return fail("LIMIT_EXCEEDED");
-      if (!wellFormed(query)) return fail("INVALID_PAYLOAD");
-      if (encoder.encode(query).byteLength > SYNTHETIC_TOOL_QUERY_MAX_BYTES) return fail("LIMIT_EXCEEDED");
+      if (!isSyntheticToolQueryWellFormed(query)) return fail("INVALID_PAYLOAD");
+      if (!isSyntheticToolQueryWithinLimit(query)) return fail("LIMIT_EXCEEDED");
       return Object.freeze({ ok: true, action: Object.freeze({ op, query, maxResults }) });
     }
     const filter = fields.filter;

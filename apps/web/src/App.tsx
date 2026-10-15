@@ -74,16 +74,20 @@ export function App() {
       </section>
 
       <section aria-labelledby="ai-boundary-heading">
-        <h2 id="ai-boundary-heading">AI 전송 안전 경계</h2>
+        <h2 id="ai-boundary-heading">AI 데이터 미리보기</h2>
         <p>
-          AI에는 Secret, 계정, 메모, URL, 프로젝트명이 아니라 검토된 메타데이터
-          허용목록만 전달합니다.
+          현재 실제 AI 서비스에 연결하거나 데이터를 전송하지 않습니다. 아래 버튼은
+          합성 데모 데이터 중 허용목록에 포함된 항목만 화면에 미리 보여줍니다.
+        </p>
+        <p>
+          서비스명·환경·권한·날짜도 민감할 수 있습니다. 외부에 복사하거나 공유하기 전에
+          내용을 직접 확인하세요.
         </p>
         <button type="button" onClick={() => setShowAiPayload((value) => !value)}>
-          {showAiPayload ? "전송 데이터 숨기기" : "AI 전송 데이터 미리보기"}
+          {showAiPayload ? "미리보기 숨기기" : "허용목록 미리보기 보기"}
         </button>
         {showAiPayload ? (
-          <pre aria-label="AI에 전달 가능한 합성 메타데이터">
+          <pre aria-label="화면에만 표시되는 합성 허용목록 데이터">
             {JSON.stringify(aiSafeInventory, null, 2)}
           </pre>
         ) : null}
