@@ -19,6 +19,15 @@ Describe 'KeyAtlas security-gates workflow policy' {
         }
         $script:Scanner = Get-Content -Raw -LiteralPath $script:ScannerPath
 
+        $script:ReleaseManifestToolPath = Join-Path $script:RepositoryRoot 'scripts\new-release-artifact-manifest.ps1'
+        $script:ReleaseManifestTestPath = Join-Path $script:RepositoryRoot 'tests\verification\new-release-artifact-manifest.Tests.ps1'
+        if (-not (Test-Path -LiteralPath $script:ReleaseManifestToolPath -PathType Leaf)) {
+            throw 'The release manifest tool is missing.'
+        }
+        if (-not (Test-Path -LiteralPath $script:ReleaseManifestTestPath -PathType Leaf)) {
+            throw 'The release manifest regression is missing.'
+        }
+
         function Assert-Condition {
             param([bool]$Condition, [string]$Message)
             if (-not $Condition) { throw $Message }
@@ -133,6 +142,55 @@ Describe 'KeyAtlas security-gates workflow policy' {
             }
             Assert-Condition $rejected "An invalid benefits web workflow must be rejected: $Reason"
         }
+
+        function Get-WorkflowStepBlock {
+            param(
+                [Parameter(Mandatory = $true)][string]$Workflow,
+                [Parameter(Mandatory = $true)][string]$Name
+            )
+            $pattern = '(?ms)^      - name: ' + [regex]::Escape($Name) + '\r?\n(?<body>.*?)(?=^      - name: |\z)'
+            return @([regex]::Matches($Workflow, $pattern))
+        }
+
+        function Assert-ReleaseManifestStep {
+            param(
+                [Parameter(Mandatory = $true)][string]$Workflow,
+                [Parameter(Mandatory = $true)][string]$Name,
+                [Parameter(Mandatory = $true)][string]$EngineCommand,
+                [Parameter(Mandatory = $true)][string]$MarkerFailure
+            )
+            $matches = Get-WorkflowStepBlock -Workflow $Workflow -Name $Name
+            Assert-Condition ($matches.Count -eq 1) "Exactly one workflow step is required: $Name"
+            $block = $matches[0].Value
+            Assert-Condition (([regex]::Matches($block, '(?m)^        shell: pwsh\s*$')).Count -eq 1) "$Name must use the reviewed pwsh shell."
+            Assert-Condition (([regex]::Matches($block, '(?m)^        timeout-minutes: 10\s*$')).Count -eq 1) "$Name needs one runner-owned 10-minute timeout."
+            Assert-Condition (([regex]::Matches($block, '(?m)^        run: \|\s*$')).Count -eq 1) "$Name must use the fail-closed command block."
+            Assert-Condition ($block.Contains('$PSNativeCommandUseErrorActionPreference = $false')) "$Name must capture native exit codes explicitly."
+            Assert-Condition ($block.Contains($EngineCommand)) "$Name uses the wrong engine command."
+            Assert-Condition ($block.Contains('$testExit = $LASTEXITCODE')) "$Name must capture the engine exit code."
+            Assert-Condition ($block.Contains('if (($null -eq $testExit) -or ($testExit -ne 0))')) "$Name must fail on a null or nonzero exit code."
+            Assert-Condition ($block.Contains("`$_ -ceq 'RELEASE_MANIFEST_TESTS_PASSED=10'")) "$Name must require the exact success marker."
+            Assert-Condition ($block.Contains(').Count -ne 1)')) "$Name must reject a missing or duplicated success marker."
+            Assert-Condition ($block.Contains($MarkerFailure)) "$Name must retain its engine-specific marker failure."
+            return $block
+        }
+
+        function Assert-ReleaseManifestWorkflowPolicy {
+            param([Parameter(Mandatory = $true)][string]$Workflow)
+            $powerShell7Name = 'Exercise release artifact manifest regressions with PowerShell 7'
+            $windowsPowerShellName = 'Exercise release artifact manifest regressions with Windows PowerShell 5.1'
+            [void](Assert-ReleaseManifestStep -Workflow $Workflow -Name $powerShell7Name -EngineCommand '& pwsh -NoProfile -NonInteractive -File .\tests\verification\new-release-artifact-manifest.Tests.ps1 2>&1' -MarkerFailure 'The PowerShell 7 release manifest tests did not emit exactly one success marker.')
+            [void](Assert-ReleaseManifestStep -Workflow $Workflow -Name $windowsPowerShellName -EngineCommand '& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\new-release-artifact-manifest.Tests.ps1 2>&1' -MarkerFailure 'The Windows PowerShell 5.1 release manifest tests did not emit exactly one success marker.')
+            Assert-Condition (([regex]::Matches($Workflow, [regex]::Escape('.\tests\verification\new-release-artifact-manifest.Tests.ps1'))).Count -eq 2) 'The manifest regression path must occur exactly once per engine.'
+
+            $scanIndex = $Workflow.IndexOf('- name: Reject repository Secret material before dependency execution', [StringComparison]::Ordinal)
+            $scanner7Index = $Workflow.IndexOf('- name: Exercise Secret scanner regressions with PowerShell 7', [StringComparison]::Ordinal)
+            $scanner51Index = $Workflow.IndexOf('- name: Exercise Secret scanner regressions with Windows PowerShell 5.1', [StringComparison]::Ordinal)
+            $manifest7Index = $Workflow.IndexOf("- name: $powerShell7Name", [StringComparison]::Ordinal)
+            $manifest51Index = $Workflow.IndexOf("- name: $windowsPowerShellName", [StringComparison]::Ordinal)
+            $dependencyIndex = $Workflow.IndexOf('- name: Install pinned Pester for workflow policy checks', [StringComparison]::Ordinal)
+            Assert-Condition ($scanIndex -ge 0 -and $scanIndex -lt $scanner7Index -and $scanner7Index -lt $scanner51Index -and $scanner51Index -lt $manifest7Index -and $manifest7Index -lt $manifest51Index -and $manifest51Index -lt $dependencyIndex) 'The Secret-first scanner, manifest, and dependency order changed.'
+        }
     }
 
     It 'uses only safe unprivileged triggers and least permissions' {
@@ -229,6 +287,25 @@ Describe 'KeyAtlas security-gates workflow policy' {
         $without = $script:Workflow.Remove($prepare.Index, $prepare.Length)
         Assert-PSGalleryMutationRejected ($without.Insert($scan.Index, $prepare.Value))
         Assert-PSGalleryMutationRejected ($without.Insert($install.Index + $install.Length - $prepare.Length, $prepare.Value))
+    }
+
+    It 'runs release manifest regressions after the Secret gate with runner-owned timeouts' {
+        Assert-ReleaseManifestWorkflowPolicy $script:Workflow
+    }
+
+    It 'rejects weakened release manifest timeout, marker, engine, and order policy' {
+        $mutations = @(
+            $script:Workflow.Replace('        timeout-minutes: 10', '        timeout-minutes: 11'),
+            $script:Workflow.Replace('RELEASE_MANIFEST_TESTS_PASSED=10', 'RELEASE_MANIFEST_TESTS_PASSED=9'),
+            $script:Workflow.Replace('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\new-release-artifact-manifest.Tests.ps1', 'powershell.exe -NoProfile -NonInteractive -File .\tests\verification\new-release-artifact-manifest.Tests.ps1'),
+            $script:Workflow.Replace('- name: Exercise release artifact manifest regressions with PowerShell 7', '- name: Install pinned Pester for workflow policy checks').Replace('- name: Install pinned Pester for workflow policy checks', '- name: Exercise release artifact manifest regressions with PowerShell 7')
+        )
+        foreach ($mutation in $mutations) {
+            $rejected = $false
+            try { Assert-ReleaseManifestWorkflowPolicy $mutation }
+            catch { $rejected = $true }
+            Assert-Condition $rejected 'A weakened release manifest workflow policy must be rejected.'
+        }
     }
 
     It 'keeps the first gate independent of runner-provided scanners' {
