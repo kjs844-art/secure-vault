@@ -1,0 +1,11 @@
+error[E0277]: `CredentialCatalogProjectionV1` doesn't implement `Debug`
+ --> tests/ui/secret_traits/catalog_projection_debug.rs:6:21
+  |
+6 |     require_debug::<CredentialCatalogProjectionV1>();
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Debug` is not implemented for `CredentialCatalogProjectionV1`
+  |
+note: required by a bound in `require_debug`
+ --> tests/ui/secret_traits/catalog_projection_debug.rs:3:21
+  |
+3 | fn require_debug<T: std::fmt::Debug>() {}
+  |                     ^^^^^^^^^^^^^^^ required by this bound in `require_debug`

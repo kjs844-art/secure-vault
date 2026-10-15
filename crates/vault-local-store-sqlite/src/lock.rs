@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::{File, OpenOptions};
 use std::path::{Component, Path, PathBuf};
 
@@ -73,9 +73,10 @@ impl StoreLocationPolicyV1 {
             || relative_path.is_absolute()
             || path_is_network_like(relative_path)
             || path_is_disallowed(relative_path)
-            || relative_path
-                .components()
-                .any(|component| !matches!(component, Component::Normal(_)))
+            || relative_path.components().any(|component| match component {
+                Component::Normal(value) => windows_component_is_ambiguous(value),
+                _ => true,
+            })
         {
             return Err(StorageError::new(StorageErrorCode::UnsupportedPlatform));
         }
@@ -132,13 +133,8 @@ impl StoreLocationV1 {
 
 impl StoreLockV1 {
     pub fn try_acquire(location: &StoreLocationV1) -> Result<Self, StorageError> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(location.lock_path())
-            .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+        let file = open_store_lock_file(location.lock_path())?;
+        validate_store_lock_file(&file)?;
         match file.try_lock() {
             Ok(()) => Ok(Self { file }),
             Err(std::fs::TryLockError::WouldBlock) => {
@@ -147,6 +143,68 @@ impl StoreLockV1 {
             Err(std::fs::TryLockError::Error(_)) => Err(StorageError::new(StorageErrorCode::Io)),
         }
     }
+}
+
+#[cfg(windows)]
+fn open_store_lock_file(path: &Path) -> Result<File, StorageError> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    // OPEN_ALWAYS is atomic. OPEN_REPARSE_POINT protects the final component,
+    // while omitting WRITE and DELETE sharing pins that entry for this guard's
+    // lifetime. Parent-directory namespace replacement remains out of scope.
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .share_mode(FILE_SHARE_READ)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|error| {
+            if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) {
+                StorageError::new(StorageErrorCode::Busy)
+            } else {
+                StorageError::new(StorageErrorCode::Io)
+            }
+        })
+}
+
+#[cfg(not(windows))]
+fn open_store_lock_file(path: &Path) -> Result<File, StorageError> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))
+}
+
+fn validate_store_lock_file(file: &File) -> Result<(), StorageError> {
+    let metadata = file
+        .metadata()
+        .map_err(|_| StorageError::new(StorageErrorCode::Io))?;
+    if !metadata.file_type().is_file() || metadata_is_windows_reparse_point(&metadata) {
+        return Err(StorageError::new(StorageErrorCode::CorruptStorage));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn metadata_is_windows_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn metadata_is_windows_reparse_point(_metadata: &std::fs::Metadata) -> bool {
+    false
 }
 
 impl Drop for StoreLockV1 {
@@ -190,6 +248,62 @@ fn path_is_disallowed(path: &Path) -> bool {
         let lower = value.to_string_lossy().to_ascii_lowercase();
         matches!(lower.as_str(), ".git" | ".hg" | ".svn") || is_cloud_component(&lower)
     })
+}
+
+// Apply Windows-safe spelling on every build so a persisted relative location
+// cannot become an alias after moving the same configuration to Windows.
+fn windows_component_is_ambiguous(component: &OsStr) -> bool {
+    let Some(component) = component.to_str() else {
+        return true;
+    };
+    if component.is_empty()
+        || component.ends_with('.')
+        || component.ends_with(' ')
+        || component.contains(':')
+    {
+        return true;
+    }
+
+    let basename = component
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ');
+    let uppercase = basename.to_ascii_uppercase();
+    matches!(
+        uppercase.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "CLOCK$"
+            | "CONIN$"
+            | "CONOUT$"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+            | "COM¹"
+            | "COM²"
+            | "COM³"
+            | "LPT¹"
+            | "LPT²"
+            | "LPT³"
+    )
 }
 
 fn is_cloud_component(component: &str) -> bool {

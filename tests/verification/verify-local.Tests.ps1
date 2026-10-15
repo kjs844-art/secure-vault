@@ -15,6 +15,8 @@ $originalPath = $env:PATH
 $originalFailure = $env:KEYATLAS_TEST_FAIL_STAGE
 $fixtureDirectory = Join-Path $PSScriptRoot 'fixtures'
 $fixtureCargo = Join-Path $fixtureDirectory 'cargo.cmd'
+$temporaryToolDirectory = Join-Path ([IO.Path]::GetTempPath()) ("keyatlas-verifier-tools-$([Guid]::NewGuid().ToString('N'))")
+$temporarySecretCandidate = Join-Path $repositoryRoot 'synthetic-secret-candidate.txt'
 $passed = 0
 
 function Assert-Condition {
@@ -30,6 +32,16 @@ function Assert-SecurityBoundary {
         $markers = @($lines | Where-Object { $_.StartsWith($prefix) })
         Assert-Condition (($markers.Count -eq 1) -and ($markers[0] -eq $expected)) "Exactly one unchanged security boundary marker is required: $expected"
     }
+}
+
+function Assert-SecretScanSuccess {
+    param([string]$Text)
+    $lines = $Text -split '\r?\n'
+    $passMarkers = @($lines | Where-Object { $_ -eq 'SECRET_SCAN_PASSED' })
+    Assert-Condition ($passMarkers.Count -eq 1) 'Exactly one Secret scan success marker is required.'
+    $secretIndex = $Text.IndexOf('SECRET_SCAN_PASSED', [StringComparison]::Ordinal)
+    $cargoIndex = $Text.IndexOf('VERIFY_TEST_CARGO:', [StringComparison]::Ordinal)
+    Assert-Condition (($secretIndex -ge 0) -and ($cargoIndex -gt $secretIndex)) 'The Secret scan must pass before Cargo starts.'
 }
 
 function Invoke-Runner {
@@ -51,6 +63,7 @@ try {
         throw 'The synthetic Cargo fixture is missing; no Cargo command was started.'
     }
     # Do not fall back to a developer's real Cargo if the fixture cannot resolve.
+    # The repository Secret scanner is implemented only with PowerShell/.NET.
     $env:PATH = $fixtureDirectory
     $resolvedCargo = Get-Command cargo -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (($null -eq $resolvedCargo) -or
@@ -62,6 +75,7 @@ try {
         $result = Invoke-Runner -Scope 'Focused'
         Assert-Condition ($result.Code -eq 0) 'Focused checks should succeed.'
         Assert-SecurityBoundary -Text $result.Text
+        Assert-SecretScanSuccess -Text $result.Text
         Assert-Condition ($result.Text.Contains("VERIFY_TEST_CWD:$repositoryRoot")) 'Cargo must run at the root derived from the script location.'
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:test --offline --locked -p vault-local-sqlite-vfs-windows --tests -- --test-threads=1')) 'Default-feature tests must run.'
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:test --offline --locked -p vault-local-sqlite-vfs-windows --features feasibility-probe -- --test-threads=1')) 'Ordinary feature-enabled tests must run.'
@@ -73,12 +87,40 @@ try {
         $result = Invoke-Runner -Scope 'Workspace'
         Assert-Condition ($result.Code -eq 0) 'Workspace checks should succeed.'
         Assert-SecurityBoundary -Text $result.Text
+        Assert-SecretScanSuccess -Text $result.Text
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:test --offline --locked --workspace --tests -- --test-threads=1')) 'Workspace default tests must run.'
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:clippy --offline --locked --workspace --all-targets --all-features -- -D warnings')) 'Workspace lint coverage must include all targets and features.'
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:test --offline --locked --workspace --doc')) 'Workspace doctests must run.'
         Assert-Condition ($result.Text.Contains('VERIFY_TEST_CARGO:test --offline --locked -p vault-local-sqlite-vfs-windows --features feasibility-probe')) 'Workspace checks must retain feature-enabled tests.'
         $passed++
         Write-Output 'PASS: workspace coverage'
+
+        if (Test-Path -LiteralPath $temporarySecretCandidate) {
+            throw 'The synthetic Secret candidate path must not exist before the regression.'
+        }
+        $candidateEncoding = New-Object Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText(
+            $temporarySecretCandidate,
+            ('api_' + 'key = "synthetic-verifier-candidate-123456"'),
+            $candidateEncoding
+        )
+        try {
+            $result = Invoke-Runner -Scope 'Focused'
+        }
+        finally {
+            if (Test-Path -LiteralPath $temporarySecretCandidate -PathType Leaf) {
+                Remove-Item -LiteralPath $temporarySecretCandidate -Force
+            }
+        }
+        Assert-Condition ($result.Code -eq 1) 'A Secret finding must fail the verifier.'
+        Assert-SecurityBoundary -Text $result.Text
+        Assert-Condition ($result.Text.Contains('SECRET_SCAN_FINDINGS=1')) 'A Secret finding count must reach the caller.'
+        Assert-Condition ($result.Text.Contains('SECRET_SCAN_FILE=synthetic-secret-candidate.txt')) 'Only the synthetic relative file must be reported.'
+        Assert-Condition ($result.Text.Contains('LOCAL_CHECKS_FAILED stage=repository-secret-scan exit=1')) 'Secret scan failure must identify its stage.'
+        Assert-Condition (-not $result.Text.Contains('VERIFY_TEST_CARGO:')) 'Cargo must not start after a Secret scan failure.'
+        Assert-Condition (-not $result.Text.Contains('LOCAL_CHECKS_PASSED')) 'A Secret scan failure must never print success.'
+        $passed++
+        Write-Output 'PASS: Secret scan failure stops Cargo'
 
         foreach ($stage in @('fmt', 'clippy', 'test')) {
             $result = Invoke-Runner -Scope 'Focused' -FailStage $stage
@@ -117,7 +159,8 @@ try {
 
         $fixturePath = $env:PATH
         try {
-            $env:PATH = ''
+            New-Item -ItemType Directory -Path $temporaryToolDirectory -ErrorAction Stop | Out-Null
+            $env:PATH = $temporaryToolDirectory
             $result = Invoke-Runner -Scope 'Focused'
             Assert-Condition ($result.Code -ne 0) 'Missing Cargo must fail.'
             Assert-SecurityBoundary -Text $result.Text
@@ -152,4 +195,10 @@ catch {
 finally {
     $env:PATH = $originalPath
     $env:KEYATLAS_TEST_FAIL_STAGE = $originalFailure
+    if (Test-Path -LiteralPath $temporarySecretCandidate -PathType Leaf) {
+        Remove-Item -LiteralPath $temporarySecretCandidate -Force
+    }
+    if (Test-Path -LiteralPath $temporaryToolDirectory -PathType Container) {
+        Remove-Item -LiteralPath $temporaryToolDirectory -Force
+    }
 }

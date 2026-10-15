@@ -16,7 +16,10 @@ pub use secret::{
     KeyEpoch, MasterPassword, OpaqueRecordId, PaddingBucketV0Alpha1, RecordContextV0Alpha1,
     RevisionId, SecretBytes, VaultCommitment, VaultSession,
 };
-pub use v0alpha1::codec::{inspect_password_envelope_v0alpha1, inspect_record_envelope_v0alpha1};
+pub use v0alpha1::codec::{
+    inspect_password_envelope_v0alpha1, inspect_record_envelope_v0alpha1,
+    sealed_record_envelope_len_v0alpha1,
+};
 pub use v0alpha1::record::{open_record_v0alpha1, seal_record_v0alpha1};
 pub use v0alpha1::storage::{
     CurrentSuiteStorageInspectionV1, FutureWireStorageInspectionV1,

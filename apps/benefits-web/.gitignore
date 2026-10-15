@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.output/
+.nitro/
+.tanstack/
+.vite/
+src/routeTree.gen.ts
+.env
+.env.*
+!.env.example
