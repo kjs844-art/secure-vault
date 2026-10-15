@@ -1,0 +1,92 @@
+/* View states (loading, empty, offline, error). Every value comes from tokens.css. */
+
+.ka-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--ka-space-sm);
+  padding: var(--ka-space-xl) var(--ka-space-lg);
+  border: 1px dashed var(--ka-color-border-strong);
+  border-radius: var(--ka-radius-lg);
+  background: var(--ka-color-surface-sunken);
+  color: var(--ka-color-text);
+  text-align: center;
+}
+
+.ka-state__indicator {
+  box-sizing: border-box;
+  width: var(--ka-space-xl);
+  height: var(--ka-space-xl);
+  border: 3px solid var(--ka-color-border-strong);
+  border-radius: var(--ka-radius-pill);
+}
+
+.ka-state__title {
+  margin: 0;
+  font-size: var(--ka-font-size-lg);
+  font-weight: var(--ka-font-weight-strong);
+  line-height: var(--ka-font-line-height);
+}
+
+.ka-state__description,
+.ka-state__detail {
+  max-width: 48ch;
+  margin: 0;
+  color: var(--ka-color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.ka-state__detail {
+  font-family: var(--ka-font-family-mono);
+  font-size: var(--ka-font-size-sm);
+}
+
+.ka-state__action {
+  margin-top: var(--ka-space-sm);
+}
+
+.ka-state--loading .ka-state__indicator {
+  border-color: var(--ka-color-border);
+  border-top-color: var(--ka-color-accent);
+}
+
+.ka-state--empty .ka-state__indicator {
+  border-style: dotted;
+}
+
+.ka-state--offline {
+  border-color: var(--ka-color-warning-text);
+}
+
+.ka-state--offline .ka-state__indicator {
+  border-style: dashed;
+  border-color: var(--ka-color-warning-text);
+}
+
+.ka-state--error {
+  border-style: solid;
+  border-color: var(--ka-color-danger-text);
+  background: var(--ka-color-danger-bg);
+}
+
+.ka-state--error .ka-state__indicator {
+  border-color: var(--ka-color-danger-text);
+  background: var(--ka-color-danger-text);
+}
+
+.ka-state--error .ka-state__description,
+.ka-state--error .ka-state__detail {
+  color: var(--ka-color-danger-text);
+}
+
+/* Motion is opt-in: users who ask for reduced motion get a static ring. */
+@media (prefers-reduced-motion: no-preference) {
+  .ka-state--loading .ka-state__indicator {
+    animation: ka-state-spin 1s linear infinite;
+  }
+}
+
+@keyframes ka-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
