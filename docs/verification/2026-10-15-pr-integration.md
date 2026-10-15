@@ -31,6 +31,8 @@ they are not fresh verification of this combined tree.
 - Staged whitespace checks: passed.
 - Benefits-web tests with Node test concurrency 1: 1,331 passed, zero failed.
 - Catalog-client focused tests: 12 passed, zero failed.
+- UI foundation, provider metadata, Identity Map, and Discovery Inbox:
+  12 test files and 236 tests passed with one worker.
 - Landing production build and its TypeScript compilation: passed. The build
   reports an existing large-bundle warning.
 - An initial parallel local test attempt exhausted process memory. Its output
@@ -39,6 +41,13 @@ they are not fresh verification of this combined tree.
   Local Rust/WASM and complete web verification are therefore not claimed.
   The combined branch must pass the Windows GitHub security workflow before
   integration into main.
+
+The integration also applies the `source-map-js` 1.2.2 security patch to the
+web and landing lockfiles. Its version, tarball URL, and SHA-512 integrity
+were checked against the official npm registry. The benefits-web lockfile
+already received the same patch through #33. The updated dependency must be
+validated by the fresh CI install; earlier local passes used the old web and
+landing installation. The workflow now builds landing before its final scan.
 
 ## Excluded PR
 

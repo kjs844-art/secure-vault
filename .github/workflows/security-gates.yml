@@ -195,8 +195,18 @@ jobs:
         working-directory: apps/benefits-web
         run: npm run test:smoke
 
+      - name: Install locked landing dependencies without lifecycle scripts
+        shell: pwsh
+        working-directory: apps/landing
+        run: npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org
+
+      - name: Type-check and build the landing app
+        shell: pwsh
+        working-directory: apps/landing
+        run: npm run build
+
       # Generated bundles do not exist in a clean checkout. Scan them only
-      # after both app builds, while retaining the same closed boundary.
+      # after all app builds, while retaining the same closed boundary.
       - name: Re-scan repository and generated artifacts after both app builds
         shell: pwsh
         run: |
