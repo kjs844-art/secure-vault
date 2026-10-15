@@ -7,9 +7,9 @@ use vault_crypto::{
     inspect_password_envelope_for_storage_v1, unlock_vault_v0alpha1,
 };
 use vault_local_core::{
-    CredentialCommitPersistenceProjectionV1, CredentialStorageAuthenticatorV1,
-    OpenCredentialOutcome, StoredPaddingBucketV0Alpha1, SyntheticCredentialFixtureId,
-    open_credential_record_v1, seal_synthetic_fixture_v1,
+    CatalogCredentialStatusV1, CatalogCredentialTypeV1, CredentialCommitPersistenceProjectionV1,
+    CredentialStorageAuthenticatorV1, OpenCredentialOutcome, StoredPaddingBucketV0Alpha1,
+    SyntheticCredentialFixtureId, open_credential_record_v1, seal_synthetic_fixture_v1,
 };
 #[cfg(feature = "test-seams")]
 use vault_local_store_sqlite::StorageErrorCode;
@@ -20,6 +20,40 @@ use vault_local_store_sqlite::{
 };
 
 const PASSWORD_TEXT: &str = "DEMO_VALUE_ONLY_restart_roundtrip.invalid";
+
+#[test]
+fn authenticated_restart_projects_a_catalog_without_writable_promotion() {
+    let fixture = committed_fixture();
+    let preflight = current_preflight(&fixture.location);
+    let password = MasterPassword::from_utf8(PASSWORD_TEXT.to_owned()).unwrap();
+    let session = unlock_vault_v0alpha1(&password, preflight.password_envelope()).unwrap();
+    let authenticator = CredentialStorageAuthenticatorV1::new(&session);
+
+    let authenticated = preflight
+        .authenticate_current_revisions(&authenticator)
+        .unwrap()
+        .into_authenticated()
+        .expect("current revisions should authenticate");
+    assert_eq!(authenticated.current_heads().len(), 1);
+
+    let sealed = authenticated.current_heads()[0].sealed_record();
+    let persistence = sealed.persistence_projection_v1();
+    let OpenCredentialOutcome::Current(opened) =
+        open_credential_record_v1(&session, sealed).unwrap()
+    else {
+        panic!("current encrypted head unexpectedly required an upgrade");
+    };
+    let catalog = opened.into_catalog_projection_v1();
+
+    assert!(catalog.record_id() == persistence.record_id());
+    assert!(catalog.revision_id() == persistence.revision_id());
+    assert!(catalog.provider_name() == "Example AI Workshop");
+    assert!(catalog.credential_type() == CatalogCredentialTypeV1::ApiKey);
+    assert!(catalog.status() == CatalogCredentialStatusV1::Active);
+    assert_eq!(catalog.connection_count(), 1);
+    assert_eq!(catalog.secret_field_count(), 1);
+    assert_eq!(catalog.mcp_connection_count(), 1);
+}
 
 #[test]
 fn opened_plaintext_is_never_formatted_by_task_six_assertions() {

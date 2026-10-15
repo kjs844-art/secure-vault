@@ -1,0 +1,138 @@
+name: Security gates
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keyatlas-security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-gates:
+    name: Secret, Rust, and web gates
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      # rustup merely installing a toolchain does not select it for later
+      # cargo/rustc subprocesses. Pin every Rust proxy in this job explicitly.
+      RUSTUP_TOOLCHAIN: 1.95.0
+
+    steps:
+      - name: Check out the exact revision without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # This must remain the first repository command. Do not install or execute
+      # project dependencies before this fail-closed scan has passed.
+      - name: Reject repository Secret material before dependency execution
+        shell: pwsh
+        run: |
+          $scanOutput = @(& .\scripts\check-repository-secrets.ps1 -Root $PWD.Path 2>&1)
+          $scanExit = $LASTEXITCODE
+          $scanOutput | ForEach-Object { Write-Output $_ }
+          if ($scanExit -ne 0) { exit $scanExit }
+          if (@($scanOutput | Where-Object { $_ -eq 'SECRET_SCAN_PASSED' }).Count -ne 1) {
+            throw 'The repository Secret scanner did not emit exactly one success marker.'
+          }
+          if (@($scanOutput | Where-Object { $_ -eq 'REAL_SECRET_GATE=CLOSED' }).Count -ne 1) {
+            throw 'The real-Secret boundary marker is missing or duplicated.'
+          }
+
+      - name: Exercise Secret scanner regressions with PowerShell 7
+        shell: pwsh
+        run: pwsh -NoProfile -NonInteractive -File .\tests\verification\check-repository-secrets.Tests.ps1
+
+      - name: Exercise Secret scanner regressions with Windows PowerShell 5.1
+        shell: pwsh
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\tests\verification\check-repository-secrets.Tests.ps1
+
+      - name: Install pinned Pester for workflow policy checks
+        shell: pwsh
+        run: Install-Module -Name Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Repository PSGallery -Force
+
+      - name: Verify this workflow remains fail-closed
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 5.7.1 -Force
+          $result = Invoke-Pester -Path .\tests\verification\verify-security-workflow.Tests.ps1 -Output Detailed -PassThru
+          if (($result.TotalCount -eq 0) -or ($result.FailedCount -ne 0)) { exit 1 }
+
+      - name: Provision the pinned Rust toolchain
+        shell: pwsh
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
+
+      - name: Fetch locked Rust dependencies after Secret scan
+        shell: pwsh
+        run: cargo fetch --locked
+
+      - name: Build the exact wasm-bindgen CLI from the locked published crate
+        shell: pwsh
+        run: cargo install wasm-bindgen-cli --version 0.2.128 --locked --root "$env:RUNNER_TEMP\wasm-bindgen-cli"
+
+      - name: Run the full Rust workspace verifier
+        shell: pwsh
+        run: pwsh -NoProfile -NonInteractive -File .\scripts\verify-local.ps1 -Scope Workspace
+
+      - name: Generate the default release WASM boundary
+        shell: pwsh
+        run: pwsh -NoProfile -NonInteractive -File .\scripts\build-wasm.ps1 -Release -BindgenPath "$env:RUNNER_TEMP\wasm-bindgen-cli\bin\wasm-bindgen.exe"
+
+      - name: Generate the synthetic-demo release WASM boundary
+        shell: pwsh
+        run: pwsh -NoProfile -NonInteractive -File .\scripts\build-wasm.ps1 -SyntheticDemo -Release -BindgenPath "$env:RUNNER_TEMP\wasm-bindgen-cli\bin\wasm-bindgen.exe"
+
+      - name: Set up pinned Node.js without dependency caching
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.8.0
+          package-manager-cache: false
+
+      - name: Smoke-test the default generated WASM boundary
+        shell: pwsh
+        run: node .\scripts\test-wasm.mjs
+
+      - name: Smoke-test the synthetic-demo generated WASM boundary
+        shell: pwsh
+        run: node .\scripts\test-wasm.mjs --demo
+
+      - name: Install locked web dependencies without lifecycle scripts
+        shell: pwsh
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Run web unit tests
+        shell: pwsh
+        working-directory: apps/web
+        run: npm test
+
+      - name: Type-check the web app
+        shell: pwsh
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Build the web app
+        shell: pwsh
+        working-directory: apps/web
+        run: npm run build
+
+      # Generated bundles do not exist in a clean checkout. Scan them only
+      # after the release build, while retaining the same closed boundary.
+      - name: Re-scan repository and generated artifacts after web build
+        shell: pwsh
+        run: |
+          $scanOutput = @(& .\scripts\check-repository-secrets.ps1 -Root $PWD.Path 2>&1)
+          $scanExit = $LASTEXITCODE
+          $scanOutput | ForEach-Object { Write-Output $_ }
+          if ($scanExit -ne 0) { exit $scanExit }
+          if (@($scanOutput | Where-Object { $_ -eq 'SECRET_SCAN_PASSED' }).Count -ne 1) {
+            throw 'The post-build Secret scanner did not emit exactly one success marker.'
+          }
+          if (@($scanOutput | Where-Object { $_ -eq 'REAL_SECRET_GATE=CLOSED' }).Count -ne 1) {
+            throw 'The post-build real-Secret boundary marker is missing or duplicated.'
+          }
