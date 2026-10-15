@@ -46,6 +46,48 @@ Describe 'KeyAtlas security-gates workflow policy' {
             @([regex]::Matches($Workflow, '(?ms)^      - name: (?<name>[^\r\n]+)\r?\n(?<body>.*?)(?=^      - name: |\z)'))
         }
 
+        function Assert-PSGalleryPreparation {
+            param([string]$Workflow)
+            $steps = @(Get-NamedWorkflowSteps $Workflow)
+            $prepare = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Ensure the default PowerShell Gallery registration' })
+            $install = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Install pinned Pester for workflow policy checks' })
+            $scan = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Reject repository Secret material before dependency execution' })
+            Assert-Condition ($prepare.Count -eq 1 -and $install.Count -eq 1 -and $scan.Count -eq 1) 'Exactly one Gallery preparation, Pester installation and initial Secret scan are required.'
+            $preparePosition = [array]::IndexOf($steps, $prepare[0])
+            $installPosition = [array]::IndexOf($steps, $install[0])
+            Assert-Condition ($prepare[0].Index -gt $scan[0].Index -and $installPosition -eq ($preparePosition + 1)) 'Gallery preparation must follow the Secret scan and immediately precede Pester installation.'
+            $actualBody = @($prepare[0].Groups['body'].Value -split '\r?\n' | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            }) -join "`n"
+            $expectedBody = @('        shell: pwsh', '        run: .\scripts\ensure-ci-psgallery.ps1') -join "`n"
+            Assert-Condition ([string]::Equals($actualBody, $expectedBody, [StringComparison]::Ordinal)) 'Gallery preparation must retain its exact fail-closed command.'
+            $verification = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Verify this workflow remains fail-closed' })
+            Assert-Condition ($verification.Count -eq 1) 'Exactly one combined policy verification step is required.'
+            $actualVerification = @($verification[0].Groups['body'].Value -split '\r?\n' | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            }) -join "`n"
+            $expectedVerification = @(
+                '        shell: pwsh'
+                '        run: |'
+                '          Import-Module Pester -RequiredVersion 5.7.1 -Force'
+                '          $result = Invoke-Pester -Path .\tests\verification\verify-security-workflow.Tests.ps1, .\tests\verification\ensure-ci-psgallery.Tests.ps1 -Output Detailed -PassThru'
+                '          if (($result.Result -ne ''Passed'') -or ($result.TotalCount -eq 0) -or ($result.FailedCount -ne 0) -or ($result.SkippedCount -ne 0) -or (@($result.Containers).Count -ne 2)) { exit 1 }'
+                '          foreach ($container in $result.Containers) {'
+                '            if (($container.TotalCount -eq 0) -or ($container.Result -ne ''Passed'')) { exit 1 }'
+                '          }'
+            ) -join "`n"
+            Assert-Condition ([string]::Equals($actualVerification, $expectedVerification, [StringComparison]::Ordinal)) 'Both Pester containers must run nonzero tests without skipped or ignored failures.'
+        }
+
+        function Assert-PSGalleryMutationRejected {
+            param([string]$Workflow)
+            Assert-Condition (-not [string]::Equals($Workflow, $script:Workflow, [StringComparison]::Ordinal)) 'The Gallery policy mutation must change the workflow.'
+            $rejected = $false
+            try { Assert-PSGalleryPreparation $Workflow }
+            catch { $rejected = $true }
+            Assert-Condition $rejected 'An invalid Gallery preparation workflow must be rejected.'
+        }
+
         function Assert-BenefitsWebVerification {
             param([string]$Workflow)
             $steps = @(Get-NamedWorkflowSteps $Workflow)
@@ -155,6 +197,38 @@ Describe 'KeyAtlas security-gates workflow policy' {
     It 'runs scanner regressions on both Windows PowerShell engines' {
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: pwsh -NoProfile -NonInteractive -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'PowerShell 7 scanner regression is missing.'
         Assert-Condition ($script:Workflow -match '(?m)^\s*run: powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \.\\tests\\verification\\check-repository-secrets\.Tests\.ps1\s*$') 'Windows PowerShell 5.1 scanner regression is missing.'
+    }
+
+    It 'prepares the official Gallery after scanning and immediately before pinned Pester' {
+        Assert-PSGalleryPreparation $script:Workflow
+    }
+
+    It 'rejects removed duplicated skipped or weakened Gallery preparation' {
+        $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -eq 'Ensure the default PowerShell Gallery registration' })[0]
+        Assert-PSGalleryMutationRejected ($script:Workflow.Remove($step.Index, $step.Length))
+        Assert-PSGalleryMutationRejected ($script:Workflow.Insert($step.Index, $step.Value))
+        foreach ($invalidStep in @(
+            $step.Value.Replace('        shell: pwsh', "        if: false`n        shell: pwsh")
+            $step.Value.Replace('        shell: pwsh', "        continue-on-error: true`n        shell: pwsh")
+            $step.Value.Replace('shell: pwsh', 'shell: cmd')
+            $step.Value.Replace('run: .\scripts\ensure-ci-psgallery.ps1', 'run: .\scripts\ensure-ci-psgallery.ps1; exit 0')
+        )) {
+            Assert-PSGalleryMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep))
+        }
+        Assert-PSGalleryMutationRejected ($script:Workflow.Replace(', .\tests\verification\ensure-ci-psgallery.Tests.ps1', ''))
+        Assert-PSGalleryMutationRejected ($script:Workflow.Replace('@($result.Containers).Count -ne 2', '@($result.Containers).Count -ne 1'))
+        Assert-PSGalleryMutationRejected ($script:Workflow.Replace('$container.TotalCount -eq 0', '$container.TotalCount -lt 0'))
+        Assert-PSGalleryMutationRejected ($script:Workflow.Replace('$result.SkippedCount -ne 0', '$result.SkippedCount -lt 0'))
+    }
+
+    It 'rejects Gallery preparation before scanning or after installing Pester' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        $prepare = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Ensure the default PowerShell Gallery registration' })[0]
+        $scan = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Reject repository Secret material before dependency execution' })[0]
+        $install = @($steps | Where-Object { $_.Groups['name'].Value -eq 'Install pinned Pester for workflow policy checks' })[0]
+        $without = $script:Workflow.Remove($prepare.Index, $prepare.Length)
+        Assert-PSGalleryMutationRejected ($without.Insert($scan.Index, $prepare.Value))
+        Assert-PSGalleryMutationRejected ($without.Insert($install.Index + $install.Length - $prepare.Length, $prepare.Value))
     }
 
     It 'keeps the first gate independent of runner-provided scanners' {
