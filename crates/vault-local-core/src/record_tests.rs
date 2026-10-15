@@ -21,8 +21,8 @@ fn populated_record_preserves_fields_after_rejected_unlock_and_repeated_reunlock
         "fixture must include rotation"
     );
 
-    // Test-only construction: the public writer continues to accept only the
-    // three approved fixtures. No free-form secret input API is introduced.
+    // Test-only construction: public writers accept only approved synthetic
+    // fixtures/selections. No free-form secret input API is introduced.
     let identity = crate::ids::generate_record_identity().unwrap();
     let plaintext = crate::codec::encode_current_item(&expected, identity.revision_id).unwrap();
     let bucket = select_bucket(plaintext.expose_secret().len()).unwrap();

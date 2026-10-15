@@ -49,6 +49,12 @@ impl EntityIdV1 {
     }
 }
 
+pub(crate) fn generate_entity_id() -> Result<EntityIdV1, LocalVaultError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| LocalVaultError::RngUnavailable)?;
+    Ok(EntityIdV1::from_bytes(bytes))
+}
+
 pub(crate) fn generate_record_identity() -> Result<RecordIdentityEntropy, LocalVaultError> {
     generate_record_identity_with(|block| {
         getrandom::fill(block).map_err(|_| LocalVaultError::RngUnavailable)

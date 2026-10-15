@@ -56,6 +56,7 @@ node_modules/
 
 # Rust
 **/target/
+apps/web/src/generated/
 
 # Infrastructure state
 .terraform/

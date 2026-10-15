@@ -357,4 +357,42 @@ mod tests {
         nonzero_padding[5] = 0x01;
         assert_authenticated_body_rejected_and_cleaned(&session, &context, nonzero_padding, 0x61);
     }
+
+    #[test]
+    fn envelope_length_matches_sealing_for_every_bucket_and_epoch_width() {
+        for bucket in [
+            PaddingBucketV0Alpha1::Bytes1024,
+            PaddingBucketV0Alpha1::Bytes4096,
+            PaddingBucketV0Alpha1::Bytes16384,
+            PaddingBucketV0Alpha1::Bytes61440,
+        ] {
+            for epoch in [1, 23, 24, 255, 256, 65_535, 65_536, u32::MAX] {
+                let commitment = VaultCommitment::from_bytes([0x21; 32]);
+                let session = VaultSession::new(
+                    HeapSecretKey::synthetic_filled(0x42),
+                    commitment.clone(),
+                    KeyEpoch::new(epoch).unwrap(),
+                );
+                let context = RecordContextV0Alpha1::new(
+                    commitment,
+                    OpaqueRecordId::from_bytes([0xff; 16]),
+                    RevisionId::from_bytes([0x00; 32]),
+                    KeyEpoch::new(epoch).unwrap(),
+                    bucket.clone(),
+                );
+                let estimated = crate::sealed_record_envelope_len_v0alpha1(&context).unwrap();
+                assert!(estimated <= 65_536);
+                for plaintext_len in [1, context.padding_bucket_bytes() - BODY_LENGTH_PREFIX_BYTES]
+                {
+                    let plaintext = SecretBytes::new(vec![0x55; plaintext_len]).unwrap();
+                    let actual = seal_record_v0alpha1(&session, &context, &plaintext).unwrap();
+                    assert_eq!(
+                        estimated,
+                        actual.len(),
+                        "epoch {epoch}, plaintext {plaintext_len}"
+                    );
+                }
+            }
+        }
+    }
 }

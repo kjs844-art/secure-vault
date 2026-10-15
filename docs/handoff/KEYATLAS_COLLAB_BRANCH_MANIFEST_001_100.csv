@@ -1,0 +1,101 @@
+number,label,risk,branch,title,mode,predecessors
+1,1A,A,codex/firstvibe-collab-1a-ci-secret-rescan,CI 및 Secret gate 상위 조정,EPIC_COORDINATION,none
+2,2A,A,codex/firstvibe-collab-2a-integration-baseline-audit,통합 baseline 읽기 전용 감사,EPIC_COORDINATION,1A
+3,3,standard,codex/firstvibe-collab-3-landing-ui-validation,랜딩 UI 상위 조정,EPIC_COORDINATION,22;23;35
+4,4,standard,codex/firstvibe-collab-4-browser-concurrency,브라우저 경합 검증 상위 조정,EPIC_COORDINATION,1A;2A
+5,5,standard,codex/firstvibe-collab-5-web-a11y,웹 접근성 상위 조정,EPIC_COORDINATION,22;23
+6,6A,A,codex/firstvibe-collab-6a-backup-drill,backup restore 보안 상위 조정,EPIC_COORDINATION,1A;2A
+7,7A,A,codex/firstvibe-collab-7a-signed-checkpoint,signed checkpoint 상위 조정,EPIC_COORDINATION,6A
+8,8A,A,codex/firstvibe-collab-8a-recovery-device-keys,recovery device key 상위 조정,EPIC_COORDINATION,7A
+9,9A,A,codex/firstvibe-collab-9a-sync-api,opaque sync 상위 조정,EPIC_COORDINATION,7A;8A
+10,10,standard,codex/firstvibe-collab-10-android-shell,Android 상위 조정,EPIC_COORDINATION,2A
+11,11,standard,codex/firstvibe-collab-11-provider-catalog,provider catalog 상위 조정,EPIC_COORDINATION,2A
+12,12A,A,codex/firstvibe-collab-12a-secret-input-reveal-copy,Secret 입력 보기 복사 보안 상위 조정,EPIC_COORDINATION,7A;8A;9A
+13,13A,A,codex/firstvibe-collab-13a-auth-passkey,인증 passkey 상위 조정,EPIC_COORDINATION,9A
+14,14A,A,codex/firstvibe-collab-14a-prod-infra,운영 infra 보안 상위 조정,EPIC_COORDINATION,9A;13A
+15,15,standard,codex/firstvibe-collab-15-billing-sandbox,billing 상위 조정,EPIC_COORDINATION,9A
+16,16A,A,codex/firstvibe-collab-16a-ops-resilience,관측성 DR 상위 조정,EPIC_COORDINATION,14A
+17,17A,A,codex/firstvibe-collab-17a-external-audit-response,외부 audit 대응 상위 조정,EPIC_COORDINATION,16A
+18,18,standard,codex/firstvibe-collab-18-privacy-legal-readiness,privacy legal 상위 조정,EPIC_COORDINATION,9A;15
+19,19,standard,codex/firstvibe-collab-19-beta-support-onboarding,beta 지원 상위 조정,EPIC_COORDINATION,3;18
+20,20,standard,codex/firstvibe-collab-20-release-store-assets,release store 상위 조정,EPIC_COORDINATION,19
+21,21,standard,codex/firstvibe-collab-21-mcp-plugin-expansion,MCP plugin 상위 조정,EPIC_COORDINATION,9A;20
+22,22,standard,codex/firstvibe-collab-22-ui-foundation,디자인 토큰 및 공용 표시 컴포넌트,IMPLEMENT,2A
+23,23,standard,codex/firstvibe-collab-23-i18n-copy,한국어 영어 문구 체계,IMPLEMENT,2A
+24,24,standard,codex/firstvibe-collab-24-landing-review,Draft 랜딩 검토 보고서,IMPLEMENT,22;23
+25,25,standard,codex/firstvibe-collab-25-onboarding-education,첫 사용자 온보딩 교육 UI,IMPLEMENT,22;23
+26,26,standard,codex/firstvibe-collab-26-catalog-browser-ux,합성 catalog 검색 필터 정렬 UX,IMPLEMENT,22;23;30
+27,27,standard,codex/firstvibe-collab-27-relationship-map,서비스 계정 프로젝트 환경 관계 지도,IMPLEMENT,22;23;26
+28,28,standard,codex/firstvibe-collab-28-rotation-guide,합성 키 회전 안내 UI,IMPLEMENT,22;23;30
+29,29,standard,codex/firstvibe-collab-29-ui-states,loading empty offline error 상태 UI,IMPLEMENT,22;23
+30,30,standard,codex/firstvibe-collab-30-provider-metadata,제공자 공개 metadata,IMPLEMENT,2A
+31,31,standard,codex/firstvibe-collab-31-help-center,FAQ 도움말 초보자 용어,IMPLEMENT,23;30
+32,32,standard,codex/firstvibe-collab-32-pricing-preview,Free Pro 가격 비교 mock,IMPLEMENT,22;23
+33,33,standard,codex/firstvibe-collab-33-legal-drafts,개인정보 약관 삭제정책 초안,IMPLEMENT,18
+34,34,standard,codex/firstvibe-collab-34-public-status,공개 status 장애 안내 mock,IMPLEMENT,22;23
+35,35,standard,codex/firstvibe-collab-35-accessibility-review,UI foundation 접근성 1차 검토,IMPLEMENT,22;23
+36,36,standard,codex/firstvibe-collab-36-responsive-shell,반응형 앱 셸 골격,IMPLEMENT,22;23
+37,37,standard,codex/firstvibe-collab-37-density-control,화면 표시 밀도 선택기,IMPLEMENT,22;23
+38,38,standard,codex/firstvibe-collab-38-command-palette,읽기 전용 명령 팔레트 모형,IMPLEMENT,22;23
+39,39,standard,codex/firstvibe-collab-39-pinned-recents,최근 항목 즐겨찾기 합성 투영,IMPLEMENT,26;30
+40,40,standard,codex/firstvibe-collab-40-responsive-table,좁은 화면용 의미론적 데이터 표,IMPLEMENT,22;35
+41,41,standard,codex/firstvibe-collab-41-safe-confirm-dialog,안전 확인 대화상자 모형,IMPLEMENT,22;23;35
+42,42,standard,codex/firstvibe-collab-42-dirty-form-model,저장 전 변경사항 상태 모델,IMPLEMENT,23
+43,43,standard,codex/firstvibe-collab-43-roving-focus,방향키 포커스 이동 유틸리티,IMPLEMENT,35
+44,44,standard,codex/firstvibe-collab-44-skip-link-kit,건너뛰기 링크 랜드마크 키트,IMPLEMENT,35;36
+45,45,standard,codex/firstvibe-collab-45-reduced-motion,모션 감소 스타일 계약,IMPLEMENT,22;35
+46,46,standard,codex/firstvibe-collab-46-contrast-gate,디자인 토큰 색 대비 검사기,IMPLEMENT,22;35
+47,47,standard,codex/firstvibe-collab-47-error-summary,폼 오류 요약 컴포넌트,IMPLEMENT,22;23;35
+48,48,standard,codex/firstvibe-collab-48-fixture-factory,결정적 합성 UI fixture 생성기,IMPLEMENT,30
+49,49,standard,codex/firstvibe-collab-49-fixture-validator,합성 fixture 구조 검사기,IMPLEMENT,48
+50,50,standard,codex/firstvibe-collab-50-locale-stress-data,한영 긴 문구 레이아웃 fixture,IMPLEMENT,23;48;49
+51,51,standard,codex/firstvibe-collab-51-relation-scenarios,관계 지도 합성 시나리오 묶음,IMPLEMENT,27;48;49
+52,52,standard,codex/firstvibe-collab-52-screenshot-fixtures,문서 스크린샷 전용 안전 fixture,IMPLEMENT,48;49;50
+53,53,standard,codex/firstvibe-collab-53-fixture-manifest,합성 fixture 출처 해시 manifest,IMPLEMENT,48;49;50;51;52
+54,54A,A,codex/firstvibe-collab-54a-visual-regression,다중 브라우저 시각 회귀 하네스,REVIEW_THEN_IMPLEMENT,36;40;45;52
+55,55,standard,codex/firstvibe-collab-55-semantic-contracts,UI 의미론 계약 회귀 모음,IMPLEMENT,36;37;38;39;40;41;42;43;44;45;46;47
+56,56,standard,codex/firstvibe-collab-56-browser-qa-matrix,브라우저 화면크기 수동 QA 매트릭스,IMPLEMENT,35;54A;55
+57,57,standard,codex/firstvibe-collab-57-writing-style,한영 제품 문구 작성 규칙,IMPLEMENT,23;31
+58,58,standard,codex/firstvibe-collab-58-evidence-labels,검증 증거 단계 상태 표현 가이드,IMPLEMENT,2A
+59,59,standard,codex/firstvibe-collab-59-demo-runbook,5분 합성 Web 데모 진행서,IMPLEMENT,25;26;27;28;29;30;31;52;58
+60,60,standard,codex/firstvibe-collab-60-feedback-template,합성 데모 사용자 피드백 템플릿,IMPLEMENT,56;58;59
+61,61,standard,codex/firstvibe-collab-61-api-service-bootstrap,독립 API 서비스 골격,IMPLEMENT,1A;2A
+62,62,standard,codex/firstvibe-collab-62-http-contract-foundation,v1 공통 HTTP OpenAPI 계약,IMPLEMENT,61
+63,63A,A,codex/firstvibe-collab-63a-opaque-sync-envelope,불투명 sync revision checkpoint wire 계약,REVIEW_THEN_IMPLEMENT,7A;8A;61;62
+64,64A,A,codex/firstvibe-collab-64a-sync-idempotency-replay,sync 재시도 중복 replay rollback 상태기계,REVIEW_THEN_IMPLEMENT,63A
+65,65A,A,codex/firstvibe-collab-65a-postgres-opaque-schema,PostgreSQL 불투명 revision checkpoint schema,REVIEW_THEN_IMPLEMENT,63A;64A
+66,66A,A,codex/firstvibe-collab-66a-postgres-tenant-isolation,tenant 격리 BOLA 방지 DB 계약,REVIEW_THEN_IMPLEMENT,65A
+67,67A,A,codex/firstvibe-collab-67a-migration-expand-contract,Flyway expand contract migration 훈련,REVIEW_THEN_IMPLEMENT,65A;66A
+68,68A,A,codex/firstvibe-collab-68a-oidc-account-linking,OIDC PKCE identity 연결 계약,REVIEW_THEN_IMPLEMENT,61;62;66A
+69,69A,A,codex/firstvibe-collab-69a-passkey-ceremony-contract,Passkey 등록 인증 ceremony 계약,REVIEW_THEN_IMPLEMENT,61;62;66A
+70,70A,A,codex/firstvibe-collab-70a-session-token-rotation,session refresh token family 회전,REVIEW_THEN_IMPLEMENT,68A;69A
+71,71A,A,codex/firstvibe-collab-71a-http-boundary-controls,CORS CSRF route rate-limit 계약,REVIEW_THEN_IMPLEMENT,61;62;70A
+72,72A,A,codex/firstvibe-collab-72a-device-roster-revocation,기기 roster revoke epoch CAS API 계약,REVIEW_THEN_IMPLEMENT,8A;64A;66A;70A
+73,73,standard,codex/firstvibe-collab-73-plan-catalog-contract,Free Pro 기계 판독형 plan catalog,IMPLEMENT,61;62
+74,74A,A,codex/firstvibe-collab-74a-entitlement-quota-downgrade,서버 권위 entitlement quota grace 상태기계,REVIEW_THEN_IMPLEMENT,66A;67A;73
+75,75A,A,codex/firstvibe-collab-75a-sandbox-checkout-port,provider neutral checkout port fake sandbox,REVIEW_THEN_IMPLEMENT,61;62;73
+76,76A,A,codex/firstvibe-collab-76a-webhook-inbox-idempotency,합성 webhook 검증 inbox 순서 처리,REVIEW_THEN_IMPLEMENT,62;67A;75A
+77,77A,A,codex/firstvibe-collab-77a-billing-reconciliation-ledger,결제 ledger entitlement 재조정 상태기계,REVIEW_THEN_IMPLEMENT,67A;74A;76A
+78,78A,A,codex/firstvibe-collab-78a-telemetry-redaction,로그 trace metric allowlist canary 차단,REVIEW_THEN_IMPLEMENT,61;62;68A;69A;70A;71A;72A;74A;75A;76A;77A
+79,79,standard,codex/firstvibe-collab-79-local-observability-slo,로컬 SLI SLO health 장애 runbook,IMPLEMENT,61;78A
+80,80A,A,codex/firstvibe-collab-80a-privacy-data-lifecycle,기술 데이터 지도 보존 export 삭제 lifecycle,REVIEW_THEN_IMPLEMENT,65A;66A;67A;68A;69A;70A;71A;72A;73;74A;75A;76A;77A;78A;79
+81,81,standard,codex/firstvibe-collab-81-android-project-shell,Android 합성 앱 프로젝트 뼈대,IMPLEMENT,1A;2A
+82,82,standard,codex/firstvibe-collab-82-android-synthetic-compose-catalog,Android 합성 카탈로그 Compose 컴포넌트,IMPLEMENT,81
+83,83A,A,codex/firstvibe-collab-83a-android-keystore-biometric-review,Keystore BiometricPrompt 설계 검토,REVIEW_ONLY,8A;81
+84,84A,A,codex/firstvibe-collab-84a-android-data-exposure-review,Android 플랫폼 노출 경계 검토,REVIEW_ONLY,81;82
+85,85,standard,codex/firstvibe-collab-85-pwa-installability-draft,PWA 설치 metadata icon 초안,IMPLEMENT,22;23
+86,86A,A,codex/firstvibe-collab-86a-pwa-update-rollback-review,PWA 업데이트 rollback 보안 검토,REVIEW_ONLY,85
+87,87,standard,codex/firstvibe-collab-87-extension-synthetic-shell,권한 없는 브라우저 확장 합성 shell,IMPLEMENT,23;30
+88,88A,A,codex/firstvibe-collab-88a-extension-security-review,브라우저 확장 도메인 공급망 검토,REVIEW_ONLY,87
+89,89,standard,codex/firstvibe-collab-89-cli-record-only-contract,합성 읽기 전용 CLI 계약,IMPLEMENT,30
+90,90A,A,codex/firstvibe-collab-90a-cli-redaction-review,CLI 로그 터미널 안전성 검토,REVIEW_ONLY,89
+91,91,standard,codex/firstvibe-collab-91-mcp-record-only-schemas,비실행 MCP 연결 기록 schema,IMPLEMENT,30
+92,92A,A,codex/firstvibe-collab-92a-mcp-security-review,MCP prompt injection 동의 유출 검토,REVIEW_ONLY,91
+93,93,standard,codex/firstvibe-collab-93-release-artifact-manifest,로컬 release artifact SHA256 도구,IMPLEMENT,1A;2A
+94,94,standard,codex/firstvibe-collab-94-oss-sbom-input-inventory,OSS SBOM 입력 목록 NOTICE 초안,IMPLEMENT,93
+95,95A,A,codex/firstvibe-collab-95a-artifact-provenance-review,서명 provenance 신뢰 모델 검토,REVIEW_ONLY,93;94
+96,96,standard,codex/firstvibe-collab-96-play-listing-data-safety-draft,Google Play listing Data Safety 초안,IMPLEMENT,33;80A;81;82
+97,97,standard,codex/firstvibe-collab-97-staging-deploy-dry-run,provider neutral staging 배포 dry-run 계약,IMPLEMENT,86A;93
+98,98A,A,codex/firstvibe-collab-98a-security-evidence-packet,출시 전 보안 증거 패킷 감사,REVIEW_ONLY,80A;83A;84A;86A;88A;90A;92A;95A
+99,99,standard,codex/firstvibe-collab-99-external-ai-intake-audit,외부 AI 결과 기계적 검수,IMPLEMENT,81;82;83A;84A;85;86A;87;88A;89;90A;91;92A;93;94;95A;96;97
+100,100A,A,codex/firstvibe-collab-100a-pr-release-go-no-go,최종 Draft PR release Go No-Go 판정,REVIEW_ONLY,98A;99

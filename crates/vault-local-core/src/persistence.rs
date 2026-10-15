@@ -266,6 +266,81 @@ fn create_synthetic_successor_with_revision_fill(
     predecessor: &SealedCredentialRecordV0Alpha1,
     fill_revision: impl FnOnce(&mut [u8; 32]) -> Result<(), LocalVaultError>,
 ) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_revision_fill(
+        session,
+        predecessor,
+        |_, _| Ok(()),
+        fill_revision,
+    )
+}
+
+pub(crate) fn create_synthetic_edited_successor_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_predecessor_v1(session, predecessor, |item, _| {
+        edit(item)
+    })
+}
+
+pub(crate) fn inspect_synthetic_predecessor_v1<T>(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    inspect: impl FnOnce(&CredentialItemV1, RevisionIdV1) -> Result<T, LocalVaultError>,
+) -> Result<T, LocalVaultError> {
+    let AuthenticatedItem::Current { metadata, item } =
+        authenticate_current_envelope(session, &predecessor.envelope)?
+    else {
+        return Err(LocalVaultError::CryptoFailure);
+    };
+
+    inspect(&item, metadata.revision_id)
+}
+
+/// Owned authenticated payload for reconstructing a closed candidate. The
+/// canonical envelope, not the cached locator, supplies both identities.
+pub(crate) fn inspect_owned_synthetic_predecessor_v1<T>(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    inspect: impl FnOnce(CredentialItemV1, RecordIdV1, RevisionIdV1) -> Result<T, LocalVaultError>,
+) -> Result<T, LocalVaultError> {
+    let AuthenticatedItem::Current { metadata, item } =
+        authenticate_current_envelope(session, &predecessor.envelope)?
+    else {
+        return Err(LocalVaultError::CryptoFailure);
+    };
+    inspect(*item, metadata.record_id, metadata.revision_id)
+}
+
+pub(crate) fn create_synthetic_edited_successor_with_predecessor_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_predecessor_and_revision_fill_v1(
+        session,
+        predecessor,
+        edit,
+        |revision| getrandom::fill(revision).map_err(|_| LocalVaultError::RngUnavailable),
+    )
+}
+
+pub(crate) fn create_synthetic_edited_successor_with_predecessor_and_revision_fill_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+    fill_revision: impl FnOnce(&mut [u8; 32]) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
+    create_synthetic_edited_successor_with_revision_fill(session, predecessor, edit, fill_revision)
+}
+
+fn create_synthetic_edited_successor_with_revision_fill(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+    fill_revision: impl FnOnce(&mut [u8; 32]) -> Result<(), LocalVaultError>,
+) -> Result<SyntheticCredentialSuccessorV1, LocalVaultError> {
     let AuthenticatedItem::Current { metadata, mut item } =
         authenticate_current_envelope(session, &predecessor.envelope)?
     else {
@@ -273,10 +348,10 @@ fn create_synthetic_successor_with_revision_fill(
     };
 
     let expected_revision_id = metadata.revision_id;
+    prepare_synthetic_successor_item(&mut item, expected_revision_id, edit)?;
     let mut revision_bytes = [0_u8; 32];
     fill_revision(&mut revision_bytes)?;
     let revision_id = RevisionIdV1::from_bytes(revision_bytes);
-    item.parent_revision_id = Some(expected_revision_id);
     let plaintext = encode_current_item(&item, revision_id)?;
     let padding_bucket = select_bucket(plaintext.expose_secret().len())?;
     let context = record_context(
@@ -293,6 +368,52 @@ fn create_synthetic_successor_with_revision_fill(
         sealed,
         expected_revision_id,
     })
+}
+
+fn prepare_synthetic_successor_item(
+    item: &mut CredentialItemV1,
+    expected_revision_id: RevisionIdV1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+) -> Result<(), LocalVaultError> {
+    // A completed cutover event remains in its immutable predecessor. Reject
+    // incomplete events before any edit or revision RNG can run. Apply this to
+    // every successor, including the generic/no-op path.
+    crate::rotation_lifecycle::prepare_rotation_successor_v1(item)?;
+    edit(item, expected_revision_id)?;
+    // The persistence boundary, not an edit closure, is authoritative for the
+    // immutable revision chain linkage.
+    item.parent_revision_id = Some(expected_revision_id);
+    Ok(())
+}
+
+/// Same authenticated transform, parent linkage, canonical payload encoder and
+/// padding selector as sealing, but no revision RNG or AEAD output allocation.
+pub(crate) fn synthetic_edited_successor_envelope_len_v1(
+    session: &VaultSession,
+    predecessor: &SealedCredentialRecordV0Alpha1,
+    edit: impl FnOnce(&mut CredentialItemV1, RevisionIdV1) -> Result<(), LocalVaultError>,
+) -> Result<usize, LocalVaultError> {
+    let AuthenticatedItem::Current { metadata, mut item } =
+        authenticate_current_envelope(session, &predecessor.envelope)?
+    else {
+        return Err(LocalVaultError::CryptoFailure);
+    };
+    prepare_synthetic_successor_item(&mut item, metadata.revision_id, edit)?;
+    // Revision IDs are fixed-width bytes. This non-parent placeholder exists
+    // only for validation/encoding and is never sealed or exposed as an ID.
+    let mut revision_bytes = *metadata.revision_id.as_bytes();
+    revision_bytes[0] ^= 1;
+    let revision_id = RevisionIdV1::from_bytes(revision_bytes);
+    let plaintext = encode_current_item(&item, revision_id)?;
+    let padding_bucket = select_bucket(plaintext.expose_secret().len())?;
+    let context = record_context(
+        session,
+        metadata.record_id,
+        revision_id,
+        session.key_epoch().get(),
+        padding_bucket,
+    )?;
+    vault_crypto::sealed_record_envelope_len_v0alpha1(&context).map_err(map_crypto_error)
 }
 
 fn projection_from_closed_record(

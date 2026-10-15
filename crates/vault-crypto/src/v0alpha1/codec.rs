@@ -269,6 +269,70 @@ pub(crate) fn encode_record_envelope(
     let mut encoder = Encoder::new(Vec::with_capacity(
         context.padding_bucket_bytes().saturating_add(256),
     ));
+    encode_record_prefix(
+        &mut encoder,
+        context,
+        item_key_nonce,
+        wrapped_item_key,
+        body_nonce,
+    )?;
+    encoder.bytes(encrypted_body).map_err(encode_error)?;
+
+    let encoded = encoder.into_writer();
+    reject_if_over_64_kib(&encoded)?;
+    Ok(encoded)
+}
+
+/// Exact current-suite envelope length, without entropy, encryption or an
+/// envelope allocation. The same canonical prefix encoder is used by sealing.
+pub fn sealed_record_envelope_len_v0alpha1(
+    context: &RecordContextV0Alpha1,
+) -> Result<usize, CryptoError> {
+    let mut encoder = Encoder::new(EncodedLength::default());
+    encode_record_prefix(
+        &mut encoder,
+        context,
+        &[0; NONCE_BYTES],
+        &[0; WRAPPED_KEY_BYTES],
+        &[0; NONCE_BYTES],
+    )?;
+    let body_length = context
+        .padding_bucket_bytes()
+        .checked_add(AUTH_TAG_BYTES)
+        .ok_or(CryptoError::LimitsExceeded)?;
+    // A definite CBOR byte-string length uses exactly the same additional-info
+    // width as this unsigned integer. Count its header, then its unallocated body.
+    encoder.u64(body_length as u64).map_err(encode_error)?;
+    let length = encoder
+        .into_writer()
+        .0
+        .checked_add(body_length)
+        .ok_or(CryptoError::LimitsExceeded)?;
+    if length > MAX_ENVELOPE_BYTES {
+        return Err(CryptoError::LimitsExceeded);
+    }
+    Ok(length)
+}
+
+#[derive(Default)]
+struct EncodedLength(usize);
+
+impl Write for EncodedLength {
+    type Error = Infallible;
+
+    fn write_all(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.0 = self.0.saturating_add(bytes.len());
+        Ok(())
+    }
+}
+
+fn encode_record_prefix<W: Write<Error = Infallible>>(
+    encoder: &mut Encoder<W>,
+    context: &RecordContextV0Alpha1,
+    item_key_nonce: &[u8; NONCE_BYTES],
+    wrapped_item_key: &[u8],
+    body_nonce: &[u8; NONCE_BYTES],
+) -> Result<(), CryptoError> {
     encoder.array(RECORD_FIELD_COUNT).map_err(encode_error)?;
     encoder.u64(WIRE_VERSION).map_err(encode_error)?;
     encoder.u64(SUITE_ID).map_err(encode_error)?;
@@ -291,11 +355,7 @@ pub(crate) fn encode_record_envelope(
     encoder.bytes(item_key_nonce).map_err(encode_error)?;
     encoder.bytes(wrapped_item_key).map_err(encode_error)?;
     encoder.bytes(body_nonce).map_err(encode_error)?;
-    encoder.bytes(encrypted_body).map_err(encode_error)?;
-
-    let encoded = encoder.into_writer();
-    reject_if_over_64_kib(&encoded)?;
-    Ok(encoded)
+    Ok(())
 }
 
 pub(crate) fn item_dek_aad(context: &RecordContextV0Alpha1) -> Result<Vec<u8>, CryptoError> {

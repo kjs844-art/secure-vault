@@ -16,8 +16,9 @@ use vault_local_store_sqlite::{
 };
 
 const PASSWORD_TEXT: &str = "DEMO_VALUE_ONLY_plaintext_scan_password.invalid";
-const MARKERS: [&[u8]; 7] = [
+const MARKERS: [&[u8]; 8] = [
     b"Example AI Workshop",
+    b"Example Workshop API Credential",
     b"demo-account",
     b"demo-project",
     b"DEMO_VALUE_ONLY_API_KEY_0001",

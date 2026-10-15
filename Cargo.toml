@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "crates/vault-client-wasm",
+    "crates/vault-client-bridge",
     "crates/vault-crypto",
     "crates/vault-local-core",
     "crates/vault-local-platform-windows",

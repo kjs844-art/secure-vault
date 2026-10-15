@@ -41,3 +41,5 @@ Slot의 추가 인증 데이터는 vault commitment, slot ID, 수단 종류, pro
 
 - [복구·보호 수단 설계](../superpowers/specs/2026-08-14-recovery-protection-design.md)
 - [보안 아키텍처](../SECURITY_ARCHITECTURE.md)
+- [제안 ADR 0004: Protection Key Slot wire v0alpha1](0004-protection-key-slot-wire-v0alpha1.md)
+- [제안 ADR 0005: Android 기기 키·생체 승인·무효화](0005-android-device-key-biometric-invalidation.md)
