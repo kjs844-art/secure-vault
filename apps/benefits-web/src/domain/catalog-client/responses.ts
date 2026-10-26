@@ -2,6 +2,8 @@
  * Catalog response validation from unknown JSON. Types are validated from
  * unknown, never trusted from declarations. No server imports.
  */
+import type { CatalogRequest } from "./requests.ts";
+
 export const CATALOG_VIEW_SCHEMA = "keyatlas.service-catalog.v1" as const;
 
 export type CatalogSubscriptionStatus = "active" | "trial" | "trial_ended" | "paused" | "cancelled" | "unknown";
@@ -57,6 +59,13 @@ export type CatalogHttpErrorCode =
 const ERRORS: readonly CatalogHttpErrorCode[] = ["API_NOT_FOUND", "API_METHOD_NOT_ALLOWED", "API_REQUEST_REJECTED",
   "API_MEDIA_TYPE", "API_BODY_TOO_LARGE", "API_INPUT_INVALID", "API_AUTH_REQUIRED", "API_SESSION_CHANGED",
   "API_RATE_LIMITED", "API_CONFLICT", "API_UNAVAILABLE", "API_TIMEOUT", "API_ABORTED"];
+// Keep aligned with the internal catalog HTTP boundary; no server runtime import.
+const ERROR_STATUS: Readonly<Record<CatalogHttpErrorCode, number>> = Object.freeze({
+  API_NOT_FOUND: 404, API_METHOD_NOT_ALLOWED: 405, API_REQUEST_REJECTED: 403,
+  API_MEDIA_TYPE: 415, API_BODY_TOO_LARGE: 413, API_INPUT_INVALID: 400,
+  API_AUTH_REQUIRED: 401, API_SESSION_CHANGED: 403, API_RATE_LIMITED: 429,
+  API_CONFLICT: 409, API_UNAVAILABLE: 503, API_TIMEOUT: 408, API_ABORTED: 408,
+});
 const PROFILE_KEYS = ["name", "provider", "planName", "accountLabel", "timezone", "subscriptionStatus", "trialEndsAt", "notes"];
 const STATUSES: readonly CatalogSubscriptionStatus[] = ["active", "trial", "trial_ended", "paused", "cancelled", "unknown"];
 
@@ -145,11 +154,14 @@ function serviceView(value: unknown): CatalogServiceView {
     "createdAt", "updatedAt", "provenance", "accountProof"]);
   if (raw.schema !== CATALOG_VIEW_SCHEMA || (raw.state !== "live" && raw.state !== "deleted")
     || raw.provenance !== "user-reported" || raw.accountProof !== "not-established") fail();
-  if (raw.state === "deleted" && raw.profile !== null) fail();
+  const createdAt = epoch(raw.createdAt);
+  const updatedAt = epoch(raw.updatedAt);
+  if ((raw.state === "deleted" && raw.profile !== null) || (raw.state === "live" && raw.profile === null)
+    || updatedAt < createdAt) fail();
   return Object.freeze({ schema: CATALOG_VIEW_SCHEMA, dataGeneration: revisionNumber(raw.dataGeneration),
     serviceId: identifier(raw.serviceId), serviceRevision: revisionNumber(raw.serviceRevision), state: raw.state,
-    profile: raw.profile === null ? null : profile(raw.profile), createdAt: epoch(raw.createdAt),
-    updatedAt: epoch(raw.updatedAt), provenance: "user-reported", accountProof: "not-established" });
+    profile: raw.profile === null ? null : profile(raw.profile), createdAt,
+    updatedAt, provenance: "user-reported", accountProof: "not-established" });
 }
 function cursor(value: unknown): CatalogCursorView {
   const raw = objectFields(value, ["afterId", "catalogRevision", "dataGeneration"]);
@@ -168,17 +180,32 @@ function singleView(value: unknown): CatalogServiceView {
 function page(value: unknown): CatalogPageView {
   const raw = objectFields(value, ["schema", "dataGeneration", "catalogRevision", "services", "nextCursor"]);
   if (raw.schema !== CATALOG_VIEW_SCHEMA) fail();
-  if (!Array.isArray(raw.services) || Object.getPrototypeOf(raw.services) !== Array.prototype
-    || raw.services.length > 50) fail();
-  const descriptors = Object.getOwnPropertyDescriptors(raw.services);
-  if (Reflect.ownKeys(descriptors).length !== raw.services.length + 1) fail();
-  const services = raw.services.map((entry) => serviceView(entry));
-  for (let index = 1; index < services.length; index++) {
-    if (services[index]!.serviceId <= services[index - 1]!.serviceId) fail();
+  if (!Array.isArray(raw.services) || Object.getPrototypeOf(raw.services) !== Array.prototype) fail();
+  // Check the scalar bound before materializing per-entry descriptors for a
+  // potentially large JSON array. Do not execute an entry getter to inspect it.
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(raw.services, "length");
+  const length = lengthDescriptor?.value as unknown;
+  if (!lengthDescriptor || !Object.hasOwn(lengthDescriptor, "value") || typeof length !== "number"
+    || !Number.isSafeInteger(length) || length < 0 || length > 50) fail();
+  const descriptors = Object.getOwnPropertyDescriptors(raw.services as object);
+  if (descriptors.length?.value !== length || Reflect.ownKeys(descriptors).length !== length + 1) fail();
+  const dataGeneration = revisionNumber(raw.dataGeneration);
+  const catalogRevision = revisionNumber(raw.catalogRevision);
+  const services: CatalogServiceView[] = [];
+  for (let index = 0; index < length; index++) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !Object.hasOwn(descriptor, "value") || !descriptor.enumerable) fail();
+    const entry = serviceView(descriptor.value);
+    // The server lists live rows only under one owner/generation snapshot.
+    if (entry.state !== "live" || entry.dataGeneration !== dataGeneration
+      || (index > 0 && entry.serviceId <= services[index - 1]!.serviceId)) fail();
+    services.push(entry);
   }
-  return Object.freeze({ schema: CATALOG_VIEW_SCHEMA, dataGeneration: revisionNumber(raw.dataGeneration),
-    catalogRevision: revisionNumber(raw.catalogRevision), services: Object.freeze(services),
-    nextCursor: raw.nextCursor === null ? null : cursor(raw.nextCursor) });
+  const nextCursor = raw.nextCursor === null ? null : cursor(raw.nextCursor);
+  if (nextCursor !== null && (length === 0 || nextCursor.dataGeneration !== dataGeneration
+    || nextCursor.catalogRevision !== catalogRevision || nextCursor.afterId !== services[length - 1]!.serviceId)) fail();
+  return Object.freeze({ schema: CATALOG_VIEW_SCHEMA, dataGeneration,
+    catalogRevision, services: Object.freeze(services), nextCursor });
 }
 
 /** Validate one catalog success payload from unknown decoded JSON. */
@@ -189,10 +216,58 @@ export function decodeCatalogSuccess(action: "create" | "update" | "delete" | "g
       return Object.freeze({ kind: "receipt", receipt: receipt(payload) });
     }
     if (action === "get") return Object.freeze({ kind: "view", view: singleView(payload) });
-    return Object.freeze({ kind: "page", page: page(payload) });
+    if (action === "list") return Object.freeze({ kind: "page", page: page(payload) });
+    return null;
   } catch {
     return null;
   }
+}
+
+function sameProfile(actual: CatalogServiceProfileView | null, expected: Record<string, unknown>): boolean {
+  return actual !== null && PROFILE_KEYS.every((key) =>
+    actual[key as keyof CatalogServiceProfileView] === expected[key]);
+}
+
+/** Bind a decoded response to a validated, detached request; not an auth check. */
+export function decodeCatalogSuccessForRequest(request: CatalogRequest, payload: unknown): CatalogSuccess | null {
+  try {
+    const success = decodeCatalogSuccess(request.action, payload);
+    if (success === null) return null;
+    if (request.action === "get") {
+      return success.kind === "view" && success.view.serviceId === request.body.serviceId ? success : null;
+    }
+    if (request.action === "list") {
+      if (success.kind !== "page") return null;
+      const { page } = success;
+      const { limit, cursor } = request.body;
+      if (page.services.length > limit || (page.nextCursor !== null && page.services.length !== limit)) return null;
+      if (cursor !== null && (page.dataGeneration !== cursor.dataGeneration
+        || page.catalogRevision !== cursor.catalogRevision
+        || page.services.some((entry) => entry.serviceId <= cursor.afterId))) return null;
+      return success;
+    }
+    if (success.kind !== "receipt" || success.receipt.operationId !== request.body.operationId) return null;
+    const { service, replayed } = success.receipt;
+    const expectedRevision = request.action === "create" ? 1 : request.body.expectedRevision + 1;
+    if (!Number.isSafeInteger(expectedRevision) || service.serviceRevision < expectedRevision
+      || (!replayed && service.serviceRevision !== expectedRevision)) return null;
+    if (request.action !== "create" && service.serviceId !== request.body.serviceId) return null;
+    if (request.action === "delete") return service.state === "deleted" ? success : null;
+    // Replay loads CURRENT state, not the historic operation snapshot. A later
+    // revision can legitimately have another profile or be a deletion tombstone.
+    if (service.serviceRevision === expectedRevision && (service.state !== "live"
+      || !sameProfile(service.profile, request.body.profile))) return null;
+    if (request.action === "create" && service.serviceRevision === 1
+      && service.createdAt !== service.updatedAt) return null;
+    return success;
+  } catch {
+    return null;
+  }
+}
+
+/** Fixed HTTP status for a decoded catalog error code. */
+export function catalogErrorStatus(code: CatalogHttpErrorCode): number {
+  return ERROR_STATUS[code];
 }
 
 /** Validate one fixed catalog error envelope from unknown decoded JSON. */

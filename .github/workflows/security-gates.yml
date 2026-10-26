@@ -205,6 +205,11 @@ jobs:
         working-directory: apps/landing
         run: npm run build
 
+      - name: Verify landing caption accessibility regressions
+        shell: pwsh
+        working-directory: apps/landing
+        run: node --test scripts/captions.node-test.mjs
+
       # Generated bundles do not exist in a clean checkout. Scan them only
       # after all app builds, while retaining the same closed boundary.
       - name: Re-scan repository and generated artifacts after both app builds

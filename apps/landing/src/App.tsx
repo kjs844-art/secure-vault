@@ -84,10 +84,10 @@ export default function App() {
       <section className="story" id="security" aria-label="어떻게 잠기는가">
         <div className="slot" /><div className="slot" /><div className="slot" /><div className="slot" />
       </section>
-      <div className="captions" aria-live="polite">
-        {CAPTIONS.map(([text, tag], i) => (
-          <p key={tag} className={`caption${beat === i + 1 ? " on" : ""}`}>{text}<small>{tag}</small></p>
-        ))}
+      <div className="captions" role="status" aria-live="polite" aria-atomic="true">
+        {CAPTIONS.map(([text, tag], i) => beat === i + 1 ? (
+          <p key={tag} className="caption on">{text}<small>{tag}</small></p>
+        ) : null)}
       </div>
 
       <section className="chapter" id="map">

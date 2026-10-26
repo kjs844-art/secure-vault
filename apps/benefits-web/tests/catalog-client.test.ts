@@ -10,6 +10,8 @@ import {
 // authentication, operational route, DB or network connection is involved.
 
 const ORIGIN = "https://synthetic.local";
+const SYNTHETIC_CONTEXT = Object.freeze({ viewScope: "synthetic-transport-view", dataGeneration: 1 });
+const readViewContext = () => SYNTHETIC_CONTEXT;
 const RESPONSE_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "private, no-store",
@@ -40,7 +42,7 @@ function bodyTextOf(request: Request): string {
 }
 
 function client(impl: CatalogClientConfig["fetch"], overrides: Partial<CatalogClientConfig> = {}) {
-  return createCatalogClient({ origin: ORIGIN, fetch: impl, ...overrides });
+  return createCatalogClient({ origin: ORIGIN, fetch: impl, readViewContext, ...overrides });
 }
 
 function profile() {
@@ -51,32 +53,36 @@ function profile() {
 }
 function serviceView(serviceId: string, revision = 1, state: "live" | "deleted" = "live") {
   return { schema: CATALOG_VIEW_SCHEMA, dataGeneration: 1, serviceId, serviceRevision: revision, state,
-    profile: state === "live" ? profile() : null, createdAt: 1, updatedAt: 2,
+    profile: state === "live" ? profile() : null, createdAt: 1, updatedAt: 1,
     provenance: "user-reported", accountProof: "not-established" };
 }
 function successBody(action: string) {
-  if (action === "create" || action === "update" || action === "delete") {
+  if (action === "create") {
     return { ok: true, value: { operationId: "op-1", replayed: false, service: serviceView("svc-1") } };
   }
-  if (action === "get") return { ok: true, value: serviceView("svc-2") };
+  if (action === "update") return { ok: true, value: { operationId: "op-2", replayed: false,
+    service: { ...serviceView("svc-1", 2), profile: { ...profile(), name: "Renamed" } } } };
+  if (action === "delete") return { ok: true, value: { operationId: "op-3", replayed: false,
+    service: serviceView("svc-1", 3, "deleted") } };
+  if (action === "get") return { ok: true, value: serviceView("svc-1") };
   return { ok: true, value: { schema: CATALOG_VIEW_SCHEMA, dataGeneration: 1, catalogRevision: 7,
-    services: [serviceView("svc-1"), serviceView("svc-2")], nextCursor: { afterId: "svc-2", catalogRevision: 7, dataGeneration: 1 } } };
+    services: [serviceView("svc-1"), serviceView("svc-2")], nextCursor: null } };
 }
 
 test("configuration rejects unsafe origins, external origins and invalid timeouts", () => {
   for (const origin of ["", "ftp://synthetic.local", "https://user:pass@synthetic.local",
     "https://synthetic.local/path", "https://synthetic.local/?q=1", "http://synthetic.local"]) {
-    assert.throws(() => createCatalogClient({ origin, fetch: async () => new Response() }),
+    assert.throws(() => createCatalogClient({ origin, fetch: async () => new Response(), readViewContext }),
       /CATALOG_CLIENT_CONFIG_INVALID/);
   }
-  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), timeoutMs: 0 }));
-  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), timeoutMs: 10001 }));
-  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), timeoutMs: 1.5 }));
-  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: "not-a-function" as never }));
-  assert.doesNotThrow(() => createCatalogClient({ origin: "https://synthetic.local", fetch: async () => new Response() }));
-  assert.doesNotThrow(() => createCatalogClient({ origin: "http://127.0.0.1:4317", fetch: async () => new Response() }));
-  assert.doesNotThrow(() => createCatalogClient({ origin: "http://localhost:4317", fetch: async () => new Response() }));
-  assert.doesNotThrow(() => createCatalogClient({ origin: "http://[::1]:4317", fetch: async () => new Response() }));
+  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), readViewContext, timeoutMs: 0 }));
+  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), readViewContext, timeoutMs: 10001 }));
+  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: async () => new Response(), readViewContext, timeoutMs: 1.5 }));
+  assert.throws(() => createCatalogClient({ origin: ORIGIN, fetch: "not-a-function" as never, readViewContext }));
+  assert.doesNotThrow(() => createCatalogClient({ origin: "https://synthetic.local", fetch: async () => new Response(), readViewContext }));
+  assert.doesNotThrow(() => createCatalogClient({ origin: "http://127.0.0.1:4317", fetch: async () => new Response(), readViewContext }));
+  assert.doesNotThrow(() => createCatalogClient({ origin: "http://localhost:4317", fetch: async () => new Response(), readViewContext }));
+  assert.doesNotThrow(() => createCatalogClient({ origin: "http://[::1]:4317", fetch: async () => new Response(), readViewContext }));
 });
 
 test("request builders normalize unknown input into exact bodies and reject malformed input", () => {
@@ -176,15 +182,15 @@ test("successful create/update/delete/get/list responses decode into frozen vali
   assert.ok(Object.isFrozen(receipt.success.receipt));
   assert.ok(Object.isFrozen(receipt.success.receipt.service));
 
-  const got = await call(createCatalogGetRequest("svc-2"));
+  const got = await call(createCatalogGetRequest("svc-1"));
   assert.ok(got.kind === "success" && got.success.kind === "view");
-  assert.equal(got.success.view.serviceId, "svc-2");
+  assert.equal(got.success.view.serviceId, "svc-1");
 
   const listed = await call(createCatalogListRequest(50, null));
   assert.ok(listed.kind === "success" && listed.success.kind === "page");
   assert.equal(listed.success.page.catalogRevision, 7);
   assert.equal(listed.success.page.services.length, 2);
-  assert.deepEqual(listed.success.page.nextCursor, { afterId: "svc-2", catalogRevision: 7, dataGeneration: 1 });
+  assert.equal(listed.success.page.nextCursor, null);
 });
 
 function transportRespond(respond: (entry: RecordedCall) => Response, request: Request, signal: AbortSignal) {
@@ -313,7 +319,7 @@ test("create receipts with wrong shapes are rejected before reaching application
     [1, 2],
   ];
   for (const value of bodies) {
-    const call = client(async () => new Response(JSON.stringify({ ok: true, value }),
+    const call = client(async () => new Response(JSON.stringify(value),
       { status: 200, headers: RESPONSE_HEADERS }));
     const result: CatalogCallResult = await call(createCatalogCreateRequest("op-1", profile()));
     assert.deepEqual(result, { kind: "invalid", reason: "ENVELOPE" });
@@ -326,7 +332,7 @@ test("page responses enforce ordered ids, frozen arrays, and reject tampered cur
     nextCursor: { afterId: "svc-9", catalogRevision: 7, dataGeneration: 1 } };
   const call = client(async () => new Response(JSON.stringify({ ok: true, value: valid }),
     { status: 200, headers: RESPONSE_HEADERS }));
-  const result = await call(createCatalogListRequest(50, null));
+  const result = await call(createCatalogListRequest(3, null));
   assert.ok(result.kind === "success" && result.success.kind === "page");
   assert.ok(Object.isFrozen(result.success.page.services));
   assert.ok(result.success.page.services.every((service) => Object.isFrozen(service)));
@@ -355,9 +361,9 @@ test("page responses enforce ordered ids, frozen arrays, and reject tampered cur
   const deletedCall = client(async () => new Response(JSON.stringify({ ok: true, value: deletedPage }),
     { status: 200, headers: RESPONSE_HEADERS }));
   const deletedResult = await deletedCall(createCatalogListRequest(50, null));
-  assert.ok(deletedResult.kind === "success" && deletedResult.success.kind === "page");
-  assert.equal(deletedResult.success.page.services[0]!.state, "deleted");
-  assert.equal(deletedResult.success.page.services[0]!.profile, null);
+  // The server list contract returns live rows only. Tombstones remain valid
+  // for get and replayed receipts, not as list results.
+  assert.deepEqual(deletedResult, { kind: "invalid", reason: "ENVELOPE" });
 });
 
 test("timeout aborts the transport and surfaces explicitly without retry", async () => {

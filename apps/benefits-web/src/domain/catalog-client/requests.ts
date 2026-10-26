@@ -100,11 +100,13 @@ function revisionNumber(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) fail();
   return value;
 }
+const PROFILE_FIELDS = ["name", "provider", "planName", "accountLabel", "timezone", "subscriptionStatus", "trialEndsAt", "notes"] as const;
 function profile(input: CatalogServiceProfileInput): Record<string, unknown> {
-  return Object.freeze({ name: text(input.name, 160), provider: nullableText(input.provider, 160),
-    planName: nullableText(input.planName, 160), accountLabel: nullableText(input.accountLabel, 160),
-    timezone: timezone(input.timezone), subscriptionStatus: status(input.subscriptionStatus),
-    trialEndsAt: trialEndsAt(input.trialEndsAt), notes: notes(input.notes) });
+  const fields = exactFields(input, PROFILE_FIELDS);
+  return Object.freeze({ name: text(fields.name, 160), provider: nullableText(fields.provider, 160),
+    planName: nullableText(fields.planName, 160), accountLabel: nullableText(fields.accountLabel, 160),
+    timezone: timezone(fields.timezone), subscriptionStatus: status(fields.subscriptionStatus),
+    trialEndsAt: trialEndsAt(fields.trialEndsAt), notes: notes(fields.notes) });
 }
 
 export function createCatalogCreateRequest(operationId: unknown, input: CatalogServiceProfileInput): CatalogCreateRequest {
@@ -131,13 +133,64 @@ export function createCatalogListRequest(limit: unknown,
   if (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit < 1 || limit > 50) fail();
   let parsed: CatalogListRequest["body"]["cursor"] = null;
   if (cursor !== null) {
-    if (typeof cursor !== "object") fail();
-    const keys = Object.keys(cursor).sort();
-    if (keys.length !== 3 || !keys.includes("afterId") || !keys.includes("catalogRevision")
-      || !keys.includes("dataGeneration")) fail();
-    const raw = cursor as Record<string, unknown>;
+    const raw = exactFields(cursor, ["afterId", "catalogRevision", "dataGeneration"]);
     parsed = Object.freeze({ afterId: identifier(raw.afterId), catalogRevision: revisionNumber(raw.catalogRevision),
       dataGeneration: revisionNumber(raw.dataGeneration) });
   }
   return Object.freeze({ action: "list", body: Object.freeze({ limit, cursor: parsed }) });
+}
+
+function exactFields(value: unknown, keys: readonly string[]): Record<string, unknown> {
+  try {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) fail();
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) fail();
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const actual = Reflect.ownKeys(descriptors);
+    if (actual.length !== keys.length || actual.some((key) => typeof key !== "string" || !keys.includes(key))) fail();
+    const fields: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    for (const key of keys) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, "value") || !descriptor.enumerable) fail();
+      fields[key] = descriptor.value as unknown;
+    }
+    return fields;
+  } catch {
+    // Reflection can execute Proxy traps. Do not echo their exceptions; this
+    // validates data records, not a sandbox for arbitrary JavaScript objects.
+    return fail();
+  }
+}
+
+/** Detach before transport; plain-object getters/toJSON hooks are not invoked. */
+export function snapshotCatalogRequest(input: unknown): CatalogRequest {
+  const request = exactFields(input, ["action", "body"]);
+  const snapshotProfile = (value: unknown) => exactFields(value, PROFILE_FIELDS) as unknown as CatalogServiceProfileInput;
+  switch (request.action) {
+    case "create": {
+      const body = exactFields(request.body, ["operationId", "decision", "profile"]);
+      if (body.decision !== "create") fail();
+      return createCatalogCreateRequest(body.operationId, snapshotProfile(body.profile));
+    }
+    case "update": {
+      const body = exactFields(request.body, ["serviceId", "expectedRevision", "operationId", "decision", "profile"]);
+      if (body.decision !== "update") fail();
+      return createCatalogUpdateRequest(body.serviceId, body.expectedRevision, body.operationId, snapshotProfile(body.profile));
+    }
+    case "delete": {
+      const body = exactFields(request.body, ["serviceId", "expectedRevision", "operationId", "decision"]);
+      if (body.decision !== "delete") fail();
+      return createCatalogDeleteRequest(body.serviceId, body.expectedRevision, body.operationId);
+    }
+    case "get": {
+      const body = exactFields(request.body, ["serviceId"]);
+      return createCatalogGetRequest(body.serviceId);
+    }
+    case "list": {
+      const body = exactFields(request.body, ["limit", "cursor"]);
+      const cursor = body.cursor === null ? null : exactFields(body.cursor, ["afterId", "catalogRevision", "dataGeneration"]);
+      return createCatalogListRequest(body.limit, cursor);
+    }
+    default: return fail();
+  }
 }

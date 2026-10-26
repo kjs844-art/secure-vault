@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   CONFIDENCE_LABELS,
   FILTER_LABELS,
@@ -38,12 +38,30 @@ export function DiscoveryInboxPanel({
   readonly items?: readonly DiscoveryInboxItem[];
   readonly sourceLabel?: string;
 }) {
-  const seed = useMemo(
-    () => buildDiscoveryInbox(items ?? SYNTHETIC_DISCOVERY_INBOX_ITEMS),
-    [items],
+  const sourceItems = items ?? SYNTHETIC_DISCOVERY_INBOX_ITEMS;
+  const [state, setState] = useState<{
+    sourceItems: readonly DiscoveryInboxItem[];
+    scope: symbol;
+    view: DiscoveryInboxView;
+  }>(
+    () => ({ sourceItems, scope: Symbol("discovery-input"), view: buildDiscoveryInbox(sourceItems) }),
   );
-  const [view, setView] = useState<DiscoveryInboxView>(seed);
-  const live = view.items === seed.items ? view : seed;
+  // Reducer actions create new arrays too: identify replacement input by its
+  // source, not by the edited view. Reset before committing the new input view.
+  let current = state;
+  if (state.sourceItems !== sourceItems) {
+    current = { sourceItems, scope: Symbol("discovery-input"), view: buildDiscoveryInbox(sourceItems) };
+    setState(current);
+  }
+  const live = current.view;
+  const scope = current.scope;
+  const dispatch = (action: Parameters<typeof reduceDiscoveryInbox>[1]) => {
+    // Generation identity also rejects retained A callbacks after A -> B -> A,
+    // while consecutive actions within one generation use the latest state.
+    setState((previous) => previous.scope === scope
+      ? { ...previous, view: reduceDiscoveryInbox(previous.view, action) }
+      : previous);
+  };
 
   return (
     <main className="discovery-inbox">
@@ -68,7 +86,7 @@ export function DiscoveryInboxPanel({
             type="button"
             data-testid={`discovery-filter-${filter}`}
             aria-pressed={live.filter === filter}
-            onClick={() => setView((current) => reduceDiscoveryInbox(current, { type: "filter", filter }))}
+            onClick={() => dispatch({ type: "filter", filter })}
           >
             {FILTER_LABELS[filter]} {live.counts[filter]}
           </button>
@@ -100,11 +118,11 @@ export function DiscoveryInboxPanel({
                         key={action.confidence}
                         type="button"
                         data-testid={`discovery-action-${action.confidence}`}
-                        onClick={() => setView((current) => reduceDiscoveryInbox(current, {
+                        onClick={() => dispatch({
                           type: "set-confidence",
                           id: item.id,
                           confidence: action.confidence,
-                        }))}
+                        })}
                       >
                         {action.label}
                       </button>
