@@ -3,6 +3,7 @@ import { createCandidateBatchClient, type CandidateBatchClientConfig } from "../
 import { createCandidateBatchReader } from "../../domain/candidate-batch-reader";
 import { normalizeReviewWorkspaceContext } from "../../domain/review-client/workspace";
 import { CandidateReviewWorkspace, type CandidateReviewWorkspaceProps } from "./CandidateReviewWorkspace";
+import { CandidateDiscardPanel } from "./CandidateDiscardPanel";
 
 export interface LoadedCandidateReviewWorkspaceProps extends Omit<CandidateReviewWorkspaceProps, "source"> {
   /** Stable injected transport. No ambient fetch or implicit account connection. */
@@ -115,5 +116,7 @@ export function LoadedCandidateReviewWorkspace(props: LoadedCandidateReviewWorks
       : "조회 버튼을 누르면 후보를 불러옵니다. 자동 조회하지 않습니다."}</p>
     <CandidateReviewWorkspace workspace={workspace} context={props.context} source={source}
       referenceTime={props.referenceTime} clocks={props.clocks} createOperationId={props.createOperationId} />
+    <CandidateDiscardPanel workspace={workspace} context={props.context} batchReference={reference}
+      reader={reader} client={props.client} />
   </section>;
 }

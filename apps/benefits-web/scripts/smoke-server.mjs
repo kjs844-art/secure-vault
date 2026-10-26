@@ -79,7 +79,7 @@ try {
     await result.arrayBuffer();
   }
   for (const path of ["/auth", "/oauth/gmail/return", "/mcp", "/gmail", "/services",
-    "/api/catalog", "/api/catalog/create", "/api/catalog/list", "/api/review", "/api/inbox", "/api/inbox/batch",
+    "/api/catalog", "/api/catalog/create", "/api/catalog/list", "/api/review", "/api/inbox", "/api/inbox/batch", "/api/inbox/discard",
     ...["preview", "confirm", "reject", "delete", "get", "list"].map((action) => "/api/review/" + action)]) {
     const result = await request(path, { method: "POST", body: "synthetic" });
     assert.equal(result.status, 503);

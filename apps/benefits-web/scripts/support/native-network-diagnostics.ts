@@ -1,6 +1,6 @@
 /** Opt-in test diagnostics, not a transport success classifier. Raw CDP IDs
  * stay private keys. Server spans and Playwright Requests are NOT joined by URL. */
-const ROUTES = ["/__candidate_completion", "/api/inbox/batch", "/api/catalog/list", "/api/catalog/create",
+const ROUTES = ["/__candidate_completion", "/api/inbox/batch", "/api/inbox/discard", "/api/catalog/list", "/api/catalog/create",
   "/api/catalog/update", "/api/catalog/delete", "/api/review/preview", "/api/review/confirm",
   "/api/review/reject", "/api/review/delete", "/api/review/get", "/api/review/list"] as const;
 type Route = typeof ROUTES[number];

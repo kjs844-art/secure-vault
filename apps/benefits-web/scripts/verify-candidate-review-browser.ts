@@ -26,6 +26,8 @@ import { createCandidateSelectionFixture } from "../tests/support/candidate-sele
 import { SYNTHETIC_PRIVATE } from "../tests/support/review-memory-store.ts";
 import { createReviewHttpHandler } from "../src/server/http/review-http.ts";
 import { createInboxHttpHandler } from "../src/server/http/inbox-http.ts";
+import { createInboxDiscardHttpHandler } from "../src/server/http/inbox-discard-http.ts";
+import { INBOX_DISCARD_REQUEST_HEADER } from "../src/server/http/inbox-discard-http-contracts.ts";
 import { createCandidateBatchReferences } from "../src/server/inbox/batch-references.ts";
 import type { ReviewAuthority } from "../src/server/review/contracts.ts";
 import { createCatalogHttpHandler } from "../src/server/http/catalog-http.ts";
@@ -46,18 +48,20 @@ type EventSample = { type: string; trusted: boolean; persisted: boolean | null; 
 declare global { interface Window { candidateProbe?: { marker: string; events: EventSample[]; detach: () => void };
   candidateExpiryObserved?: number | null } }
 const args = process.argv.slice(2), developmentEffects = args.includes("--development-effects");
+const discardOnly = args.includes("--discard-only");
 const bootstrapDiagnostic = args.includes("--bootstrap-diagnostic"), BOOTSTRAP_CYCLES = 8;
 const bootstrapAfterHistory = args.includes("--bootstrap-after-history");
 const nativeNetworkDiagnosticsEnabled = args.includes("--native-network-diagnostics");
 const cleanupExperimentArgument = args.find((flag) => flag.startsWith("--candidate-cleanup-experiment="));
 const cleanupExperiment = cleanupExperimentArgument?.slice("--candidate-cleanup-experiment=".length) as CandidateCleanupExperimentMode | undefined;
 const browserChannel = process.env.BROWSER_CHANNEL ?? "chrome";
-const report = { scope: bootstrapAfterHistory ? "ACTUAL_REACT_HISTORY_BOOTSTRAP_DIAGNOSTIC_SYNTHETIC_HTTP"
+const report = { scope: discardOnly ? "ACTUAL_CANDIDATE_DISCARD_SYNTHETIC_HTTP" : bootstrapAfterHistory ? "ACTUAL_REACT_HISTORY_BOOTSTRAP_DIAGNOSTIC_SYNTHETIC_HTTP"
   : bootstrapDiagnostic ? "ACTUAL_REACT_BOOTSTRAP_DIAGNOSTIC_SYNTHETIC_HTTP" : "ACTUAL_CANDIDATE_REVIEW_COMPOSITION_SYNTHETIC_HTTP",
-  mode: bootstrapAfterHistory ? "BOOTSTRAP_AFTER_HISTORY_DIAGNOSTIC"
+  mode: discardOnly ? "DISCARD_ONLY" : bootstrapAfterHistory ? "BOOTSTRAP_AFTER_HISTORY_DIAGNOSTIC"
     : bootstrapDiagnostic ? "BOOTSTRAP_DIAGNOSTIC" : "FULL_COMPOSITION", stage: "preflight", status: "BLOCKED",
   startedAt: new Date().toISOString(), groups: [] as string[], observations: {} as Record<string, unknown>,
-  limits: [bootstrapDiagnostic
+  limits: [discardOnly ? "Focused candidate-discard regression only; earlier full-composition groups are not executed"
+    : bootstrapDiagnostic
     ? "Diagnostic only: eight fresh-document cycles alternate seeded-two/empty-zero services, read completion/catalog/two candidates, create once and close; not full composition or root-cause proof"
     : "Full composition mode; the opt-in bootstrap diagnostic is not executed",
     ...(bootstrapAfterHistory ? ["Each diagnostic cycle first holds an actual completion request, natively leaves and returns closed, then takes a separate baseline for the existing four read/create requests",
@@ -92,6 +96,11 @@ const sockets = new Set<Socket>(), responses = new Set<ServerResponse>(), idle =
 const assets = new Map<string, { body: string | Uint8Array; type: string }>();
 const wire: { action: string; status: number; digest: string; requestBytes: number; responseBytes: number }[] = [];
 const reads: { status: number; code: string | null; requestBytes: number; responseBytes: number }[] = [];
+const discardWire: { status: number; digest: string; requestBytes: number; responseBytes: number }[] = [];
+let expectedDiscardStatus: number | null = null;
+const matchedDiscardStatuses: number[] = [];
+let holdNextDiscard = false, releaseDiscard: (() => void) | null = null;
+function releaseHeldDiscard() { releaseDiscard?.(); }
 const catalogWire: { status: number; code: string | null; cursor: boolean; requestBytes: number; responseBytes: number }[] = [];
 const catalogMutationWire: { action: "create" | "update" | "delete"; status: number; code: string | null; digest: string; replayed: boolean | null;
   state: string | null; responseWriteAttempted: boolean; requestBytes: number; responseBytes: number }[] = [];
@@ -101,6 +110,7 @@ const COOKIE = "synthetic-candidate-session";
 let fixture!: Awaited<ReturnType<typeof createCandidateSelectionFixture>>;
 let handler: ReturnType<typeof createReviewHttpHandler>;
 let inboxHandler: ReturnType<typeof createInboxHttpHandler>;
+let discardHandler: ReturnType<typeof createInboxDiscardHttpHandler>;
 let catalogHandler: ReturnType<typeof createCatalogHttpHandler>;
 let origin = "", html = "", active = 0, expected503 = false, matched503 = 0;
 let expected401 = false, matched401 = 0;
@@ -227,11 +237,13 @@ async function bridge(message: IncomingMessage, response: ServerResponse) {
     assert.equal(message.method, "POST"); assert.equal(message.headers.origin, origin);
     const completionRead = message.url === "/__candidate_completion";
     const candidateRead = message.url === "/api/inbox/batch", catalogRead = message.url === "/api/catalog/list";
+    const candidateDiscard = message.url === "/api/inbox/discard";
     const catalogCreate = message.url === "/api/catalog/create", catalogUpdate = message.url === "/api/catalog/update";
     const catalogDelete = message.url === "/api/catalog/delete";
     const catalogMutation = catalogCreate || catalogUpdate || catalogDelete;
     assert.equal(message.headers["x-keyatlas-request"], completionRead ? "synthetic-completion-observation"
-      : candidateRead ? INBOX_REQUEST_HEADER : catalogRead || catalogMutation ? CATALOG_REQUEST_HEADER : REVIEW_REQUEST_HEADER);
+      : candidateRead ? INBOX_REQUEST_HEADER : candidateDiscard ? INBOX_DISCARD_REQUEST_HEADER
+        : catalogRead || catalogMutation ? CATALOG_REQUEST_HEADER : REVIEW_REQUEST_HEADER);
     const chunks: Buffer[] = []; let count = 0;
     for await (const raw of message) { const part = Buffer.from(raw); count += part.length;
       assert.ok(count <= MAX_REVIEW_REQUEST_BYTES); chunks.push(part); }
@@ -259,7 +271,7 @@ async function bridge(message: IncomingMessage, response: ServerResponse) {
     }
     for (const [key, value] of Object.entries(message.headers)) if (value !== undefined)
       for (const item of Array.isArray(value) ? value : [value]) headers.append(key, item);
-    const result = await (candidateRead ? inboxHandler : catalogRead || catalogMutation ? catalogHandler : handler)(new Request(origin + message.url, { method: "POST", headers, body: new Uint8Array(body), signal: abort.signal }));
+    const result = await (candidateRead ? inboxHandler : candidateDiscard ? discardHandler : catalogRead || catalogMutation ? catalogHandler : handler)(new Request(origin + message.url, { method: "POST", headers, body: new Uint8Array(body), signal: abort.signal }));
     const bytes = new Uint8Array(await result.arrayBuffer()); assert.ok(bytes.length <= MAX_REVIEW_RESPONSE_BYTES);
     const text = new TextDecoder().decode(bytes), parsed: unknown = JSON.parse(text);
     let createReceipt: Extract<ReturnType<typeof decodeCatalogSuccess>, { kind: "receipt" }> | null = null;
@@ -308,6 +320,10 @@ async function bridge(message: IncomingMessage, response: ServerResponse) {
     }
     if (candidateRead) reads.push({ status: result.status, code: result.status === 200 ? null : (JSON.parse(text) as { code: string }).code,
       requestBytes: body.length, responseBytes: bytes.length });
+    else if (candidateDiscard) {
+      assert.ok(body.length <= 1024 && bytes.length <= 2048);
+      discardWire.push({ status: result.status, digest: digest(body), requestBytes: body.length, responseBytes: bytes.length });
+    }
     else if (catalogRead) catalogWire.push({ status: result.status, code: result.status === 200 ? null : (JSON.parse(text) as { code: string }).code,
       cursor: (JSON.parse(body.toString("utf8")) as { cursor: unknown }).cursor !== null, requestBytes: body.length, responseBytes: bytes.length });
     else if (catalogMutation) catalogMutationWire.push({ action: catalogCreate ? "create" : catalogUpdate ? "update" : "delete", status: result.status,
@@ -331,7 +347,7 @@ async function bridge(message: IncomingMessage, response: ServerResponse) {
 const server = createServer((request, response) => {
   response.setHeader("cache-control", "max-age=0");
   response.setHeader("content-security-policy", "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
-  if (request.url === "/api/catalog/list" || request.url === "/api/catalog/create" || request.url === "/api/catalog/update" || request.url === "/api/catalog/delete" || request.url === "/api/inbox/batch" || request.url === "/__candidate_completion") { void bridge(request, response); return; }
+  if (request.url === "/api/catalog/list" || request.url === "/api/catalog/create" || request.url === "/api/catalog/update" || request.url === "/api/catalog/delete" || request.url === "/api/inbox/batch" || request.url === "/api/inbox/discard" || request.url === "/__candidate_completion") { void bridge(request, response); return; }
   if (/^\/api\/review\/(preview|confirm|reject|delete|get|list)$/.test(request.url ?? "")) { void bridge(request, response); return; }
   if (request.method !== "GET" && request.method !== "HEAD") { response.statusCode = 405; response.end(); return; }
   if (request.url === "/__candidate.html") { response.setHeader("content-type", "text/html; charset=utf-8"); response.end(html); }
@@ -655,13 +671,15 @@ async function settleControlledCompletion(page: Page, id: number, outcome: "reso
 try {
   assert.equal(args[0], "--synthetic-only", "CANDIDATE_SYNTHETIC_ACK_REQUIRED");
   assert.ok(args.length >= 1 && args.length <= 6 && new Set(args).size === args.length
-    && args.slice(1).every((flag) => flag === "--development-effects" || flag === "--bootstrap-diagnostic"
+    && args.slice(1).every((flag) => flag === "--development-effects" || flag === "--bootstrap-diagnostic" || flag === "--discard-only"
       || flag === "--native-network-diagnostics" || flag === "--bootstrap-after-history"
       || flag === "--candidate-cleanup-experiment=observe" || flag === "--candidate-cleanup-experiment=omit_perform_success_discard"),
   "CANDIDATE_DIAGNOSTIC_FLAGS_INVALID");
   assert.ok(args.filter((flag) => flag.startsWith("--candidate-cleanup-experiment=")).length <= 1,
     "CANDIDATE_EXPERIMENT_VARIANT_AMBIGUOUS");
   assert.ok(!bootstrapAfterHistory || bootstrapDiagnostic, "CANDIDATE_HISTORY_REQUIRES_BOOTSTRAP_DIAGNOSTIC");
+  assert.ok(!discardOnly || (!bootstrapDiagnostic && !bootstrapAfterHistory && !cleanupExperiment), "CANDIDATE_DISCARD_MODE_CONFLICT");
+  if (discardOnly) report.limits.push("Focused discard regression only; the earlier full composition groups are NOT executed in this mode");
   assert.ok(browserChannel === "chrome" || browserChannel === "msedge", "CANDIDATE_BROWSER_CHANNEL_INVALID");
   report.stage = "fixture_bundle";
   let cleanupTransforms = 0;
@@ -740,6 +758,23 @@ try {
       }
       return { allowed: true, surface: INBOX_REQUEST_HEADER, requestId: request.requestId,
         action: request.action, authority: request.authority, expiresAt: request.notAfter };
+    } });
+  discardHandler = createInboxDiscardHttpHandler({ trustedOrigin: origin, now: clock, newId: () => fixture.store.dependencies.newId(),
+    transaction: (authority, task) => fixture.store.referenceDependencies.transaction(authority, task),
+    readSession: async ({ cookie }) => cookie === `synthetic-session=${COOKIE}` ? structuredClone(fixture.store.controls.authority) : null,
+    resolveBatch: (request, signal) => fixture.references.resolve(request, signal),
+    admit: async (request, signal) => {
+      if (holdNextDiscard) {
+        holdNextDiscard = false;
+        await new Promise<void>((resolve) => {
+          const finish = () => { signal.removeEventListener("abort", finish); resolve(); };
+          releaseDiscard = finish; signal.addEventListener("abort", finish, { once: true });
+          if (signal.aborted) finish();
+        });
+        releaseDiscard = null;
+      }
+      return { allowed: true, surface: INBOX_DISCARD_REQUEST_HEADER, requestId: request.requestId,
+        action: "discard", authority: request.authority, expiresAt: request.notAfter };
     } });
   catalogHandler = createCatalogHttpHandler({ trustedOrigin: origin, now: clock, newId: () => fixture.store.dependencies.newId(),
     transaction: async (authority, action) => {
@@ -832,15 +867,20 @@ try {
         && message.location().url === origin + "/api/catalog/delete") { expectedDelete409 = false; matchedDelete409++; }
       else if (expectedDelete401 && message.text() === "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
         && message.location().url === origin + "/api/catalog/delete") { expectedDelete401 = false; matchedDelete401++; }
-      else {
+      else if (expectedDiscardStatus !== null && message.location().url === origin + "/api/inbox/discard"
+        && message.text() === `Failed to load resource: the server responded with a status of ${expectedDiscardStatus} (${({ 401: "Unauthorized", 404: "Not Found", 409: "Conflict", 503: "Service Unavailable" } as Record<number, string>)[expectedDiscardStatus]})`) {
+        matchedDiscardStatuses.push(expectedDiscardStatus); expectedDiscardStatus = null;
+      } else {
         errors.console++;
         // Bounded enum-only diagnostics. Keep every unexpected event failing;
         // never print raw console text, URLs, payloads or user-controlled values.
         const entries = (report.observations.unexpectedConsole ??= []) as { stage: string; code: string }[];
         if (entries.length < 16) {
           const resource503 = message.text() === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)";
+          const httpCode = /^Failed to load resource: the server responded with a status of (400|401|403|404|408|409|415|429|500|503) /.exec(message.text())?.[1];
           const code = resource503 && message.location().url === origin + "/api/catalog/create" ? "CATALOG_CREATE_503"
-            : resource503 && message.location().url === origin + "/api/catalog/update" ? "CATALOG_UPDATE_503" : "OTHER";
+            : resource503 && message.location().url === origin + "/api/catalog/update" ? "CATALOG_UPDATE_503"
+              : httpCode ? `HTTP_${httpCode}` : /Maximum update depth exceeded|Minified React error #185/.test(message.text()) ? "REACT_UPDATE_DEPTH" : "OTHER";
           entries.push({ stage: report.stage, code });
         }
       }
@@ -964,6 +1004,7 @@ try {
     assert.equal(diagnostic.completedCycles, BOOTSTRAP_CYCLES);
     assert.equal(diagnostic.historyCycles, bootstrapAfterHistory ? BOOTSTRAP_CYCLES : 0);
   } else {
+  if (!discardOnly) {
   report.stage = "completion_delivery_recovery";
   await click(page, "Open"); await expect(panel(page)).toHaveAttribute("data-open", "yes");
   assert.equal(completions, 0); assert.deepEqual(fixture.readAnalysisCounts(), { quota: 1, mailbox: 1, analysis: 1 });
@@ -3160,6 +3201,130 @@ try {
   await recordLifecycle(page, manualMarker, "serviceManualFactsLifecycle");
   assert.equal(nativeApiRequestStarts, manualHistoryReads); assert.equal(catalogMutationWire.length, manualHistoryWrites);
   pass("manual_fact_unsent_draft_native_bfcache_retirement_without_automatic_http_or_save");
+
+  }
+  report.stage = "discard_intent_and_stale_callbacks";
+  await closePage(page); await whenIdle(); await freshFixture(); page = await newPage(); await open(page);
+  const discardPanel = () => page.getByTestId("candidate-discard");
+  const discardTarget = () => page.getByLabel("폐기할 후보 식별자", { exact: true });
+  const prepareDiscard = async (index: number) => {
+    await discardTarget().selectOption(fixture.batch.candidates[index]!.candidateId);
+    await click(page, "후보 폐기 대상 확인"); await expect(discardPanel()).toHaveAttribute("data-phase", "prepared");
+  };
+  // Controlled retained-React-callback check, distinct from native user input.
+  const retainClick = async (label: string) => page.getByRole("button", { name: label, exact: true }).evaluate((node) => {
+    const key = Object.keys(node).find((item) => item.startsWith("__reactProps$"));
+    if (!key) throw Error("CANDIDATE_REACT_CALLBACK_UNAVAILABLE");
+    const callback = (node as unknown as Record<string, { onClick?: () => void }>)[key]?.onClick;
+    if (typeof callback !== "function") throw Error("CANDIDATE_REACT_CALLBACK_UNAVAILABLE");
+    (window as unknown as { discardOldClick: () => void }).discardOldClick = callback;
+  });
+  const invokeRetained = async () => page.evaluate(() => {
+    const saved = window as unknown as { discardOldClick?: () => void }; const callback = saved.discardOldClick;
+    delete saved.discardOldClick; callback?.();
+  });
+  const discardBefore = discardWire.length;
+  await discardTarget().selectOption(fixture.batch.candidates[0]!.candidateId); await retainClick("후보 폐기 대상 확인");
+  await discardTarget().selectOption(fixture.batch.candidates[1]!.candidateId); await invokeRetained();
+  await expect(discardPanel()).toHaveAttribute("data-phase", "idle"); assert.equal(discardWire.length, discardBefore);
+  await click(page, "후보 폐기 대상 확인"); await expect(discardPanel()).toHaveAttribute("data-phase", "prepared");
+  await expect(page.getByTestId("candidate-discard-target")).toContainText(fixture.batch.candidates[1]!.candidateId);
+  await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기"); await retainClick("이 후보 내용 폐기");
+  await page.getByLabel("폐기 확인 문구", { exact: true }).fill(""); await invokeRetained();
+  await expect(discardPanel()).toHaveAttribute("data-phase", "prepared"); assert.equal(discardWire.length, discardBefore);
+  await page.getByLabel("폐기 확인 문구", { exact: true }).focus(); await page.keyboard.press("Escape");
+  await expect(discardPanel()).toHaveAttribute("data-phase", "idle"); await expect(page.getByTestId("candidate-discard-status")).toBeFocused();
+  assert.equal(discardWire.length, discardBefore);
+  await prepareDiscard(1); await reload(page); await expect(discardPanel()).toHaveAttribute("data-phase", "idle");
+  assert.equal(discardWire.length, discardBefore);
+  pass("discard_explicit_target_confirmation_escape_refresh_and_retained_callback_fences_no_implicit_http");
+
+  report.stage = "discard_preserves_uncertain_confirm";
+  await choose(page, 0, 0, "폐기와 별개로 보존할 합성 혜택"); await click(page, "미리보기 요청");
+  await expect(page.getByTestId("review-panel-preview")).toHaveCount(1); await whenIdle();
+  const confirmIndex = wire.length;
+  fixture.store.controls.afterCommit = () => { delete fixture.store.controls.afterCommit; throw Error(SYNTHETIC_PRIVATE); };
+  expected503 = true; await click(page, "이 내용으로 기록 저장");
+  await expect(page.getByRole("button", { name: "같은 요청의 결과 다시 확인", exact: true })).toBeEnabled(); await whenIdle();
+  const savedBenefits = structuredClone([...fixture.store.rows.benefits]);
+  const acceptedCandidate = structuredClone(fixture.store.rows.candidates.get(fixture.batch.candidates[0]!.candidateId));
+  await prepareDiscard(1); await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기");
+  holdNextDiscard = true; await click(page, "이 후보 내용 폐기");
+  await expect.poll(() => releaseDiscard !== null).toBe(true);
+  await expect(discardPanel()).toHaveAttribute("data-phase", "sending");
+  await expect(page.getByTestId("candidate-discard-status")).toBeFocused();
+  releaseHeldDiscard(); await expect(discardPanel()).toHaveAttribute("data-phase", "succeeded"); await whenIdle();
+  await expect(page.getByTestId("candidate-loader")).toHaveAttribute("data-phase", "idle");
+  await expect(page.getByRole("button", { name: "같은 요청의 결과 다시 확인", exact: true })).toBeEnabled();
+  assert.deepEqual([...fixture.store.rows.benefits], savedBenefits);
+  assert.deepEqual(fixture.store.rows.candidates.get(fixture.batch.candidates[0]!.candidateId), acceptedCandidate);
+  assert.equal(fixture.store.rows.candidates.get(fixture.batch.candidates[1]!.candidateId)?.state, "deleted");
+  await click(page, "같은 요청의 결과 다시 확인"); await expect(page.getByRole("group", { name: "결과 재확인", exact: true })).toHaveCount(0);
+  await whenIdle(); assert.equal(wire.at(-1)?.digest, wire[confirmIndex]?.digest); assert.deepEqual([...fixture.store.rows.benefits], savedBenefits);
+  pass("discard_held_request_keeps_focus_success_preserves_accepted_benefit_and_original_uncertain_confirm");
+
+  report.stage = "discard_lost_ack_exact_reconcile";
+  await closePage(page); await whenIdle(); await freshFixture(); page = await newPage(); await open(page);
+  await prepareDiscard(1); await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기");
+  expectedDiscardStatus = 503;
+  fixture.store.controls.afterCommit = () => { delete fixture.store.controls.afterCommit; throw Error(SYNTHETIC_PRIVATE); };
+  await click(page, "이 후보 내용 폐기"); await expect(discardPanel()).toHaveAttribute("data-phase", "uncertain"); await whenIdle();
+  const committedDiscard = fixture.store.snapshot(), firstDiscard = discardWire.at(-1)!;
+  assert.equal(firstDiscard.status, 503); const beforeDiscardRefresh = discardWire.length;
+  await receiveCompletion(page); await expect(discardPanel()).toHaveAttribute("data-phase", "uncertain");
+  await reload(page); await expect(discardPanel()).toHaveAttribute("data-phase", "uncertain");
+  await expect(page.getByTestId("candidate-discard-target")).toContainText(fixture.batch.candidates[1]!.candidateId);
+  assert.equal(discardWire.length, beforeDiscardRefresh);
+  await click(page, "같은 폐기 요청 결과 다시 확인"); await expect(discardPanel()).toHaveAttribute("data-phase", "succeeded"); await whenIdle();
+  assert.equal(discardWire.at(-1)?.digest, firstDiscard.digest); assert.equal(discardWire.at(-1)?.status, 200);
+  assert.deepEqual(fixture.store.snapshot(), committedDiscard);
+  pass("discard_lost_ack_preserves_exact_original_request_across_receipt_and_batch_refresh_no_reanalysis_or_second_erasure");
+
+  report.stage = "discard_postcommit_conflict_is_uncertain";
+  await closePage(page); await whenIdle(); await freshFixture(); page = await newPage(); await open(page);
+  await prepareDiscard(0); await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기");
+  fixture.store.controls.afterCommit = () => {
+    delete fixture.store.controls.afterCommit;
+    const row = fixture.store.rows.batchReferences.get(fixture.locator.batchReference)!;
+    fixture.store.rows.batchReferences.set(fixture.locator.batchReference, { ...row, state: "retired", revision: 2 });
+  };
+  expectedDiscardStatus = 409; await click(page, "이 후보 내용 폐기");
+  await expect(discardPanel()).toHaveAttribute("data-phase", "uncertain"); await whenIdle();
+  const retiredDiscard = discardWire.at(-1)!, retiredRows = fixture.store.snapshot();
+  assert.equal(retiredDiscard.status, 409); assert.equal(fixture.store.rows.candidates.get(fixture.batch.candidates[0]!.candidateId)?.state, "deleted");
+  expectedDiscardStatus = 404; await click(page, "같은 폐기 요청 결과 다시 확인");
+  await expect(discardPanel()).toHaveAttribute("data-phase", "uncertain"); await whenIdle();
+  assert.equal(discardWire.at(-1)?.status, 404); assert.equal(discardWire.at(-1)?.digest, retiredDiscard.digest);
+  assert.deepEqual(fixture.store.snapshot(), retiredRows); await expect(discardTarget()).toBeDisabled();
+  pass("discard_first_409_after_commit_and_replay_404_never_claim_no_commit_or_replace_original_request");
+
+  report.stage = "discard_expired_content_and_authority";
+  await closePage(page); await whenIdle(); await freshFixture(5000); page = await newPage(); await open(page);
+  await expect.poll(() => Date.now(), { timeout: 7000 }).toBeGreaterThanOrEqual(fixture.batch.candidates[0]!.accessExpiresAt);
+  await reload(page);
+  assert.ok((await fixture.refresh()).candidates.every((entry) => entry.state === "expired" && entry.content === null));
+  await prepareDiscard(1); await expect(discardPanel()).not.toContainText("Synthetic trial offer");
+  await expect(discardPanel()).not.toContainText("Synthetic Service");
+  await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기"); await click(page, "이 후보 내용 폐기");
+  await expect(discardPanel()).toHaveAttribute("data-phase", "succeeded"); await whenIdle();
+  assert.equal(fixture.store.rows.candidates.get(fixture.batch.candidates[1]!.candidateId)?.state, "deleted");
+  pass("discard_expired_pending_candidate_by_id_without_content_reexposure_or_access_renewal");
+  await reload(page); await prepareDiscard(0); await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기");
+  const beforeDiscardAuthority = fixture.store.snapshot(); fixture.store.controls.authority = null; expectedDiscardStatus = 401;
+  await click(page, "이 후보 내용 폐기"); await closed(page); await expect(discardPanel()).toHaveAttribute("data-phase", "closed"); await whenIdle();
+  assert.deepEqual(fixture.store.snapshot(), beforeDiscardAuthority); await expect(page.getByTestId("candidate-discard-target")).toHaveCount(0);
+  pass("discard_authority_rejection_closes_shared_workspace_without_erasure");
+
+  report.stage = "discard_native_history";
+  await closePage(page); await whenIdle(); await freshFixture(); page = await newPage(); await open(page); await prepareDiscard(0);
+  await page.getByLabel("폐기 확인 문구", { exact: true }).fill("폐기");
+  const discardMarker = await observeLifecycle(page), beforeDiscardHistory = nativeApiRequestStarts, discardHistoryWrites = discardWire.length;
+  await page.getByRole("link", { name: "Leave document", exact: true }).click();
+  await expect(page).toHaveURL(origin + "/__candidate_away.html"); await page.goBack({ waitUntil: "commit" }); await closed(page);
+  await expect(discardPanel()).toHaveAttribute("data-phase", "closed"); await expect(page.getByTestId("candidate-discard-target")).toHaveCount(0);
+  await recordLifecycle(page, discardMarker, "candidateDiscardLifecycle");
+  assert.equal(nativeApiRequestStarts, beforeDiscardHistory); assert.equal(discardWire.length, discardHistoryWrites);
+  pass("discard_prepared_confirmation_native_history_retires_without_automatic_request_or_reopen");
   }
 
   report.stage = "privacy_and_idle"; await whenIdle();
@@ -3167,11 +3332,14 @@ try {
   if (!bootstrapDiagnostic) await browserPrivacy(page);
   assert.deepEqual(errors, { bridge: 0, page: 0, console: 0, external: 0, websocket: 0, csp: 0, transport: 0 });
   assert.ok(wire.every((item) => item.status === 200 || item.status === 503));
-  assert.equal(wire.filter((item) => item.status === 503).length, bootstrapDiagnostic ? 0 : 3);
+  assert.equal(wire.filter((item) => item.status === 503).length, bootstrapDiagnostic ? 0 : discardOnly ? 1 : 4);
+  assert.equal(expectedDiscardStatus, null);
+  assert.ok(discardWire.every((item) => [200, 401, 404, 409, 503].includes(item.status)));
   assert.ok(reads.every((item) => [200, 408, 401, 403, 404].includes(item.status)));
   assert.ok(catalogWire.every((item) => [200, 408, 409, 401].includes(item.status)));
   assert.ok(catalogMutationWire.every((item) => [200, 503, 401, 408, 409].includes(item.status)));
   report.observations.http = { reviewRequests: wire.length, actualCatalogRequests: catalogWire.length, candidateReadRequests: reads.length,
+    candidateDiscardRequests: discardWire.length, matchedDiscardStatuses, discardRequestDigests: discardWire,
     completionObservations: completions, completionAborts, matchedCompletionAborts,
     serviceCreateRequests: catalogMutationWire.filter((item) => item.action === "create").length,
     serviceUpdateRequests: catalogMutationWire.filter((item) => item.action === "update").length,
@@ -3191,6 +3359,11 @@ try {
     maxResponseBytes: wire.length ? Math.max(...wire.map((item) => item.responseBytes)) : 0 };
   pass("bounded_minimal_responses_no_external_requests_unexpected_errors_or_browser_storage");
 } catch (error) {
+  report.observations.failureWireSummary = {
+    catalog: catalogWire.slice(-4).map(({ status, code }) => ({ status, code })),
+    candidates: reads.slice(-4).map(({ status, code }) => ({ status, code })),
+    discard: discardWire.slice(-4).map(({ status }) => ({ status })),
+  };
   failed = true; report.observations.failureClass = error instanceof Error ? error.name : "unknown";
   report.observations.failureCode = error instanceof Error ? /^CANDIDATE_[A-Z_]+/.exec(error.message)?.[0] ?? "UNCLASSIFIED" : "UNCLASSIFIED";
   report.observations.failureAction = error instanceof Error ? /^(?:locator|page)\.[A-Za-z]+/.exec(error.message)?.[0] ?? null : null;
@@ -3206,6 +3379,7 @@ try {
     report.observations.cleanupExperimentDocuments = cleanupExperimentDocuments;
   }
   releaseHeldRead(); releaseHeldCatalog(); releaseHeldCompletion(); releaseHeldCreateReply(); releaseHeldPreviewReply(); releaseHeldGetReply();
+  releaseHeldDiscard();
   if (fixture) delete fixture.store.controls.afterCommit;
   const cleanupErrors: string[] = [];
   nativeDiagnostics?.setPhase("CONTEXT_CLOSE");
