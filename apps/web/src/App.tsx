@@ -39,6 +39,7 @@ export function App() {
         <p><a href="/?view=local-vault">로컬 합성 금고 열기 →</a></p>
         <p><a href="/?view=identity-map">Identity Map 3단계 탐색 →</a></p>
         <p><a href="/?view=discovery-inbox">가입 흔적 Discovery Inbox →</a></p>
+        <p><a href="/?view=signup-mail-discovery">합성 메일 범위 선택 · 동의 · 후보 검토 →</a></p>
       </section>
 
       <section aria-labelledby="inventory-heading">
