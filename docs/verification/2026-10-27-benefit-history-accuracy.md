@@ -139,3 +139,66 @@ separate requirement before any merge.
 #44's full Edge/native transport failure, earlier Chrome failure of unknown
 cause, and #42's exact idle-transition INCONCLUSIVE evidence remain open
 independently. This display fix does not resolve or hide them.
+
+## PR #45 review follow-up (2026-10-26 20:17 UTC)
+
+The receipts above describe initial head `779c042`; the following evidence is
+newer. PR #45 was changed to **Draft** after the final Chrome cleanup failure
+below. Neither earlier green browser evidence nor CI substitutes for this result.
+
+| Review item | Change and evidence |
+| --- | --- |
+| Ended status with conflicting service end date | A matching `trial_ended` status now independently requires review when the explicit benefit expiry is future. Future/malformed service dates do not silently restore a usable-looking meter. History classification is unchanged; there is no automatic archive or new real-provider policy. |
+| Card label versus attention item | Tests require both separately, not an either/or condition. |
+| Visual meter despite removed ARIA | Tests and browser runner also check the actual inline-style bar. An actual SSR counterexample removes role/ARIA and proves the visual guard still detects the bar. |
+| Ordinary valid meters | Every ordinary card is checked against its calculable ratio, including recorded zero and unknown values. |
+| Irrelevant history count | History summary accepts two arguments; legacy three-argument/union-view use remains compatible. Review still requires a count in the type signature. |
+| Screenshots from failed checks | PNGs stay in memory until all checks AND owned cleanup pass; absence checks and exclusive `wx` creation remain. Existing evidence is never deleted or overwritten. A new fixed `benefit-history-20261027-review/` directory is reserved for follow-up evidence. The failed Chrome run created no directory or screenshots. |
+| Failure diagnostics | Fixed allowlisted stage/detail/scenario/code/name and separate cleanup failures preserve the failure location. Raw messages, stack traces, URLs and bodies are not emitted. |
+
+Before the product fix, the three focused test files produced **39 PASS / 5 FAIL
+of 44, exit 1**, no skip/cancel. Five new ended-status cases (future, impossible,
+date-only, arbitrary text, empty string) all failed the actual card-label check:
+the card showed ordinary remaining text and a meter. After the product fix the
+six-file focus passed **182/182, exit 0**. Adding the independent visual-guard
+counterexample then gave the final three-file focus **45/45 PASS, exit 0**.
+
+Final full `npm test`: **3,325/3,325 PASS**, fail/cancel/skip 0, exit 0.
+`npm run build`, post-build `node scripts/check-boundaries.mjs` (96 source / 6
+client), `npm run test:smoke` (5 assets), and the same strict TypeScript command
+covering three tests plus runner/fixture all exit 0. Existing build warnings are
+not suppressed. Independent read-only review confirmed the conservative display
+change does not alter the history decision or apply to unrelated credits.
+
+### Final actual browser results — not all green
+
+| Browser | Actual interval (UTC) | Functional checks | Overall result |
+| --- | --- | --- | --- |
+| Chrome 156.0.8078.48, with `--screenshots` | 20:15:13.527–20:15:35.068 | 20 groups recorded, all seven error counters 0 | **FAIL, exit 1**: `CLEANUP / BROWSER_CLOSE / HISTORY_DEADLINE`. All cleanup flags ultimately true; no screenshot published. |
+| Edge 156.0.4314.42, without screenshots | 20:16:31.792–20:16:39.508 | 20 groups PASS, all seven error counters 0 | **PASS, exit 0**, all cleanup flags true, failure null. |
+
+Both used the same 212,026-byte fixture entry SHA256
+`dd214fd9969d72cfea198aa08a27f8eb982af84258e75042cdab2061ce420253`.
+The added groups cover each viewport's valid meter positive control and
+ended-status/future or malformed-date records. Requests remain loopback-only in
+the owned context. Root confirmed zero matching Playwright test-browser processes
+after Chrome before starting Edge. No existing browser/tool was installed,
+upgraded, security-bypassed or terminated by name. Chrome reported a different
+installed version from the earlier 155 receipt; this is observed version drift,
+not evidence of its cause or proof that it caused the failure.
+
+The runner's two preflight rejection cases (missing exact flag and existing PNG)
+returned expected child exit 1 with fixed diagnostic codes, no browser/entry or
+images, and cleanup true; the author's assertion wrapper exited 0. Those checks
+used the original evidence directory before root selected the fresh review path.
+The failed actual screenshot run now proves later cleanup failure leaves no
+screenshots. Successful post-cleanup screenshot publication in the new revision
+was not exercised. Two file writes are not a filesystem-atomic group: an I/O
+failure on the second write can leave a first, already-validated image; the report
+records the published path and FAIL. No claim of atomic image publication is made.
+
+PR CI on initial `779c042` failed before Rust/web execution because pinned Pester
+5.7.1 could not download; this is separate from Chrome cleanup. Its push run was
+still in progress at the review checkpoint. Changed-head CI and review must be
+checked anew. #44's transport failures and #42's timing INCONCLUSIVE remain
+independent. This follow-up remains a Draft checkpoint, not merge/release approval.

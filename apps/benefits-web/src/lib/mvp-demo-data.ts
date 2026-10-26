@@ -169,8 +169,10 @@ export function getDemoBenefitReviewReason(
     if (benefit.benefit_kind !== "trial" || !service || service.id !== benefit.service_id
       || (service.subscription_status !== "trial" && service.subscription_status !== "trial_ended")) return null;
     const trialEnd = parseDemoInstant(service.trial_ends_at);
-    const ended = trialEnd !== null ? trialEnd <= referenceTime
-      : service.subscription_status === "trial_ended" && service.trial_ends_at === null;
+    // An ended status remains conflicting evidence even if its date is missing,
+    // malformed or future. Request review; do not change history classification.
+    const ended = service.subscription_status === "trial_ended"
+      || (trialEnd !== null && trialEnd <= referenceTime);
     return ended ? "서비스 체험은 종료된 기록이지만 혜택 만료일은 남아 있음 · 이용 가능 여부 확인 필요" : null;
   }
   return hasLaterMatchingTrialEnd(benefit, service, referenceTime)

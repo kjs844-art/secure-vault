@@ -10,13 +10,17 @@ import "../../src/styles.css";
 
 const REFERENCE = Date.parse("2026-02-28T00:00:00.000Z");
 const DAY = 86400000;
-const MODES = ["normal", "expired-benefit", "ended-trial", "date-only", "impossible-service", "escaped"] as const;
+const MODES = ["normal", "expired-benefit", "ended-trial", "date-only", "ended-status-future",
+  "ended-status-malformed", "impossible-service", "escaped"] as const;
 type Mode = typeof MODES[number];
 function sample(mode: Exclude<Mode, "normal">): DemoDataset {
   const base = buildDemoData(REFERENCE), future = new Date(REFERENCE + DAY).toISOString();
   const past = new Date(REFERENCE - DAY).toISOString();
   const service = { ...base.services[1]!, id: "synthetic-history-service",
-    trial_ends_at: mode === "ended-trial" ? past : mode === "impossible-service" ? "2026-02-30T00:00:00.000Z" : future };
+    subscription_status: mode === "ended-status-future" || mode === "ended-status-malformed"
+      ? "trial_ended" as const : base.services[1]!.subscription_status,
+    trial_ends_at: mode === "ended-trial" ? past : mode === "impossible-service" || mode === "ended-status-malformed"
+      ? "2026-02-30T00:00:00.000Z" : future };
   const benefit = { ...base.benefits[0]!, id: "synthetic-history-benefit", service_id: service.id,
     name: mode === "escaped" ? "<img src=x onerror=alert(1)>" : "합성 체험 기록",
     benefit_kind: "trial" as const, granted_amount: 14, remaining_amount: 5,

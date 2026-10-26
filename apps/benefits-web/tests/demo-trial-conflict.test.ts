@@ -14,6 +14,7 @@ const base = buildDemoData(now);
 const service: DemoService = { ...base.services[1]!, trial_ends_at: iso(-1) };
 const benefit = { ...base.benefits[0]!, service_id: service.id,
   benefit_kind: "trial" as const, expires_at: iso(1), remaining_amount: 5, granted_amount: 14 };
+const VISUAL_METER = /class="[^"]*\bbenefit-meter\b|<div\b[^>]*style="[^"]*\bheight:0\.4rem(?:;|")/;
 
 for (const owner of [service, { ...service, trial_ends_at: iso(0) },
   { ...service, subscription_status: "trial_ended" as const },
@@ -33,7 +34,39 @@ for (const owner of [service, { ...service, trial_ends_at: iso(0) },
       selectedId: owner.id, onSelect: () => {}, referenceTime: now }));
     assert.match(markup, /<strong>확인 필요<\/strong>/);
     assert.match(markup, /기록된 잔량/);
-    assert.doesNotMatch(markup, /role="meter"|기록 당시 잔량/);
+    assert.doesNotMatch(markup, /role="meter"|aria-valuenow|기록 당시 잔량/);
+    assert.doesNotMatch(markup, VISUAL_METER);
+    assert.deepEqual(source, before);
+  });
+}
+
+for (const [name, trialEnd] of [
+  ["future timestamp", iso(1)],
+  ["impossible calendar date", "2026-02-30T00:00:00.000Z"],
+  ["date only", "2026-10-17"],
+  ["invalid text", "not-a-date"],
+  ["empty string", ""],
+] as const) {
+  test(`ended status with ${name} and future benefit expiry requires review, not history`, () => {
+    const owner = { ...service, subscription_status: "trial_ended" as const, trial_ends_at: trialEnd };
+    const source = { ...base, services: [owner], benefits: [benefit] };
+    const before = structuredClone(source);
+    const review = selectDemoHistoryView(source, "review", now);
+    assert.deepEqual(review.benefits, [benefit]);
+    assert.equal(getDemoBenefitHistoryReason(benefit, owner, now), null);
+    assert.deepEqual(selectDemoHistoryView(source, "history", now).benefits, []);
+    const markup = renderToStaticMarkup(createElement(ServiceList, { dataset: review,
+      selectedId: owner.id, onSelect: () => {}, referenceTime: now }));
+    assert.match(markup, /<strong>확인 필요<\/strong>/);
+    assert.match(markup, /기록된 잔량/);
+    assert.doesNotMatch(markup, /role="meter"|aria-valuenow|기록 당시 잔량|<strong>지난 기록<\/strong>/);
+    assert.doesNotMatch(markup, VISUAL_METER);
+    const reason = getDemoBenefitReviewReason(benefit, owner, now);
+    assert.match(reason ?? "", /확인 필요/);
+    const attention = collectAttention(review, new Date(now)).filter(({ id }) => id === `expiry-${benefit.id}`);
+    assert.equal(attention.length, 1);
+    assert.equal(attention[0]!.kind, "needs_review");
+    assert.equal(attention[0]!.detail, reason);
     assert.deepEqual(source, before);
   });
 }
@@ -42,12 +75,15 @@ test("ended-trial conflict does not apply to unrelated service, credit or unknow
   for (const owner of [undefined, { ...service, id: "synthetic-other" },
     { ...service, subscription_status: "active" as const },
     { ...service, trial_ends_at: iso(1) }, { ...service, trial_ends_at: null },
-    { ...service, trial_ends_at: "2026-10-17" },
-    { ...service, subscription_status: "trial_ended" as const, trial_ends_at: "2026-02-30T00:00:00.000Z" },
-    { ...service, subscription_status: "trial_ended" as const, trial_ends_at: iso(1) }]) {
+    { ...service, trial_ends_at: "2026-10-17" }]) {
     assert.equal(getDemoBenefitReviewReason(benefit, owner, now), null);
   }
   assert.equal(getDemoBenefitReviewReason({ ...benefit, benefit_kind: "credit" }, service, now), null);
+  for (const trialEnd of [iso(1), "2026-02-30T00:00:00.000Z"]) {
+    const owner = { ...service, subscription_status: "trial_ended" as const, trial_ends_at: trialEnd };
+    assert.equal(getDemoBenefitReviewReason({ ...benefit, benefit_kind: "credit" }, owner, now), null);
+    assert.equal(getDemoBenefitReviewReason(benefit, { ...owner, id: "synthetic-other" }, now), null);
+  }
   for (const reference of [NaN, Infinity, 9e20]) {
     assert.equal(getDemoBenefitReviewReason(benefit, service, reference), null);
   }

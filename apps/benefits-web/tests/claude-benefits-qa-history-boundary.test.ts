@@ -10,7 +10,7 @@ import {
   buildDemoDataWithHistory, getDemoBenefitHistoryReason, selectDemoHistoryView,
 } from "../src/lib/demo-benefit-history.ts";
 import {
-  buildDemoData, collectAttention, daysUntil, DEMO_DATASET_STAMP, DEMO_NOTICE, getDemoBenefitReviewReason, STATUS_LABELS,
+  buildDemoData, collectAttention, daysUntil, DEMO_DATASET_STAMP, DEMO_NOTICE, getDemoBenefitReviewReason, remainingRatio, STATUS_LABELS,
   type DemoBenefit, type DemoDataset, type DemoService,
 } from "../src/lib/mvp-demo-data.ts";
 
@@ -22,6 +22,9 @@ const iso = (offset: number) => new Date(REFERENCE + offset).toISOString();
 const render = (element: ReactElement) => renderToStaticMarkup(element);
 const visibleText = (markup: string) => markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 const articles = (markup: string) => [...markup.matchAll(/<article\b[\s\S]*?<\/article>/g)].map((match) => match[0]);
+// Actual inline-style wrapper plus a future named class: neither may survive
+// merely because role/ARIA attributes were removed.
+const VISUAL_METER = /class="[^"]*\bbenefit-meter\b|<div\b[^>]*style="[^"]*\bheight:0\.4rem(?:;|")/;
 const expanded = () => buildDemoDataWithHistory(REFERENCE);
 const historyView = () => selectDemoHistoryView(expanded(), "history", REFERENCE);
 const reviewView = () => selectDemoHistoryView(expanded(), "review", REFERENCE);
@@ -34,7 +37,8 @@ const dataset = (services: DemoService[], benefits: DemoBenefit[]): DemoDataset 
 
 test("history summary counts past records as records, not as current benefits or review items", () => {
   const history = historyView();
-  const stats = demoSummaryStats("history", history, 0);
+  const stats = demoSummaryStats("history", history);
+  assert.deepEqual(stats, demoSummaryStats("history", history, 99), "legacy attention count does not affect history summary");
   const text = stats.map(({ label, value, detail }) => `${label} ${value} ${detail}`).join(" | ");
   assert.ok(stats.some(({ label, value }) => label === "지난 기록" && value === `${history.benefits.length}`), text);
   assert.match(text, /현재 사용할 수 있는 혜택이 아님/);
@@ -59,6 +63,7 @@ test("every history card is individually labelled past with no spendable wording
     assert.match(visibleText(card), /현재 잔액을 조회한 값이 아닙니다/);
     assert.doesNotMatch(visibleText(card), /(?:^|\s)남음\s/);
     assert.doesNotMatch(card, /role="meter"|aria-valuenow|비율을 계산할 수 없습니다/);
+    assert.doesNotMatch(card, VISUAL_METER);
   }
 });
 
@@ -140,10 +145,12 @@ test("a trial benefit past its recorded expiry should not look spendable in the 
   assert.deepEqual(review.benefits.map(({ id }) => id), [pastExpiryTrial.id]);
   const markup = renderList(review, false);
   const attention = collectAttention(review, new Date(REFERENCE));
-  const flagged = /확인 필요/.test(visibleText(articles(markup)[0] ?? ""))
-    || attention.some(({ id, kind }) => id.includes(pastExpiryTrial.id) && kind === "needs_review");
-  assert.ok(flagged, "expired-but-conflicting record is shown without a 확인 필요 label");
-  assert.doesNotMatch(markup, /role="meter"/);
+  const cards = articles(markup);
+  assert.equal(cards.length, 1);
+  assert.match(cards[0]!, /<strong>확인 필요<\/strong>/);
+  assert.equal(attention.filter(({ id, kind }) => id === `expiry-${pastExpiryTrial.id}` && kind === "needs_review").length, 1);
+  assert.doesNotMatch(markup, /role="meter"|aria-valuenow/);
+  assert.doesNotMatch(markup, VISUAL_METER);
 });
 
 test("an ambiguous recorded expiry should be counted as a 확인 필요 item", () => {
@@ -231,15 +238,37 @@ test("review cards with a review reason show a 확인 필요 label without spend
     assert.match(visibleText(card), /기록된 잔량/);
     assert.doesNotMatch(visibleText(card), /(?:^|\s)남음\s/);
     assert.doesNotMatch(card, /role="meter"|aria-valuenow/);
+    assert.doesNotMatch(card, VISUAL_METER);
     assert.doesNotMatch(card, /<strong>지난 기록<\/strong>|기록 당시 잔량/);
   }
 });
 
 test("ordinary review cards keep 남음 wording and their meter", () => {
-  const cards = articles(renderList(reviewView(), false));
+  const review = reviewView();
+  const cards = articles(renderList(review, false));
   assert.equal(cards.length, 6);
-  assert.ok(cards.some((card) => /role="meter"/.test(card)));
-  assert.ok(cards.every((card) => !/<strong>확인 필요<\/strong>/.test(card) && /(?:^|\s)남음\s/.test(visibleText(card))));
+  for (const benefit of review.benefits) {
+    const matches = cards.filter((card) => card.includes(`aria-labelledby="${benefit.id}-name"`));
+    assert.equal(matches.length, 1, benefit.id);
+    const card = matches[0]!;
+    const ratio = remainingRatio(benefit);
+    assert.doesNotMatch(card, /<strong>확인 필요<\/strong>/);
+    assert.match(visibleText(card), /(?:^|\s)남음\s/);
+    assert.equal(/role="meter"/.test(card), ratio !== null, `${benefit.id} accessible meter`);
+    assert.equal(VISUAL_METER.test(card), ratio !== null, `${benefit.id} visual meter`);
+    if (ratio === null) assert.doesNotMatch(card, /aria-valuenow/);
+    else assert.match(card, new RegExp(`aria-valuenow="${Math.round(ratio * 100)}"`));
+  }
+});
+
+test("visual meter guard still rejects an actual meter after role and ARIA are removed", () => {
+  const benefit = buildDemoData(REFERENCE).benefits[0]!;
+  assert.notEqual(remainingRatio(benefit), null);
+  const markup = render(createElement(BenefitCard, { benefit }));
+  const withoutAccessibility = markup.replace(/\srole="[^"]*"/g, "").replace(/\saria-[\w-]+="[^"]*"/g, "");
+  assert.doesNotMatch(withoutAccessibility, /\srole=|\saria-/);
+  assert.match(withoutAccessibility, VISUAL_METER);
+  assert.throws(() => assert.doesNotMatch(withoutAccessibility, VISUAL_METER), { code: "ERR_ASSERTION" });
 });
 
 // Integration regression: service-level expiry must use the same strict instant

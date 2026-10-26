@@ -10,6 +10,9 @@ import { buildDemoData, collectAttention, daysUntil } from "../src/lib/mvp-demo-
 // demonstrate contradictory output rather than missing newly added exports.
 const NOW = Date.parse("2026-02-28T00:00:00.000Z");
 const instant = (offset: number) => new Date(NOW + offset).toISOString();
+// The current visual meter has inline styles, not a benefit-meter class.
+// Check its actual element independently of accessibility attributes.
+const VISUAL_METER = /class="[^"]*\bbenefit-meter\b|<div\b[^>]*style="[^"]*\bheight:0\.4rem(?:;|")/;
 
 test("impossible calendar dates cannot turn into a trial countdown", () => {
   assert.equal(daysUntil("2026-02-30T00:00:00.000Z", new Date(NOW)), null);
@@ -35,7 +38,8 @@ for (const [name, benefitExpiry, trialExpiry] of [
     }));
     assert.match(markup, /<strong>확인 필요<\/strong>/);
     assert.match(markup, /기록된 잔량/);
-    assert.doesNotMatch(markup, /role="meter"|기록 당시 잔량/);
+    assert.doesNotMatch(markup, /role="meter"|aria-valuenow|기록 당시 잔량/);
+    assert.doesNotMatch(markup, VISUAL_METER);
     assert.equal(collectAttention(review, new Date(NOW))
       .filter(({ id, kind }) => id === `expiry-${row.id}` && kind === "needs_review").length, 1);
     assert.deepEqual(dataset, before);
