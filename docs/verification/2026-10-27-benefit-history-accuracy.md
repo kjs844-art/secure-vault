@@ -211,8 +211,9 @@ are unchanged from `8e8c28a`. A test-only helper now records connection loss and
 the one `browser.close()` Promise separately. The limit remains 10,000ms; a
 settlement-time monotonic check also rejects completion at/after that limit even
 if the timer callback is late. A later resolution/rejection cannot erase FAIL.
-Only the observer's listener is removed, and diagnostics never read raw error
-properties. Screenshot publication still requires all checks AND cleanup.
+Only the observer's listener is removed. The new close-observation helper never
+inspects rejected error values; the runner emits only allowlisted failure
+metadata. Screenshot publication still requires all checks AND cleanup.
 
 New/changed diagnostic paths:
 
