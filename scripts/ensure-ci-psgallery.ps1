@@ -35,4 +35,8 @@ catch {
     throw 'CI_PSGALLERY_PREPARATION_FAILED'
 }
 
+# Actions' pwsh wrapper exits with LASTEXITCODE, including a native status left
+# behind by provider internals. Only this verified success path may replace it;
+# every query, registration or postcondition failure above still throws.
+$global:LASTEXITCODE = 0
 Write-Output 'CI_PSGALLERY_READY'
