@@ -11,7 +11,7 @@ import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
 import { acquireOwned, withDeadline } from "../tests/mvp-browser/qa-lifecycle.mjs";
 import { probeSyntheticArchive } from "../tests/mvp-browser/synthetic-idb-probe.mjs";
-import { classifyIdleTiming } from "../tests/mvp-browser/idle-lock-timing.mjs";
+import { classifyIdleTiming, classifyIdleTransition } from "../tests/mvp-browser/idle-lock-timing.mjs";
 
 const requireLanding = createRequire(new URL("../../landing/package.json", import.meta.url));
 const IDLE_MS = 300000, EARLY_SAMPLE_MS = 295000, OBSERVATION_LIMIT_MS = 360000;
@@ -27,7 +27,8 @@ const report = {
   groups: [], observed: {}, cleanupConfirmed: false,
   limits: ["existing closed synthetic build only; not real-secret authentication",
     "real elapsed idle in one foreground headless context; not OS sleep, mobile or standalone tab hiding",
-    "passive DOM observation is not an exact internal lock-call timestamp or heap-zeroization proof",
+    "passive DOM transition intervals cannot prove the internal session lock-call time or heap zeroization",
+    "a last-open to first-locked interval crossing five minutes is INCONCLUSIVE, not PASS",
     "browser scheduling can delay lock delivery; observation deadline is not a real-time security guarantee",
     "tested bundle hashes are not source-to-build attestation or release approval",
     "harness CSP and loopback isolation are not deployment policy"],
@@ -163,6 +164,7 @@ try {
       privateNodes: document.querySelectorAll(privateSelector).length,
       editorNodes: document.querySelectorAll('[data-testid="connection-editor"]').length });
     let beforeCount = 0, afterCount = 0, last = null, stopped = false, firstLocked = null;
+    let lastOpen = null, lastOpenBeforeLock = null;
     const pending = new WeakMap(), lifecycle = [];
     const before = (event) => {
       if (!event.isTrusted) return;
@@ -174,7 +176,11 @@ try {
     };
     const observe = () => {
       const state = sample();
-      if (state.locked && firstLocked === null) firstLocked = state;
+      if (firstLocked === null) {
+        if (state.open && !state.locked) lastOpen = state;
+        if (state.locked) { firstLocked = state; lastOpenBeforeLock = lastOpen; }
+      }
+      return state;
     };
     const onLifecycle = (event) => { if (lifecycle.length < 8) lifecycle.push({ type: event.type,
       trusted: event.isTrusted, ...sample() }); };
@@ -189,7 +195,11 @@ try {
     const observer = new MutationObserver(observe);
     observer.observe(document.body, { subtree: true, childList: true, characterData: true });
     const probe = {
-      stats: () => ({ beforeCount, afterCount, last, firstLocked, lifecycle: [...lifecycle], current: sample() }),
+      stats: () => {
+        const current = observe();
+        return { beforeCount, afterCount, last, firstLocked, lastOpenBeforeLock,
+          lifecycle: [...lifecycle], current };
+      },
       stop: () => {
         if (stopped) return; stopped = true; observer.disconnect();
         for (const type of ["pointerdown", "keydown"]) {
@@ -240,7 +250,6 @@ try {
     if (current.firstLocked) {
       const lockTiming = classifyIdleTiming(activity.before.monotonic, activity.after.monotonic,
         current.firstLocked.monotonic, IDLE_MS);
-      if (lockTiming.state === "uncertain") inconclusive("IDLE_LOCK_THRESHOLD_INTERVAL_UNCERTAIN");
       if (lockTiming.state === "before") {
         const wallTiming = classifyIdleTiming(activity.before.wall, activity.after.wall,
           current.firstLocked.wall, IDLE_MS);
@@ -271,7 +280,15 @@ try {
   }
   assert.ok(settled, "IDLE_OBSERVATION_DEADLINE");
   report.observed.firstLocked = settled.firstLocked;
+  report.observed.lastOpenBeforeLock = settled.lastOpenBeforeLock;
   report.observed.settled = settled.current;
+  if (!settled.lastOpenBeforeLock) inconclusive("IDLE_LAST_OPEN_OBSERVATION_MISSING");
+  // Observer delivery may lag the DOM transition. A late first-locked timestamp
+  // alone does not establish that the transition happened after the deadline.
+  // Even these bounds describe DOM observations, never the internal lock call.
+  const transitionTiming = classifyIdleTransition(activity.before.monotonic, activity.after.monotonic,
+    settled.lastOpenBeforeLock.monotonic, settled.firstLocked.monotonic, IDLE_MS);
+  report.observed.domTransitionTiming = transitionTiming;
   const lockTiming = classifyIdleTiming(activity.before.monotonic, activity.after.monotonic,
     settled.firstLocked.monotonic, IDLE_MS);
   const settledTiming = classifyIdleTiming(activity.before.monotonic, activity.after.monotonic,
@@ -284,7 +301,7 @@ try {
   report.observed.lockObservedElapsedMs = settled.firstLocked.monotonic - activity.before.monotonic;
   report.observed.settledElapsedMs = settled.current.monotonic - activity.before.monotonic;
   report.observed.actualTrustedActivityEvents = { before: settled.beforeCount, after: settled.afterCount };
-  pass("real_five_minute_idle_reaches_locked_and_private_dom_empty_without_navigation");
+  pass("locked_dom_observed_and_private_content_removed_without_navigation");
   await page.evaluate(() => window.keyatlasVaultIdleProbe.stop());
 
   report.stage = "locked-bytes-and-explicit-reopen";
@@ -300,6 +317,10 @@ try {
   assert.ok([...assets].some((name) => name.endsWith(".wasm")), "IDLE_WASM_NOT_OBSERVED");
   assert.deepEqual(errors, { page: 0, console: 0, http: 0, failed: 0, denied: 0, websocket: 0, source: 0, methods: 0 });
   report.observed.assets = [...assets].sort();
+  report.observed.functionalObservationsComplete = true;
+  report.stage = "classify-dom-transition-interval";
+  if (transitionTiming.state === "before") assert.fail("IDLE_TRANSITION_OBSERVED_BEFORE_FIVE_MINUTES");
+  if (transitionTiming.state === "uncertain") inconclusive("IDLE_DOM_TRANSITION_INTERVAL_UNCERTAIN");
   report.status = "PASS"; report.stage = "complete";
 } catch (error) {
   report.failureCode = error instanceof Error && /^IDLE_[A-Z0-9_]+$/.test(error.message)
