@@ -202,3 +202,82 @@ PR CI on initial `779c042` failed before Rust/web execution because pinned Peste
 still in progress at the review checkpoint. Changed-head CI and review must be
 checked anew. #44's transport failures and #42's timing INCONCLUSIVE remain
 independent. This follow-up remains a Draft checkpoint, not merge/release approval.
+
+## Single-close diagnostic follow-up — 2026-10-26 21:25 UTC
+
+This is additional failure evidence, **not a cleanup fix or a passing rerun**.
+The product files, fixture, twenty functional checks and screenshot requirements
+are unchanged from `8e8c28a`. A test-only helper now records connection loss and
+the one `browser.close()` Promise separately. The limit remains 10,000ms; a
+settlement-time monotonic check also rejects completion at/after that limit even
+if the timer callback is late. A later resolution/rejection cannot erase FAIL.
+Only the observer's listener is removed, and diagnostics never read raw error
+properties. Screenshot publication still requires all checks AND cleanup.
+
+New/changed diagnostic paths:
+
+- `apps/benefits-web/scripts/support/history-close-observation.ts`
+- `apps/benefits-web/tests/history-close-observation.test.ts`
+- `apps/benefits-web/scripts/verify-benefit-history-browser.ts`
+
+Executed from `apps/benefits-web/`:
+
+```text
+node --import tsx --test tests/history-close-observation.test.ts
+node node_modules/typescript/bin/tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM,DOM.Iterable --types node --jsx react-jsx --strict --skipLibCheck --allowImportingTsExtensions --noUnusedLocals --noUnusedParameters --noImplicitReturns --noFallthroughCasesInSwitch --noUncheckedIndexedAccess --exactOptionalPropertyTypes scripts/support/history-close-observation.ts tests/history-close-observation.test.ts scripts/verify-benefit-history-browser.ts scripts/fixtures/benefit-history-fixture.tsx
+npm test
+```
+
+Results: helper **15/15 PASS, exit 0**; strict TypeScript **exit 0**; full benefits
+**3,340/3,340 PASS, exit 0**, fail/cancel/skip 0. These include immediate/late
+resolve and reject, disconnect without settlement, one-call reentry, the
+9,999/10,000/10,001ms boundary, opaque errors, invalid clocks and listener
+ownership/failures. An independent read-only review found no concrete must-fix;
+it did not repeat the browser execution. Product build/boundary/SSR receipts
+above remain earlier evidence, not newly repeated by this diagnostic-only change.
+
+### Actual Chrome run — FAIL retained
+
+Root ran the same runner with `BROWSER_CHANNEL=chrome`, `--synthetic-only` and
+`--screenshots` exactly once after preparation. A local, ignored PowerShell
+observer started the Node process with a hidden window and read its direct
+Chrome child. It verified executable, creation time, debugging-pipe arguments
+and the generated temporary-profile scope, then retained a process handle to
+avoid PID-reuse confusion. It never terminated a process or printed raw command
+lines, profile paths or stderr. The observer's first preparation attempt could
+not start Node because executable lookup returned multiple paths; no Node or
+browser was launched. Selecting and validating one existing Node executable
+corrected that observer-only error before the actual measurement.
+
+| Observation | Result |
+| --- | --- |
+| Observer UTC interval | 21:25:29.8826591–21:25:57.5793351 |
+| Runner UTC interval | 21:25:31.047–21:25:56.258 |
+| Browser | Installed Chrome 156.0.8078.48; no installation/update by this task |
+| Product fixture | 212,026 bytes, SHA256 `dd214fd9969d72cfea198aa08a27f8eb982af84258e75042cdab2061ce420253`; all eight source hashes match the prior failing run |
+| Function/error evidence | 20 groups completed, seven error counters 0, stderr characters 0 |
+| Close operation | Exactly 1 call; start 16,222.8204ms, disconnect 16,295.7559ms, deadline observation 26,227.3209ms on the Node monotonic clock |
+| Promise versus connection | At the deadline: Promise PENDING, connected false, outcome DEADLINE, passed false |
+| OS handle evidence | Verified direct main process last observed alive at observer +27,332.260ms; first observed exited at +27,443.580ms |
+| Final owned state | Runner exited 1; verified Chrome main handle exited; its temporary profile absent; root post-check found 0 matching test browsers and 0 history runners |
+| Images | No PNGs published; the reserved review image directory remains absent |
+
+The Node time-origin anchor was `1793049930020.163` epoch milliseconds. Node and
+OS-observer monotonic values have different origins and must not be directly
+subtracted. Mapping via their wall-time anchors approximately places the last
+main-process-alive observation after the close deadline. The OS exit result is
+a polling interval, not an exact exit timestamp or proof about every descendant.
+Thus this run supports delayed actual Chrome main-process exit after connection
+loss; it does **not** identify why exit was delayed or prove an application bug.
+The final JSON has a pending Promise snapshot; it cannot show a later settlement
+after serialization. `cleanup.browser=true` alone only means disconnected.
+
+The local observer is an ignored diagnostic artifact, not a distributed project
+command. Its result does not replace the committed runner or normal CI. No
+second `browser.close()`, wider deadline, generic process kill, error-counter
+reset, browser update or Windows-policy bypass was used. Playwright's own
+internal shutdown behavior is not a guarantee that it never uses a fallback.
+
+PR #45 remains **Draft/HOLD**. #44's native transport failures and #42's exact
+idle-boundary INCONCLUSIVE result remain separate. No real provider, Secret,
+authentication, production DB or deployment was enabled.

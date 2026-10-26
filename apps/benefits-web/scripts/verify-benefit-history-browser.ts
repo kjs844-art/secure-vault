@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import type { Socket } from "node:net";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
+import { createHistoryCloseObservation, type HistoryCloseSnapshot } from "./support/history-close-observation.ts";
 
 const landing = createRequire(new URL("../../landing/package.json", import.meta.url));
 const { chromium } = landing("playwright") as typeof import("../../landing/node_modules/playwright/index.js");
@@ -43,8 +44,9 @@ const errors = { console: 0, page: 0, transport: 0, external: 0, websocket: 0, d
 const report = { scope: "SYNTHETIC_BENEFIT_HISTORY_ACTUAL_COMPONENTS", status: "FAIL", stage: "PREFLIGHT" as Stage,
   detail: "ARGUMENTS" as Detail, scenario: "none" as Scenario, failure: null as Failure | null,
   cleanupFailures: [] as Failure[],
+  browserCloseObservation: null as HistoryCloseSnapshot | null,
   browser: channel === "msedge" ? "EDGE" : "CHROME", bundle: "IN_MEMORY_VITE_NOT_EXISTING_DIST",
-  startedAt: new Date().toISOString(), finishedAt: "", browserVersion: "",
+  startedAt: new Date().toISOString(), processTimeOriginMs: performance.timeOrigin, finishedAt: "", browserVersion: "",
   entryBytes: 0, entrySha256: "",
   screenshots: [] as { label: ScreenshotView; path: string }[],
   checks: [] as string[], sourceSha256: {} as Record<string, string>, errors,
@@ -53,6 +55,7 @@ const report = { scope: "SYNTHETIC_BENEFIT_HISTORY_ACTUAL_COMPONENTS", status: "
     "REQUEST_ROUTING_NOT_OS_NETWORK_SANDBOX", "NO_AUTH_DATABASE_OR_PUBLIC_ROUTE", "NO_CSS_OR_DESIGN_CHANGE"] };
 const sockets = new Set<Socket>(), assets = new Map<string, { body: string | Uint8Array; type: string }>();
 let browser: Browser | undefined, context: Context | undefined, origin = "", html = "", closedContext = true;
+let browserCloseObservation: ReturnType<typeof createHistoryCloseObservation> | undefined;
 const server = createServer((request, response) => {
   response.setHeader("cache-control", "no-store");
   response.setHeader("x-content-type-options", "nosniff");
@@ -252,6 +255,7 @@ try {
   report.stage = "LAUNCH"; report.detail = "BROWSER_LAUNCH";
   ensure(deadline - performance.now() > 16000);
   browser = await chromium.launch({ channel, headless: true, timeout: 15000 });
+  browserCloseObservation = createHistoryCloseObservation(browser);
   report.browserVersion = browser.version();
   report.detail = "CONTEXT_SETUP";
   context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" }); closedContext = false;
@@ -278,10 +282,20 @@ try {
   ensure(Object.values(errors).every((value) => value === 0), "HISTORY_ASYNC_ERRORS"); report.status = "PASS"; report.stage = "CHECKS_COMPLETE";
 } catch (error) { report.status = "FAIL"; report.failure = failure(error); }
 finally {
+  browserCloseObservation?.setPhase("CONTEXT_CLOSE");
   try { if (context) await bounded(context.close(), 5000, true); } catch (error) { cleanupFailure(error, "CONTEXT_CLOSE"); }
   report.cleanup.context = closedContext;
-  try { if (browser) await bounded(browser.close(), 10000, true); } catch (error) { cleanupFailure(error, "BROWSER_CLOSE"); }
-  report.cleanup.browser = !browser || !browser.isConnected();
+  if (browser) {
+    browserCloseObservation ??= createHistoryCloseObservation(browser);
+    // One close invocation, the same 10,000ms limit, and separately observed
+    // connection loss. A late promise settlement cannot change the outcome.
+    const closeOutcome = await browserCloseObservation.close();
+    if (!browserCloseObservation.snapshot().passed) cleanupFailure(new Error(
+      closeOutcome === "DEADLINE" ? "HISTORY_DEADLINE" : "HISTORY_CLEANUP_INCOMPLETE"), "BROWSER_CLOSE");
+  }
+  try { report.cleanup.browser = !browser || !browser.isConnected(); }
+  catch { cleanupFailure(new Error("HISTORY_CLEANUP_INCOMPLETE"), "BROWSER_CLOSE"); }
+  browserCloseObservation?.setPhase("SERVER_CLOSE");
   try {
     const closing = server.listening ? new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) : Promise.resolve();
     const socketCloses = [...sockets].map((socket) => new Promise<void>((resolve) => { socket.once("close", () => resolve()); socket.destroy(); }));
@@ -291,6 +305,13 @@ finally {
   if (!Object.values(report.cleanup).every(Boolean)) cleanupFailure(new Error("HISTORY_CLEANUP_INCOMPLETE"), "CLEANUP_CHECK");
   if (Object.values(errors).some((value) => value !== 0)) {
     report.status = "FAIL"; report.failure ??= failure(new Error("HISTORY_ASYNC_ERRORS"), "FINAL_ERRORS", "CLEANUP");
+  }
+  if (browserCloseObservation) {
+    browserCloseObservation.setPhase("FINAL");
+    browserCloseObservation.dispose();
+    report.browserCloseObservation = browserCloseObservation.snapshot();
+    if (!report.browserCloseObservation.passed && !report.cleanupFailures.some((item) => item.detail === "BROWSER_CLOSE"))
+      cleanupFailure(new Error("HISTORY_CLEANUP_INCOMPLETE"), "BROWSER_CLOSE");
   }
   // No image is written before checks AND cleanup succeed. Recheck every path
   // immediately before publication; wx never overwrites an existing artifact.
