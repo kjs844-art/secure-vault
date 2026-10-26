@@ -8,12 +8,11 @@ import { SyntheticToolPanel } from "./SyntheticToolPanel";
 import { SyntheticRegistrationPanel } from "./SyntheticRegistrationPanel";
 import { SyntheticConflictReviewPanel } from "./SyntheticConflictReviewPanel";
 import { SyntheticRotationStagePanel } from "./SyntheticRotationStagePanel";
+import { IdentityMapPanel } from "../identity-map/IdentityMapPanel";
 import "../../styles.css";
 import "./local-vault.css";
 
 export function LocalVaultPanel() {
-  // Constructors do not read storage or start workers. StrictMode can safely
-  // create/discard a session; effect cleanup invalidates pending operations.
   const [session] = useState(() => new SyntheticVaultSession(
     createSyntheticCiphertextStore(), new BrowserSyntheticVaultWorker(),
   ));
@@ -32,6 +31,10 @@ export function LocalVaultPanel() {
         <p>서비스별 API 키·비밀번호를 보관하고, API 키는 연결된 도구까지 기록합니다. 가상 데이터로 로컬 저장과 복원을 확인하는 기능 화면입니다.</p>
         <p className="demo-warning"><strong>실제 비밀번호·API 키 입력 금지.</strong> 공개된 테스트 비밀번호를 사용하는 데모입니다. 암호화 흐름을 시험하지만 실제 비밀정보를 보호할 수 있는 제품은 아닙니다.</p>
         <a href="/">기존 합성 목록 화면</a>
+        {" · "}
+        <a href="/?view=identity-map">Identity Map 3단계</a>
+        {" · "}
+        <a href="/?view=discovery-inbox">가입 흔적 Inbox</a>
       </header>
 
       <section aria-labelledby="storage-heading">
@@ -65,6 +68,7 @@ export function LocalVaultPanel() {
       />}
       {state.phase === "open" && <SyntheticRegistrationPanel key={`registration-${session.viewGeneration}`} session={session} entryCount={state.entries.length} />}
       {state.phase === "open" && <SyntheticEditableCatalog key={`catalog-${generation}`} entries={state.entries} generation={generation} session={session} />}
+      {state.phase === "open" && <IdentityMapPanel key={`identity-map-${generation}`} embedded entries={state.entries} sourceLabel="열린 합성 금고의 표시 스냅샷" />}
       {state.phase === "open" && <SyntheticToolPanel key={`tools-${session.viewGeneration}`} session={session} />}
       <section aria-labelledby="local-explanation-heading">
         <h2 id="local-explanation-heading">로컬 저장은 ‘이 브라우저 안 서랍’이에요</h2>
