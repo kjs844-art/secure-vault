@@ -154,6 +154,11 @@ jobs:
         working-directory: apps/web
         run: npm test
 
+      - name: Run vault idle timing boundary tests
+        shell: pwsh
+        working-directory: apps/web
+        run: node --test tests/mvp-browser/idle-lock-timing.node-test.mjs
+
       - name: Type-check the web app
         shell: pwsh
         working-directory: apps/web

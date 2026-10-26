@@ -55,6 +55,35 @@ Describe 'KeyAtlas security-gates workflow policy' {
             @([regex]::Matches($Workflow, '(?ms)^      - name: (?<name>[^\r\n]+)\r?\n(?<body>.*?)(?=^      - name: |\z)'))
         }
 
+        function Assert-VaultIdleTimingVerification {
+            param([string]$Workflow)
+            $steps = @(Get-NamedWorkflowSteps $Workflow)
+            $unit = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run web unit tests' })
+            $idle = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })
+            $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })
+            Assert-Condition ($unit.Count -eq 1 -and $idle.Count -eq 1 -and $typecheck.Count -eq 1) 'Exactly one web unit, vault idle timing, and web typecheck step are required.'
+            Assert-Condition ($unit[0].Index -lt $idle[0].Index -and $idle[0].Index -lt $typecheck[0].Index) 'Vault idle timing tests must run after web unit tests and before web typecheck.'
+
+            $actualBody = @($idle[0].Groups['body'].Value -split '\r?\n' | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '^\s*#'
+            }) -join "`n"
+            $expectedBody = @(
+                '        shell: pwsh'
+                '        working-directory: apps/web'
+                '        run: node --test tests/mvp-browser/idle-lock-timing.node-test.mjs'
+            ) -join "`n"
+            Assert-Condition ([string]::Equals($actualBody, $expectedBody, [StringComparison]::Ordinal)) 'Vault idle timing tests must retain their exact shell, directory, and fail-closed command without conditional skips or ignored failures.'
+        }
+
+        function Assert-VaultIdleTimingMutationRejected {
+            param([string]$Workflow, [string]$Reason)
+            Assert-Condition (-not [string]::Equals($Workflow, $script:Workflow, [StringComparison]::Ordinal)) "The vault idle policy mutation did not change the workflow: $Reason"
+            $rejected = $false
+            try { Assert-VaultIdleTimingVerification $Workflow }
+            catch { $rejected = $true }
+            Assert-Condition $rejected "An invalid vault idle timing workflow must be rejected: $Reason"
+        }
+
         function Assert-PSGalleryPreparation {
             param([string]$Workflow)
             $steps = @(Get-NamedWorkflowSteps $Workflow)
@@ -365,6 +394,51 @@ Describe 'KeyAtlas security-gates workflow policy' {
 
     It 'runs every benefits web gate in order with its exact fail-closed command and directory' {
         Assert-BenefitsWebVerification $script:Workflow
+    }
+
+    It 'runs the vault idle timing boundary tests between web unit tests and typecheck' {
+        Assert-VaultIdleTimingVerification $script:Workflow
+    }
+
+    It 'rejects missing or duplicated vault idle timing steps and their ordering boundaries' {
+        foreach ($name in @('Run web unit tests', 'Run vault idle timing boundary tests', 'Type-check the web app')) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq $name })[0]
+            Assert-VaultIdleTimingMutationRejected ($script:Workflow.Remove($step.Index, $step.Length)) "missing $name"
+            Assert-VaultIdleTimingMutationRejected ($script:Workflow.Insert($step.Index, $step.Value)) "duplicated $name"
+        }
+    }
+
+    It 'rejects a changed vault idle timing command or execution context' {
+        $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })[0]
+        foreach ($invalidStep in @(
+            $step.Value.Replace('working-directory: apps/web', 'working-directory: apps/benefits-web')
+            $step.Value.Replace('shell: pwsh', 'shell: cmd')
+            $step.Value.Replace('node --test tests/mvp-browser/idle-lock-timing.node-test.mjs', 'node --test tests/mvp-browser/other.node-test.mjs')
+            $step.Value.Replace('node --test', 'node')
+            $step.Value.Replace('Run vault idle timing boundary tests', 'Run optional vault idle timing boundary tests')
+        )) {
+            Assert-VaultIdleTimingMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) 'changed idle command, name, or context'
+        }
+    }
+
+    It 'rejects conditional skips or ignored failures in vault idle timing tests' {
+        $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })[0]
+        foreach ($bypass in @('if: false', 'continue-on-error: true')) {
+            $invalidStep = $step.Value.Replace('        shell: pwsh', "        $bypass`n        shell: pwsh")
+            Assert-VaultIdleTimingMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) $bypass
+        }
+        $maskedExit = $step.Value.Replace('run: node --test tests/mvp-browser/idle-lock-timing.node-test.mjs', 'run: node --test tests/mvp-browser/idle-lock-timing.node-test.mjs; exit 0')
+        Assert-VaultIdleTimingMutationRejected ($script:Workflow.Replace($step.Value, $maskedExit)) 'masked idle test exit'
+    }
+
+    It 'rejects vault idle timing tests moved before unit tests or after typecheck' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        $unit = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run web unit tests' })[0]
+        $idle = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })[0]
+        $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })[0]
+        $withoutIdle = $script:Workflow.Remove($idle.Index, $idle.Length)
+        Assert-VaultIdleTimingMutationRejected ($withoutIdle.Insert($unit.Index, $idle.Value)) 'idle before unit tests'
+        Assert-VaultIdleTimingMutationRejected ($withoutIdle.Insert($typecheck.Index + $typecheck.Length - $idle.Length, $idle.Value)) 'idle after typecheck'
     }
 
     It 'rejects missing or duplicated benefits web gates even when the other web app has the same command' {
