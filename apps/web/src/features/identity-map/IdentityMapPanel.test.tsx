@@ -49,4 +49,14 @@ describe("IdentityMapPanel initial rendering", () => {
     expect(html).toContain("표시할 합성 계정이 없습니다.");
     expect(html).not.toContain("data-testid=\"identity-map-account\"");
   });
+
+  it("gives two embedded panels distinct heading associations", () => {
+    const html = renderToStaticMarkup(<><IdentityMapPanel embedded /><IdentityMapPanel embedded /></>);
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+    const labels = [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids.length).toBe(4);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(labels.length).toBe(4);
+    expect(labels.every((id) => ids.includes(id))).toBe(true);
+  });
 });
