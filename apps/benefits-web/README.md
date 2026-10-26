@@ -1,6 +1,6 @@
 # KeyAtlas benefits web — independent migration workspace
 
-Status: **scaffold / synthetic only**, not an operational account manager or vault.
+Status: **integrated synthetic prototype**, not an operational account manager or vault.
 Original Lovable/benefit-validator remains unchanged. This app has no provider SDK,
 database connection, OAuth callback handler, mail reader, external AI or MCP tools.
 Those are pending integrations, not completed features.
@@ -23,7 +23,9 @@ bounded batches. It uses the same test-only memory store as review, not a real D
 See [the inbox and staging contract](INBOX_CONTRACT.md).
 Owned service organization now has internal create/update/delete/get/list controllers.
 Reviewed benefits have a separate browser-safe projection/decoder and scoped response
-reducer. Neither is connected to UI, real authentication, or a database yet.
+reducer. The catalog/candidate/review React composition is connected through injected
+synthetic adapters and browser-tested; real authentication, durable database storage
+and public account routes are still not connected.
 See [the catalog and presentation contract](CATALOG_CONTRACT.md).
 An internal Fetch HTTP adapter now composes the catalog with bounded JSON,
 fixed-session authority, admission and deadline checks. It is not mounted;
@@ -94,6 +96,17 @@ and conflicting trial facts remain in the review view. Past amounts are labelled
 as recorded amounts, without a spendable-balance meter. The reference time is the
 page's SSR seed, not a continuously refreshed provider clock. A real data adapter
 must preserve these evidence distinctions and undergo separate validation.
+
+The demo countdown now uses the same canonical UTC instant policy as the history
+filter, rather than normalizing an impossible date into a deadline. A malformed
+benefit expiry or a disagreement between its expiry and the matching service's
+trial end is explicitly marked **확인 필요**. The card calls the amount a recorded
+amount, suppresses its spendable-looking ratio meter, and adds a review item.
+Both directions of disagreement are covered; unrelated credits are not reclassified
+using a service's trial end. Past-view summary counts say **지난 기록**, not current
+benefits. This is display accuracy, not proof of entitlement or a new provider-date
+parsing policy. Offset/date-only input requires separate normalization with provenance
+before a real adapter could use this canonical demo contract.
 
 This does not connect Gmail, change the real database, or enable real vault secrets.
 

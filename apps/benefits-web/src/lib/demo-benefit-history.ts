@@ -1,14 +1,9 @@
-import { buildDemoData, STATUS_LABELS, type DemoBenefit, type DemoDataset, type DemoService } from "./mvp-demo-data";
+import {
+  buildDemoData, hasLaterMatchingTrialEnd, parseDemoInstant as instant, STATUS_LABELS,
+  type DemoBenefit, type DemoDataset, type DemoService,
+} from "./mvp-demo-data";
 
 export type DemoHistoryView = "review" | "history";
-
-// Date-only, ambiguous timezone and normalized impossible dates require review.
-// This synthetic display helper is not a mail parser or authorization boundary.
-function instant(value: string | null | undefined): number | null {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
-}
 
 export function getDemoBenefitHistoryReason(
   benefit: DemoBenefit, service: DemoService | undefined, referenceTime: number,
@@ -18,10 +13,8 @@ export function getDemoBenefitHistoryReason(
   if (expiry !== null && expiry <= referenceTime) {
     // Matching trial facts that disagree about whether it ended need review.
     // A future service trial does not override an unrelated credit's expiry.
-    const matchingTrial = benefit.benefit_kind === "trial" && service?.id === benefit.service_id
-      && (service.subscription_status === "trial" || service.subscription_status === "trial_ended");
-    const serviceTrialExpiry = matchingTrial ? instant(service.trial_ends_at) : null;
-    if (serviceTrialExpiry !== null && serviceTrialExpiry > referenceTime) return null;
+    // 이 행은 현재 보기에 남고, getDemoBenefitReviewReason이 확인 필요로 표시한다.
+    if (hasLaterMatchingTrialEnd(benefit, service, referenceTime)) return null;
     return "기록상 만료 시각이 지난 혜택 · 연장·재지급 여부는 별도 확인";
   }
   // Do not apply a service's trial expiry to unrelated credits or subscriptions.

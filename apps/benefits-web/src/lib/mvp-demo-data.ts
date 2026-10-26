@@ -118,10 +118,10 @@ export function remainingRatio(benefit: DemoBenefit): number | null {
 }
 
 export function daysUntil(iso: string | null, now: Date): number | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime()) || !Number.isFinite(now.getTime())) return null;
-  const remaining = date.getTime() - now.getTime();
+  // A service countdown must not turn a history-ambiguous date into a fact.
+  const timestamp = parseDemoInstant(iso);
+  if (timestamp === null || !Number.isFinite(now.getTime())) return null;
+  const remaining = timestamp - now.getTime();
   // A just-expired timestamp must not round up to negative zero ("today").
   return remaining < 0 ? Math.floor(remaining / 86_400_000) : Math.ceil(remaining / 86_400_000);
 }
@@ -131,6 +131,51 @@ export function formatDay(iso: string | null): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "날짜 모름";
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", timeZone: "Asia/Seoul" }).format(date);
+}
+
+// Date-only, ambiguous timezone and normalized impossible dates require review.
+// This synthetic display helper is not a mail parser or authorization boundary.
+export function parseDemoInstant(value: string | null | undefined): number | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
+}
+
+/** 같은 서비스의 체험 기록이 기준 시각보다 뒤에 끝난다고 적혀 있는지. 체험 혜택에만 적용한다. */
+export function hasLaterMatchingTrialEnd(
+  benefit: DemoBenefit, service: DemoService | undefined, referenceTime: number,
+): boolean {
+  if (benefit.benefit_kind !== "trial" || !service || service.id !== benefit.service_id) return false;
+  if (service.subscription_status !== "trial" && service.subscription_status !== "trial_ended") return false;
+  const trialEnd = parseDemoInstant(service.trial_ends_at);
+  return trialEnd !== null && trialEnd > referenceTime;
+}
+
+/**
+ * 현재·확인 필요 보기에 남지만 사용할 수 있는 혜택처럼 보이면 안 되는 행의 확인 사유.
+ * - 형식이 모호한 만료일: 만료 여부를 판단할 수 없다.
+ * - 만료 시각이 지났지만 같은 서비스의 체험 종료일이 남은 체험: 기록끼리 충돌한다.
+ * - 혜택 만료일은 남았지만 같은 서비스 체험은 종료된 기록: 반대 방향 충돌도 확인한다.
+ * 지난 기록으로 분류되는 행에는 사유를 돌려주지 않는다(지난 기록 사유와 겹치지 않음).
+ */
+export function getDemoBenefitReviewReason(
+  benefit: DemoBenefit, service: DemoService | undefined, referenceTime: number,
+): string | null {
+  if (benefit.expires_at == null) return null;
+  const expiry = parseDemoInstant(benefit.expires_at);
+  if (expiry === null) return "기록된 만료일 형식이 모호함 · 만료 여부 확인 필요";
+  if (!Number.isFinite(new Date(referenceTime).getTime())) return null;
+  if (expiry > referenceTime) {
+    if (benefit.benefit_kind !== "trial" || !service || service.id !== benefit.service_id
+      || (service.subscription_status !== "trial" && service.subscription_status !== "trial_ended")) return null;
+    const trialEnd = parseDemoInstant(service.trial_ends_at);
+    const ended = trialEnd !== null ? trialEnd <= referenceTime
+      : service.subscription_status === "trial_ended" && service.trial_ends_at === null;
+    return ended ? "서비스 체험은 종료된 기록이지만 혜택 만료일은 남아 있음 · 이용 가능 여부 확인 필요" : null;
+  }
+  return hasLaterMatchingTrialEnd(benefit, service, referenceTime)
+    ? "기록상 만료 시각이 지났지만 서비스 체험 종료일은 남아 있음 · 이용 가능 여부 확인 필요"
+    : null;
 }
 
 export type AttentionKind = "expiring" | "needs_review" | "empty_balance";
@@ -145,6 +190,7 @@ export interface AttentionItem {
 
 export function collectAttention(dataset: DemoDataset, now: Date): AttentionItem[] {
   const items: AttentionItem[] = [];
+  const services = new Map(dataset.services.map((service) => [service.id, service]));
   for (const service of dataset.services) {
     if (service.subscription_status !== "trial") continue;
     const days = daysUntil(service.trial_ends_at, now);
@@ -181,6 +227,17 @@ export function collectAttention(dataset: DemoDataset, now: Date): AttentionItem
         kind: "needs_review",
         title: `${benefit.name} 확인 필요`,
         detail: benefit.extra_limit_note ?? "잔량이 자료에 없어 모름으로 남겼습니다.",
+        serviceId: benefit.service_id,
+      });
+    }
+    // 잔량 항목과 별개로, 만료일을 믿을 수 없는 행도 살펴볼 항목에 넣는다.
+    const reviewReason = getDemoBenefitReviewReason(benefit, services.get(benefit.service_id), now.getTime());
+    if (reviewReason !== null) {
+      items.push({
+        id: `expiry-${benefit.id}`,
+        kind: "needs_review",
+        title: `${benefit.name} 만료일 확인 필요`,
+        detail: reviewReason,
         serviceId: benefit.service_id,
       });
     }
