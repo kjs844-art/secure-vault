@@ -19,6 +19,12 @@ for (const pathname of [
   "/.lovable.oauth.consent", "/dashboard", "/services", "/settings", "/schedule",
   "/AUTH", "/%61uth", "/oauth%2fgmail/return", "/%broken",
   "/api/catalog", "/api/catalog/create", "/api/catalog/list", "/API/CATALOG/delete", "/api/%63atalog/get",
+  "/api/review", "/api/review/", "/api/review/list", "/api/review/get",
+  "/api/review/preview", "/api/review/confirm", "/api/review/reject", "/api/review/delete",
+  "/API/REVIEW", "/Api/ReViEw/list", "/api/%72eview/get", "/%61pi/review/confirm",
+  "/api%2freview%2flist", "/api/review%2Fconfirm", "/api%5creview%5clist",
+  "/api/inbox", "/api/inbox/", "/api/inbox/batch", "/API/INBOX/BATCH", "/api/%69nbox/batch",
+  "/api%2finbox%2fbatch", "/api%5cinbox%5cbatch",
 ]) {
   test("unconnected route does not reach any adapter: " + pathname, async () => {
     assert.equal(isDisconnectedRoute(pathname), true);
@@ -33,6 +39,38 @@ for (const pathname of [
     assert.deepEqual(await result.json(), { code: "INTEGRATION_NOT_CONNECTED" });
   });
 }
+
+test("review and inbox stay disconnected before adapters for every method", async () => {
+  for (const path of ["/api/review/list", "/api/inbox/batch", "/api/inbox/discard"]) {
+    for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      let calls = 0;
+      const response = await handleRequest(new Request(
+        "http://localhost" + path + "?mode=live&synthetic=SYNTHETIC_DO_NOT_REFLECT",
+        { method, headers: { cookie: "mode=live; synthetic=SYNTHETIC_DO_NOT_REFLECT" } },
+      ), { KEYATLAS_BENEFITS_MODE: "synthetic" }, () => {
+        calls++; return Response.json({ code: "SYNTHETIC_ACTIVE_DISPATCH" });
+      });
+      assert.equal(calls, 0);
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { code: "INTEGRATION_NOT_CONNECTED" });
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(response.headers.get("set-cookie"), null);
+    }
+  }
+});
+
+test("disconnection does not capture adjacent names or public demo rendering", async () => {
+  for (const pathname of ["/", "/demo", "/api/reviewer", "/api/reviews", "/api/review-preview", "/api/inboxes", "/api/inbox-batch"]) {
+    assert.equal(isDisconnectedRoute(pathname), false);
+    let calls = 0;
+    const response = await handleRequest(new Request("http://localhost" + pathname), {}, () => {
+      calls++; return new Response("synthetic-render-result");
+    });
+    assert.equal(calls, 1);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "synthetic-render-result");
+  }
+});
 
 test("runtime mode cannot be overridden by any query/cookie", async () => {
   let rendered = false;

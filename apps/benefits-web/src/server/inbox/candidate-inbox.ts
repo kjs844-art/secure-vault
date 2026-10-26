@@ -76,7 +76,9 @@ export function createCandidateInbox(deps: CandidateInboxDependencies) {
       // A commit can already have happened. Suppress late unauthorized payloads,
       // but do not report an unknown acknowledgement as rollback success.
       await guard();
-      return Object.freeze({ ok: true as const, value: finalize(value, clock()) });
+      const finalTime = clock();
+      if (auth.expiresAt <= finalTime) return failReview("REVIEW_AUTHORITY_CHANGED");
+      return Object.freeze({ ok: true as const, value: finalize(value, finalTime) });
     } catch (error) {
       return Object.freeze({ ok: false as const,
         code: error instanceof ReviewFailure ? error.code : "REVIEW_STORE_UNAVAILABLE" });

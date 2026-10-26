@@ -2,6 +2,7 @@ import type { BenefitEvidenceKind, EmailCandidate } from "../mail/contracts";
 
 export const REVIEW_SCHEMA = "keyatlas.benefit-review.v1" as const;
 export const PREVIEW_TTL_MS = 5 * 60 * 1000;
+export const MAX_REVIEWED_BENEFIT_PAGE = 50;
 
 /** Verified server state, never copied from HTTP input. */
 export interface ReviewAuthority {
@@ -130,6 +131,16 @@ export interface ReviewTransaction {
   getService(id: string): Promise<ReviewServiceRow | null>;
   getPreview(id: string): Promise<PreviewRow | null>;
   getBenefit(id: string): Promise<ReviewedBenefitRow | null>;
+  // Live records only (including ended benefits), strictly ascending ASCII IDs.
+  // Same owner/generation and transaction snapshot as the collection revision;
+  // return at most take rows strictly after afterId. Never scan an unbounded
+  // result into application memory in a durable adapter.
+  listReviewedBenefits(afterId: string | null, take: number): Promise<readonly ReviewedBenefitRow[]>;
+  getBenefitCollectionRevision(): Promise<number>;
+  // Every saved-benefit insert/update/delete must advance this revision in the
+  // SAME atomic transaction as row and operation-ledger writes. Initial value
+  // is 1; no wrap/reset/reuse within a generation. Replay does not advance it.
+  advanceBenefitCollectionRevision(expected: number): Promise<boolean>;
   getOperation(operationId: string): Promise<ReviewOperation | null>;
   insertPreview(row: PreviewRow): Promise<boolean>;
   insertBenefit(row: ReviewedBenefitRow): Promise<boolean>;
@@ -163,6 +174,8 @@ export type ReviewResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly code: ReviewErrorCode };
 export interface PreviewView {
+  // Copied only from the verified authority, never from a draft/request.
+  readonly dataGeneration: number;
   readonly id: string;
   readonly revision: number;
   readonly expiresAt: number;
@@ -170,13 +183,32 @@ export interface PreviewView {
   readonly accountProof: "not-established";
   readonly currentBalanceProof: "not-established";
 }
-export interface ReviewReceipt {
+/** Internal read snapshot. Project before sending to a browser; content is private. */
+export interface ReviewedBenefitSnapshot {
   readonly schema: typeof REVIEW_SCHEMA;
   readonly dataGeneration: number;
-  readonly operationId: string;
   readonly outcome: "saved" | "deleted";
   readonly benefitId: string;
   readonly benefitRevision: number;
-  readonly replayed: boolean;
   readonly content: BenefitContent | null;
+}
+/** Position/change detector only, not authority or a retained historical snapshot. */
+export interface ReviewedBenefitCursor {
+  readonly afterId: string;
+  readonly benefitCollectionRevision: number;
+  readonly dataGeneration: number;
+}
+
+/** Internal snapshot. Project every benefit before any browser serialization. */
+export interface ReviewedBenefitPage {
+  readonly schema: typeof REVIEW_SCHEMA;
+  readonly dataGeneration: number;
+  readonly benefitCollectionRevision: number;
+  readonly benefits: readonly ReviewedBenefitSnapshot[];
+  readonly nextCursor: ReviewedBenefitCursor | null;
+}
+
+export interface ReviewReceipt extends ReviewedBenefitSnapshot {
+  readonly operationId: string;
+  readonly replayed: boolean;
 }

@@ -551,12 +551,13 @@ for (const action of ["preview", "confirm", "reject", "remove"] as const) {
 }
 
 type WriteMethod = Exclude<keyof ReviewTransaction, "limitCommitTime" | "requireServiceVersion" | "getCandidate" | "getService"
-  | "getPreview" | "getBenefit" | "getOperation">;
+  | "getPreview" | "getBenefit" | "getOperation" | "listReviewedBenefits" | "getBenefitCollectionRevision">;
 const writeCases: Array<[Action, WriteMethod]> = [
   ["preview", "insertPreview"], ["confirm", "updateCandidate"], ["confirm", "updatePreview"],
   ["confirm", "insertBenefit"], ["confirm", "insertOperation"], ["reject", "updatePreview"],
   ["remove", "updateBenefit"], ["remove", "updateCandidate"],
   ["remove", "eraseCandidatePreviews"], ["remove", "insertOperation"],
+  ["confirm", "advanceBenefitCollectionRevision"], ["remove", "advanceBenefitCollectionRevision"],
 ];
 for (const [action, method] of writeCases) {
   test(`${action} rolls back all writes when ${method} throws after its mutation`, async () => {

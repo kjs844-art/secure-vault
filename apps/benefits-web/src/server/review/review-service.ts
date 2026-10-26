@@ -1,12 +1,12 @@
 import {
   PREVIEW_TTL_MS, REVIEW_SCHEMA,
   type BenefitContent, type CandidateRow, type PreviewContent, type PreviewRow, type PreviewView,
-  type ReviewAuthority, type ReviewDependencies, type ReviewDraft, type ReviewedBenefitRow,
+  type ReviewAuthority, type ReviewDependencies, type ReviewDraft, type ReviewedBenefitRow, type ReviewedBenefitSnapshot,
   type ReviewOperation, type ReviewReceipt, type ReviewResult, type ReviewServiceRow,
-  type ReviewTransaction, type ReviewValues,
+  type ReviewTransaction, type ReviewValues, type ReviewedBenefitPage,
 } from "./contracts";
 import {
-  ReviewFailure, failReview, parseAuthority, parseCandidateContent, parseConfirm,
+  ReviewFailure, failReview, parseAuthority, parseBenefitRead, parseBenefitList, parseCandidateContent, parseConfirm,
   parseDelete, parseDraft, parseId, parseRevision, parseRevoke, parseValues,
 } from "./validation";
 
@@ -26,6 +26,27 @@ function nextRevision(revision: number): number {
     return failReview("REVIEW_CONFLICT");
   }
   return revision + 1;
+}
+function pageRows(value: unknown, maximum: number): readonly ReviewedBenefitRow[] {
+  return persisted(() => {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype
+      || value.length > maximum) return failReview("REVIEW_STORE_UNAVAILABLE");
+    // Bound before enumerating descriptors; do not invoke an adapter-supplied
+    // iterator, index getter or map method. The port is not a public JSON body.
+    const descriptors = Object.getOwnPropertyDescriptors(value as object);
+    const length = descriptors.length?.value as unknown;
+    if (typeof length !== "number" || !Number.isSafeInteger(length) || length < 0 || length > maximum
+      || Reflect.ownKeys(descriptors).length !== length + 1) return failReview("REVIEW_STORE_UNAVAILABLE");
+    const rows: ReviewedBenefitRow[] = [];
+    for (let index = 0; index < length; index++) {
+      const descriptor = descriptors[String(index)];
+      if (!descriptor || !Object.hasOwn(descriptor, "value") || !descriptor.enumerable) {
+        return failReview("REVIEW_STORE_UNAVAILABLE");
+      }
+      rows.push(descriptor.value as ReviewedBenefitRow);
+    }
+    return rows;
+  });
 }
 function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -131,10 +152,13 @@ function benefitSnapshot(row: ReviewedBenefitRow): ReviewedBenefitRow {
       content, deletedAt: null });
   });
 }
-function receipt(row: ReviewedBenefitRow, operationId: string, replayed: boolean): ReviewReceipt {
-  return freeze({ schema: REVIEW_SCHEMA, dataGeneration: row.dataGeneration, operationId,
+function readback(row: ReviewedBenefitRow): ReviewedBenefitSnapshot {
+  return freeze({ schema: REVIEW_SCHEMA, dataGeneration: row.dataGeneration,
     outcome: row.state === "deleted" ? "deleted" : "saved", benefitId: row.id,
-    benefitRevision: row.revision, replayed, content: row.content });
+    benefitRevision: row.revision, content: row.content });
+}
+function receipt(row: ReviewedBenefitRow, operationId: string, replayed: boolean): ReviewReceipt {
+  return freeze({ ...readback(row), operationId, replayed });
 }
 
 /**
@@ -176,7 +200,9 @@ export function createReviewService(deps: ReviewDependencies) {
       // Commit acknowledgement can be delayed too. Do not return a payload to
       // authority revoked while awaiting it; failure is NOT proof of rollback.
       await guard();
-      return freeze({ ok: true as const, value: finalize(result.value, clock()) });
+      const finalTime = clock();
+      if (auth.expiresAt <= finalTime) return failReview("REVIEW_AUTHORITY_CHANGED");
+      return freeze({ ok: true as const, value: finalize(result.value, finalTime) });
     } catch (error) {
       // A commit may have happened before an adapter failure. Never claim rollback.
       return freeze({ ok: false, code: error instanceof ReviewFailure ? error.code : "REVIEW_STORE_UNAVAILABLE" });
@@ -194,6 +220,10 @@ export function createReviewService(deps: ReviewDependencies) {
   }
   async function loadBenefit(tx: ReviewTransaction, auth: ReviewAuthority, id: string) {
     return benefitSnapshot(owned(await tx.getBenefit(id), id, auth));
+  }
+  async function collectionRevision(tx: ReviewTransaction): Promise<number> {
+    const value = await tx.getBenefitCollectionRevision();
+    return persisted(() => parseRevision(value));
   }
   async function replay(tx: ReviewTransaction, auth: ReviewAuthority, operationId: string,
     kind: ReviewOperation["kind"], requestKey: string): Promise<ReviewReceipt | null> {
@@ -228,6 +258,39 @@ export function createReviewService(deps: ReviewDependencies) {
   }
 
   return Object.freeze({
+    // Read only through the same authority/transaction/final-clock boundary.
+    // No operation replay, new ID, candidate deadline or cross-owner lookup.
+    // This is a transaction snapshot, not a promise that no later writer exists.
+    get(input: unknown): Promise<ReviewResult<ReviewedBenefitSnapshot>> {
+      return execute(input, parseBenefitRead, async (tx, auth, request) =>
+        readback(await loadBenefit(tx, auth, request.benefitId)));
+    },
+    list(input: unknown): Promise<ReviewResult<ReviewedBenefitPage>> {
+      return execute(input, parseBenefitList, async (tx, auth, request) => {
+        const revision = await collectionRevision(tx);
+        const { limit, cursor } = request;
+        if (cursor && (cursor.dataGeneration !== auth.dataGeneration
+          || cursor.benefitCollectionRevision !== revision)) return failReview("REVIEW_CONFLICT");
+        const rows = pageRows(await tx.listReviewedBenefits(cursor?.afterId ?? null, limit + 1), limit + 1);
+        let after = cursor?.afterId ?? "";
+        const projected: ReviewedBenefitSnapshot[] = [];
+        for (const raw of rows) {
+          // Validate the lookahead too. A corrupt/foreign row fails the complete
+          // page; it must not be silently filtered into a seemingly valid page.
+          const row = persisted(() => benefitSnapshot(owned(raw, parseId(raw.id), auth)));
+          if (row.state !== "live" || row.id <= after) return failReview("REVIEW_STORE_UNAVAILABLE");
+          after = row.id;
+          projected.push(readback(row));
+        }
+        const benefits = projected.slice(0, limit);
+        const nextCursor = projected.length > limit ? {
+          afterId: benefits[benefits.length - 1]!.benefitId,
+          benefitCollectionRevision: revision, dataGeneration: auth.dataGeneration,
+        } : null;
+        return freeze({ schema: REVIEW_SCHEMA, dataGeneration: auth.dataGeneration,
+          benefitCollectionRevision: revision, benefits, nextCursor });
+      });
+    },
     preview(input: unknown): Promise<ReviewResult<PreviewView>> {
       return execute(input, parseDraft, async (tx, auth, draft, clock, guard) => {
         const { candidate, service } = await requirePending(tx, auth, draft, clock());
@@ -240,7 +303,7 @@ export function createReviewService(deps: ReviewDependencies) {
         tx.limitCommitTime(row.expiresAt);
         if (!await tx.insertPreview(row)) return failReview("REVIEW_CONFLICT");
         if (clock() >= row.expiresAt) return failReview("REVIEW_PREVIEW_EXPIRED");
-        return freeze({ id: row.id, revision: row.revision, expiresAt: row.expiresAt, content,
+        return freeze({ dataGeneration: auth.dataGeneration, id: row.id, revision: row.revision, expiresAt: row.expiresAt, content,
           accountProof: "not-established" as const, currentBalanceProof: "not-established" as const });
       }, (view, now) => {
         if (view.expiresAt <= now) return failReview("REVIEW_PREVIEW_EXPIRED");
@@ -259,6 +322,8 @@ export function createReviewService(deps: ReviewDependencies) {
         if (!same(candidate.content, draft.source) || service.name !== draft.serviceName) return failReview("REVIEW_CONFLICT");
         const candidateRevision = nextRevision(candidate.revision);
         const previewRevision = nextRevision(preview.revision);
+        const revision = await collectionRevision(tx);
+        nextRevision(revision); // Refuse overflow before any business mutation.
         await guard();
         pendingPreview(preview, auth, clock());
         const content: BenefitContent = freeze({ schema: REVIEW_SCHEMA, serviceId: service.id,
@@ -273,7 +338,8 @@ export function createReviewService(deps: ReviewDependencies) {
           || !await tx.updateCandidate(freeze({ ...candidate, revision: candidateRevision, state: "accepted" }), candidate.revision)
           || !await tx.updatePreview(freeze({ ...preview, revision: previewRevision, state: "consumed" }), preview.revision)
           || !await tx.insertOperation(freeze({ ownerId: auth.ownerId, operationId: request.operationId,
-            dataGeneration: auth.dataGeneration, kind: "confirm", requestKey, benefitId: benefit.id }))) {
+            dataGeneration: auth.dataGeneration, kind: "confirm", requestKey, benefitId: benefit.id }))
+          || !await tx.advanceBenefitCollectionRevision(revision)) {
           return failReview("REVIEW_CONFLICT");
         }
         pendingPreview(preview, auth, clock());
@@ -305,6 +371,8 @@ export function createReviewService(deps: ReviewDependencies) {
         if (candidate.state !== "accepted") return failReview("REVIEW_CONFLICT");
         const benefitRevision = nextRevision(benefit.revision);
         const candidateRevision = nextRevision(candidate.revision);
+        const revision = await collectionRevision(tx);
+        nextRevision(revision);
         await guard();
         const deleted: ReviewedBenefitRow = freeze({ ...benefit, revision: benefitRevision,
           state: "deleted", content: null, deletedAt: new Date(clock()).toISOString() });
@@ -314,7 +382,8 @@ export function createReviewService(deps: ReviewDependencies) {
         }
         await tx.eraseCandidatePreviews(candidate.id);
         if (!await tx.insertOperation(freeze({ ownerId: auth.ownerId, operationId: request.operationId,
-          dataGeneration: auth.dataGeneration, kind: "delete", requestKey, benefitId: benefit.id }))) {
+          dataGeneration: auth.dataGeneration, kind: "delete", requestKey, benefitId: benefit.id }))
+          || !await tx.advanceBenefitCollectionRevision(revision)) {
           return failReview("REVIEW_CONFLICT");
         }
         return receipt(deleted, request.operationId, false);
