@@ -5,7 +5,11 @@ import {
   type ReviewServiceRow, type ReviewValues,
 } from "../../src/server/review/contracts.ts";
 import { STAGING_POLICY, type CandidateBatchRow, type CandidateInboxDependencies,
-  type CandidateInboxTransaction, type CandidateStagingGrant } from "../../src/server/inbox/contracts.ts";
+  type CandidateStagingGrant } from "../../src/server/inbox/contracts.ts";
+import type { CandidateBatchMapping, CandidateBatchReferenceDependencies, CandidateBatchReferenceRow,
+  CandidateReferenceTransaction } from "../../src/server/inbox/batch-reference-contracts.ts";
+import { parseBatch } from "../../src/server/inbox/validation.ts";
+import { objectFields, parseId, parseRevision } from "../../src/server/review/validation.ts";
 import { MAIL_ANALYSIS_POLICY, type RunAuthority } from "../../src/server/mail/run-analysis.ts";
 import { DELETED_SERVICE_NAME, type CatalogDependencies, type CatalogOperation,
   type CatalogServiceRow, type CatalogTransaction } from "../../src/server/catalog/contracts.ts";
@@ -74,16 +78,21 @@ export interface MemoryRows {
   benefits: Map<string, ReviewedBenefitRow>;
   operations: Map<string, ReviewOperation>;
   batches: Map<string, CandidateBatchRow>;
+  batchReferences: Map<string, CandidateBatchReferenceRow>;
+  // Global-reference uniqueness and owner/operation uniqueness survive retirement.
+  batchReferenceSlots: Map<string, string>;
   // Synthetic unique-index metadata survives candidate payload erasure.
   candidateSlots: Map<string, string>;
   catalogOperations: Map<string, CatalogOperation>;
   catalogRevisions: Map<string, number>;
+  benefitsRevisions: Map<string, number>;
 }
-type MemoryTransaction = CandidateInboxTransaction & CatalogTransaction;
+type MemoryTransaction = CandidateReferenceTransaction & CatalogTransaction;
 type Method = keyof MemoryTransaction;
 type ConditionalMethod = "insertPreview" | "insertBenefit" | "insertOperation"
   | "updateCandidate" | "updatePreview" | "updateBenefit" | "insertCandidate" | "insertCandidateBatch"
-  | "insertCatalogService" | "updateCatalogService" | "insertCatalogOperation" | "advanceCatalogRevision";
+  | "insertCatalogService" | "updateCatalogService" | "insertCatalogOperation" | "advanceCatalogRevision"
+  | "advanceBenefitCollectionRevision" | "insertBatchReference" | "retireBatchReference";
 export interface MemoryControls {
   authority: unknown;
   now: number;
@@ -109,20 +118,22 @@ export interface MemoryControls {
 
 export const operationKey = (ownerId: string, operationId: string) => JSON.stringify([ownerId, operationId]);
 export const catalogRevisionKey = (ownerId: string, dataGeneration: number) => JSON.stringify([ownerId, dataGeneration]);
+export const benefitCollectionRevisionKey = (ownerId: string, dataGeneration: number) => JSON.stringify([ownerId, dataGeneration]);
 const clone = <T>(value: T): T => structuredClone(value);
 
 export function createReviewMemoryStore() {
   let rows: MemoryRows = {
     candidates: new Map([[CANDIDATE_ID, candidateRow()]]),
     services: new Map([[SERVICE_ID, serviceRow()]]), previews: new Map(), benefits: new Map(), operations: new Map(),
-    batches: new Map(), candidateSlots: new Map(),
-    catalogOperations: new Map(), catalogRevisions: new Map(),
+    batches: new Map(), batchReferences: new Map(), batchReferenceSlots: new Map(), candidateSlots: new Map(),
+    catalogOperations: new Map(), catalogRevisions: new Map(), benefitsRevisions: new Map(),
   };
   const controls: MemoryControls = { authority: reviewAuthority(), now: REVIEW_NOW,
     authorityReads: 0, transactions: 0, commits: 0, rollbacks: 0, trace: [],
     analysisAuthority: analysisAuthority(), stagingGrant: stagingGrant(), analysisChecks: 0, stagingGrantReads: 0 };
   let serial = Promise.resolve();
   let idSequence = 0;
+  let referenceSequence = 0;
 
   function assertAuthority(expected: ReviewAuthority) {
     // This models a trusted adapter's atomic entry/commit predicate only.
@@ -160,13 +171,45 @@ export function createReviewMemoryStore() {
     staging: Array<{ analysis: RunAuthority; grant: CandidateStagingGrant }>;
     services: Array<{ id: string; revision: number }>;
     noLiveBenefits: string[];
+    references: CandidateBatchMapping[];
+    insertedReferences: Set<string>;
+    referenceBatches: Map<string, { before: CandidateBatchRow | null; expected: CandidateBatchRow }>;
+  }
+  function sameMapping(left: CandidateBatchMapping, right: CandidateBatchMapping): boolean {
+    return left.batchReference === right.batchReference && left.ownerId === right.ownerId
+      && left.dataGeneration === right.dataGeneration && left.analysisOperationId === right.analysisOperationId;
+  }
+  function sameReference(left: CandidateBatchReferenceRow, right: CandidateBatchReferenceRow): boolean {
+    return validReference(left) && validReference(right) && sameMapping(left, right)
+      && left.state === right.state && left.revision === right.revision;
+  }
+  function validReference(row: CandidateBatchReferenceRow): boolean {
+    try {
+      const fields = objectFields(row, ["batchReference", "ownerId", "dataGeneration", "analysisOperationId", "state", "revision"]);
+      parseId(fields.batchReference); parseId(fields.ownerId); parseId(fields.analysisOperationId); parseRevision(fields.dataGeneration);
+      return fields.state === "active" && fields.revision === 1 || fields.state === "retired" && fields.revision === 2;
+    } catch { return false; }
+  }
+  function sameMap<T>(left: Map<string, T>, right: Map<string, T>, equal: (a: T, b: T) => boolean): boolean {
+    return left.size === right.size && [...left].every(([key, value]) => right.has(key) && equal(value, right.get(key)!));
+  }
+  const sameBatch = (left: CandidateBatchRow, right: CandidateBatchRow): boolean =>
+    JSON.stringify(parseBatch(left)) === JSON.stringify(parseBatch(right));
+  function assertActiveReference(data: MemoryRows, authority: ReviewAuthority, expected: CandidateBatchMapping): void {
+    const row = data.batchReferences.get(expected.batchReference);
+    if (!row || !validReference(row) || row.state !== "active" || row.revision !== 1 || !sameMapping(row, expected)
+      || row.ownerId !== authority.ownerId || row.dataGeneration !== authority.dataGeneration
+      || data.batchReferenceSlots.get(operationKey(row.ownerId, row.analysisOperationId)) !== row.batchReference) {
+      throw new Error(SYNTHETIC_PRIVATE);
+    }
   }
   function assertService(data: MemoryRows, authority: ReviewAuthority, id: string, revision: number) {
     const row = data.services.get(id);
     if (!row || row.ownerId !== authority.ownerId || row.dataGeneration !== authority.dataGeneration
       || row.state !== "live" || row.revision !== revision) throw new Error(SYNTHETIC_PRIVATE);
   }
-  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: CommitRequirements): MemoryTransaction {
+  function transactionView(snapshot: MemoryRows, authority: ReviewAuthority, deadline: CommitRequirements,
+    baseBatches: Map<string, CandidateBatchRow>): MemoryTransaction {
     async function operation<T>(method: Method, action: () => T): Promise<T> {
       controls.trace.push(method);
       await controls.beforeMethod?.(method);
@@ -179,6 +222,19 @@ export function createReviewMemoryStore() {
     }
     function allowed(row: { ownerId: string; dataGeneration: number }) {
       return row.ownerId === authority.ownerId && row.dataGeneration === authority.dataGeneration;
+    }
+    function requireBackingBatch(mapping: CandidateBatchMapping): boolean {
+      const key = operationKey(mapping.ownerId, mapping.analysisOperationId), raw = snapshot.batches.get(key);
+      if (!raw || !allowed(raw) || raw.analysisOperationId !== mapping.analysisOperationId
+        || raw.ownerId !== mapping.ownerId || raw.dataGeneration !== mapping.dataGeneration) return false;
+      try {
+        const expected = parseBatch(raw), before = baseBatches.get(key) ?? null;
+        if (before !== null && !sameBatch(before, expected)) return false;
+        const previous = deadline.referenceBatches.get(key);
+        if (previous && !sameBatch(previous.expected, expected)) return false;
+        deadline.referenceBatches.set(key, { before: clone(before), expected: clone(expected) });
+        return true;
+      } catch { return false; }
     }
     function insert<T extends { id: string; ownerId: string; dataGeneration: number; revision: number }>(
       method: ConditionalMethod, map: Map<string, T>, row: T,
@@ -230,6 +286,46 @@ export function createReviewMemoryStore() {
       return true;
     }
     return {
+      getBatchReference: (reference) => operation("getBatchReference", () => scoped(snapshot.batchReferences.get(reference))),
+      getBatchReferenceByOperation: (id) => operation("getBatchReferenceByOperation", () => {
+        const reference = snapshot.batchReferenceSlots.get(operationKey(authority.ownerId, id));
+        if (reference === undefined) return null;
+        const row = snapshot.batchReferences.get(reference);
+        // An absent slot is only absence; an existing dangling/misdirected slot
+        // is observable corruption, not permission to allocate a replacement.
+        if (!row || !validReference(row) || row.batchReference !== reference
+          || row.ownerId !== authority.ownerId || row.analysisOperationId !== id) throw new Error(SYNTHETIC_PRIVATE);
+        return clone(row);
+      }),
+      insertBatchReference: (row) => operation("insertBatchReference", () => {
+        const slot = operationKey(row.ownerId, row.analysisOperationId);
+        if (controls.falseMethod === "insertBatchReference" || !validReference(row) || !allowed(row)
+          || row.state !== "active" || row.revision !== 1 || snapshot.batchReferences.has(row.batchReference)
+          || snapshot.batchReferenceSlots.has(slot) || [...snapshot.batchReferences.values()].some((existing) =>
+            existing.ownerId === row.ownerId && existing.analysisOperationId === row.analysisOperationId)
+          || !requireBackingBatch(row)) return false;
+        snapshot.batchReferences.set(row.batchReference, clone(row));
+        snapshot.batchReferenceSlots.set(slot, row.batchReference);
+        deadline.insertedReferences.add(row.batchReference);
+        return true;
+      }),
+      retireBatchReference: (row, expectedRevision) => operation("retireBatchReference", () => {
+        const previous = snapshot.batchReferences.get(row.batchReference);
+        if (controls.falseMethod === "retireBatchReference" || !validReference(row) || !allowed(row)
+          || row.state !== "retired" || row.revision !== 2 || expectedRevision !== 1 || !previous
+          || !validReference(previous) || previous.state !== "active" || previous.revision !== 1
+          || !sameMapping(previous, row)
+          || snapshot.batchReferenceSlots.get(operationKey(row.ownerId, row.analysisOperationId)) !== row.batchReference
+          || !requireBackingBatch(row)) return false;
+        snapshot.batchReferences.set(row.batchReference, clone(row));
+        return true;
+      }),
+      requireBatchReference: (expected) => {
+        controls.trace.push("requireBatchReference");
+        assertActiveReference(snapshot, authority, expected);
+        if (!requireBackingBatch(expected)) throw new Error(SYNTHETIC_PRIVATE);
+        deadline.references.push(clone(expected));
+      },
       requireServiceVersion: (id, revision) => {
         controls.trace.push("requireServiceVersion");
         assertService(snapshot, authority, id, revision);
@@ -309,6 +405,21 @@ export function createReviewMemoryStore() {
       getService: (id) => operation("getService", () => scoped(snapshot.services.get(id))),
       getPreview: (id) => operation("getPreview", () => scoped(snapshot.previews.get(id))),
       getBenefit: (id) => operation("getBenefit", () => scoped(snapshot.benefits.get(id))),
+      // Synthetic snapshot only. Every production benefit writer must advance
+      // this revision atomically with its row and operation-ledger mutations.
+      getBenefitCollectionRevision: () => operation("getBenefitCollectionRevision", () =>
+        snapshot.benefitsRevisions.get(benefitCollectionRevisionKey(authority.ownerId, authority.dataGeneration)) ?? 1),
+      listReviewedBenefits: (afterId, take) => operation("listReviewedBenefits", () => [...snapshot.benefits.values()]
+        .filter((row) => allowed(row) && row.state === "live" && (afterId === null || row.id > afterId))
+        .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+        .slice(0, take).map((row) => clone(row))),
+      advanceBenefitCollectionRevision: (expected) => operation("advanceBenefitCollectionRevision", () => {
+        const key = benefitCollectionRevisionKey(authority.ownerId, authority.dataGeneration);
+        if (controls.falseMethod === "advanceBenefitCollectionRevision" || !Number.isSafeInteger(expected)
+          || expected < 1 || expected >= Number.MAX_SAFE_INTEGER || (snapshot.benefitsRevisions.get(key) ?? 1) !== expected) return false;
+        snapshot.benefitsRevisions.set(key, expected + 1);
+        return true;
+      }),
       getOperation: (id) => operation("getOperation", () => scoped(snapshot.operations.get(operationKey(authority.ownerId, id)))),
       insertPreview: (row) => operation("insertPreview", () => insert("insertPreview", snapshot.previews, row)),
       insertBenefit: (row) => operation("insertBenefit", () => {
@@ -358,11 +469,28 @@ export function createReviewMemoryStore() {
       await controls.beforeEntry?.();
       assertAuthority(authority);
       const snapshot = clone(rows);
-      const deadline: CommitRequirements = { notAfter: authority.expiresAt, staging: [], services: [], noLiveBenefits: [] };
-      const result = await action(transactionView(snapshot, authority, deadline));
+      const baseReferences = clone(rows.batchReferences), baseSlots = clone(rows.batchReferenceSlots), baseBatches = clone(rows.batches);
+      const deadline: CommitRequirements = { notAfter: authority.expiresAt, staging: [], services: [], noLiveBenefits: [],
+        references: [], insertedReferences: new Set(), referenceBatches: new Map() };
+      const result = await action(transactionView(snapshot, authority, deadline, baseBatches));
       await controls.beforeCommit?.();
       assertAuthority(authority);
       if (controls.now >= deadline.notAfter) throw new Error(SYNTHETIC_PRIVATE);
+      // The test store replaces its whole snapshot, including on read-only
+      // transactions. Conservatively reject external reference/index changes so
+      // even an unrelated read cannot overwrite a concurrent retirement.
+      if (!sameMap(baseReferences, rows.batchReferences, sameReference)
+        || !sameMap(baseSlots, rows.batchReferenceSlots, (left, right) => left === right)) throw new Error(SYNTHETIC_PRIVATE);
+      for (const [key, required] of deadline.referenceBatches) {
+        const live = rows.batches.get(key), final = snapshot.batches.get(key);
+        if ((required.before === null ? live !== undefined : live === undefined || !sameBatch(required.before, live))
+          || !final || !sameBatch(required.expected, final)) throw new Error(SYNTHETIC_PRIVATE);
+      }
+      for (const expected of deadline.references) {
+        // A newly staged batch/alias can be checked in the same transaction;
+        // the global absence/index predicates above still guard its insertion.
+        assertActiveReference(deadline.insertedReferences.has(expected.batchReference) ? snapshot : rows, authority, expected);
+      }
       for (const expected of deadline.staging) assertStaging(authority, expected.analysis, expected.grant);
       for (const service of deadline.services) {
         assertService(rows, authority, service.id, service.revision);
@@ -400,5 +528,15 @@ export function createReviewMemoryStore() {
     },
   };
   const catalogDependencies: CatalogDependencies = { ...common, transaction };
-  return { dependencies, inboxDependencies, catalogDependencies, controls, get rows() { return rows; }, snapshot: () => clone(rows) };
+  const referenceDependencies: CandidateBatchReferenceDependencies = { ...inboxDependencies, transaction,
+    newReference: () => `synthetic-batch-reference-${++referenceSequence}`,
+    readReference: async (reference, signal) => {
+      controls.trace.push("readReference");
+      if (signal.aborted) throw new Error(SYNTHETIC_PRIVATE);
+      // Direct committed read: must not enqueue a nested serial transaction.
+      return clone(rows.batchReferences.get(reference) ?? null);
+    },
+  };
+  return { dependencies, inboxDependencies, catalogDependencies, referenceDependencies, controls,
+    get rows() { return rows; }, snapshot: () => clone(rows) };
 }

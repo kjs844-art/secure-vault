@@ -1,8 +1,8 @@
 import type { BenefitEvidenceKind, EmailCandidate } from "../mail/contracts";
 import {
-  REVIEW_SCHEMA,
+  MAX_REVIEWED_BENEFIT_PAGE, REVIEW_SCHEMA,
   type CandidateContent, type ExtractedValues, type ReviewAuthority, type ReviewDraft,
-  type ReviewErrorCode, type ReviewValues,
+  type ReviewErrorCode, type ReviewValues, type ReviewedBenefitCursor,
 } from "./contracts";
 
 const VALUE_KEYS = [
@@ -180,6 +180,27 @@ export function parseConfirm(value: unknown): Readonly<{
   const raw = objectFields(value, ["previewId", "operationId", "decision"]);
   if (raw.decision !== "confirm") return failReview();
   return Object.freeze({ previewId: parseId(raw.previewId), operationId: parseId(raw.operationId), decision: "confirm" });
+}
+
+export function parseBenefitRead(value: unknown): Readonly<{ benefitId: string }> {
+  const raw = objectFields(value, ["benefitId"]);
+  return Object.freeze({ benefitId: parseId(raw.benefitId) });
+}
+
+export function parseBenefitList(value: unknown): Readonly<{
+  limit: number; cursor: ReviewedBenefitCursor | null;
+}> {
+  const raw = objectFields(value, ["limit", "cursor"]);
+  if (typeof raw.limit !== "number" || !Number.isSafeInteger(raw.limit)
+    || raw.limit < 1 || raw.limit > MAX_REVIEWED_BENEFIT_PAGE) return failReview();
+  let cursor: ReviewedBenefitCursor | null = null;
+  if (raw.cursor !== null) {
+    const fields = objectFields(raw.cursor, ["afterId", "benefitCollectionRevision", "dataGeneration"]);
+    cursor = Object.freeze({ afterId: parseId(fields.afterId),
+      benefitCollectionRevision: parseRevision(fields.benefitCollectionRevision),
+      dataGeneration: parseRevision(fields.dataGeneration) });
+  }
+  return Object.freeze({ limit: raw.limit, cursor });
 }
 
 export function parseDelete(value: unknown): Readonly<{

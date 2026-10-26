@@ -32,7 +32,7 @@ function objectWithKeys(value: unknown, keys: readonly string[]): Record<string,
 
 function label(value: unknown, max: number): string {
   if (typeof value !== "string" || !value || value.trim() !== value || value.length > max
-    || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value)
+    || /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u.test(value)
     || /[\uD800-\uDFFF]/u.test(value)) return fail();
   return value;
 }

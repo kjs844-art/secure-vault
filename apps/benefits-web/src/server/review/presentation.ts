@@ -1,13 +1,13 @@
 import { decodeReviewedBenefitView, REVIEWED_BENEFIT_VIEW_SCHEMA, type ReviewedBenefitView } from "../../domain/reviewed-benefit-view";
-import { REVIEW_SCHEMA, type ReviewReceipt } from "./contracts";
+import { REVIEW_SCHEMA, type ReviewReceipt, type ReviewedBenefitSnapshot } from "./contracts";
 
 /**
- * Trusted internal receipt projection only, never authentication or a public
- * receipt validator. Call AFTER the service/adapter verifies the current owner.
+ * Trusted internal snapshot projection only, never authentication or a public
+ * snapshot validator. Call AFTER the service/adapter verifies the current owner.
  * These labels and reviewed values may still be personal; projection is not
  * anonymization. It supplies no live balance, account status, provider or UI link.
  */
-export function projectReviewReceipt(receipt: ReviewReceipt): ReviewedBenefitView {
+export function projectReviewedBenefit(receipt: ReviewedBenefitSnapshot): ReviewedBenefitView {
   try {
     if (receipt.schema !== REVIEW_SCHEMA) throw new Error("REVIEW_PRESENTATION_INVALID");
     const source = receipt.content;
@@ -42,4 +42,9 @@ export function projectReviewReceipt(receipt: ReviewReceipt): ReviewedBenefitVie
   } catch {
     throw new Error("REVIEW_PRESENTATION_INVALID");
   }
+}
+
+/** Confirmation/deletion receipts and readback share the same minimal browser DTO. */
+export function projectReviewReceipt(receipt: ReviewReceipt): ReviewedBenefitView {
+  return projectReviewedBenefit(receipt);
 }
