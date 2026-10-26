@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CONFIDENCE_LABELS,
   FILTER_LABELS,
@@ -39,28 +39,49 @@ export function DiscoveryInboxPanel({
   readonly sourceLabel?: string;
 }) {
   const sourceItems = items ?? SYNTHETIC_DISCOVERY_INBOX_ITEMS;
+  const context = useMemo(() => ({
+    scope: Symbol("discovery-input"),
+    initialView: buildDiscoveryInbox(sourceItems),
+  }), [sourceItems]);
   const [state, setState] = useState<{
-    sourceItems: readonly DiscoveryInboxItem[];
     scope: symbol;
     view: DiscoveryInboxView;
-  }>(
-    () => ({ sourceItems, scope: Symbol("discovery-input"), view: buildDiscoveryInbox(sourceItems) }),
-  );
-  // Reducer actions create new arrays too: identify replacement input by its
-  // source, not by the edited view. Reset before committing the new input view.
-  let current = state;
-  if (state.sourceItems !== sourceItems) {
-    current = { sourceItems, scope: Symbol("discovery-input"), view: buildDiscoveryInbox(sourceItems) };
-    setState(current);
-  }
-  const live = current.view;
-  const scope = current.scope;
-  const dispatch = (action: Parameters<typeof reduceDiscoveryInbox>[1]) => {
-    // Generation identity also rejects retained A callbacks after A -> B -> A,
-    // while consecutive actions within one generation use the latest state.
-    setState((previous) => previous.scope === scope
-      ? { ...previous, view: reduceDiscoveryInbox(previous.view, action) }
-      : previous);
+  }>(() => ({ scope: context.scope, view: context.initialView }));
+  // Replacement input renders its initial view without publishing a state reset
+  // from a render that React may abandon. Edited arrays do not replace context.
+  const { scope, initialView } = context;
+  const live = state.scope === scope ? state.view : initialView;
+  const committedScope = useRef<symbol | null>(null);
+  const selectedFilter = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<{ scope: symbol; trigger: HTMLButtonElement } | null>(null);
+  useLayoutEffect(() => {
+    committedScope.current = scope;
+    return () => {
+      if (committedScope.current === scope) committedScope.current = null;
+    };
+  }, [scope]);
+  useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+    pendingFocus.current = null;
+    if (!pending || pending.scope !== scope || pending.trigger.isConnected) return;
+    const owner = pending.trigger.ownerDocument;
+    const target = selectedFilter.current;
+    if (owner.activeElement === owner.body && target?.isConnected && target.ownerDocument === owner) {
+      target.focus({ preventScroll: true });
+    }
+  }, [scope, live]);
+  const dispatch = (action: Parameters<typeof reduceDiscoveryInbox>[1], trigger?: HTMLButtonElement) => {
+    // Reject stale callbacks before they can clear a newer pending focus request.
+    if (committedScope.current !== scope) return;
+    pendingFocus.current = action.type === "set-confidence" && trigger
+      && trigger.ownerDocument.activeElement === trigger ? { scope, trigger } : null;
+    setState((previous) => {
+      // An accepted callback can still be queued across replacement or unmount.
+      // Current-generation actions reduce the latest view, not their captured one.
+      if (committedScope.current !== scope) return previous;
+      const view = previous.scope === scope ? previous.view : initialView;
+      return { scope, view: reduceDiscoveryInbox(view, action) };
+    });
   };
 
   return (
@@ -86,6 +107,7 @@ export function DiscoveryInboxPanel({
             type="button"
             data-testid={`discovery-filter-${filter}`}
             aria-pressed={live.filter === filter}
+            ref={live.filter === filter ? selectedFilter : undefined}
             onClick={() => dispatch({ type: "filter", filter })}
           >
             {FILTER_LABELS[filter]} {live.counts[filter]}
@@ -118,11 +140,11 @@ export function DiscoveryInboxPanel({
                         key={action.confidence}
                         type="button"
                         data-testid={`discovery-action-${action.confidence}`}
-                        onClick={() => dispatch({
+                        onClick={(event) => dispatch({
                           type: "set-confidence",
                           id: item.id,
                           confidence: action.confidence,
-                        })}
+                        }, event.currentTarget)}
                       >
                         {action.label}
                       </button>
