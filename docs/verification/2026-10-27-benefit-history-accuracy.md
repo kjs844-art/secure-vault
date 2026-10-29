@@ -282,3 +282,59 @@ internal shutdown behavior is not a guarantee that it never uses a fallback.
 PR #45 remains **Draft/HOLD**. #44's native transport failures and #42's exact
 idle-boundary INCONCLUSIVE result remain separate. No real provider, Secret,
 authentication, production DB or deployment was enabled.
+
+## Current installed-browser evidence — 2026-10-29 UTC
+
+The preceding Draft/HOLD paragraphs describe the earlier checkpoints and
+remain historical evidence. Root performed one new actual measurement per
+currently installed browser, without changing the product, fixture, close
+deadline or installed software. This is not an explanation or retroactive
+pass for the older Chrome 156.0.8078.48 failure.
+
+Both measurements used, from `apps/benefits-web/`, the existing command:
+
+```powershell
+$env:BROWSER_CHANNEL = 'chrome' # 'msedge' for the separate Edge measurement
+node --import tsx scripts/verify-benefit-history-browser.ts --synthetic-only --screenshots
+```
+
+| Evidence | Chrome | Edge |
+| --- | --- | --- |
+| Installed version | 156.0.8078.49 | 156.0.4314.50 |
+| UTC interval | 14:43:38.110–14:43:43.503 | 14:47:45.508–14:47:49.124 |
+| Functional checks | 20/20 PASS | 20/20 PASS |
+| Error counters | all seven zero | all seven zero |
+| Close calls / strict limit | 1 / 10,000ms | 1 / 10,000ms |
+| Close-Promise settlement | RESOLVED, about 285.11ms | RESOLVED, about 360.18ms |
+| Disconnection after close start | about 43.73ms | about 95.18ms |
+| Context/browser/server/socket cleanup | all true | all true |
+| Overall / process exit | PASS / 0 | PASS / 0 |
+
+Both runs generated exactly 212,026 entry bytes with SHA256
+`dd214fd9969d72cfea198aa08a27f8eb982af84258e75042cdab2061ce420253`.
+All eight source hashes match the earlier failing fixture. The close observer
+reported no clock/probe/listener failures, and the post-run OS query found no
+owned Playwright-profile Chrome/Edge processes. No additional browser retry,
+second close, deadline expansion or process termination was used.
+
+Before the actual Edge launch, the runner correctly refused to overwrite the
+Chrome PNGs (`PREFLIGHT / HISTORY_SCREENSHOT_ALREADY_EXISTS`, exit 1, zero
+checks and no browser launched). Root hash-verified and preserved only those
+newly generated owned captures under ignored reports, then used the empty
+output destinations for the one actual Edge run. The committed review PNGs
+therefore come from the new Edge run. This preparation refusal is not a
+passing browser measurement and was retained separately.
+
+Chrome measured the exact source at `ef6384c`; before Edge, root normally
+merged main `b36a279` into this feature branch as `f962aaa`. The merge changes
+only the six PR49 web/discovery paths. `git diff ef6384c..f962aaa --
+apps/benefits-web Cargo.toml Cargo.lock crates scripts/verify-local.ps1` is
+empty. The prior full benefits 3,340/3,340, strict types, build, boundary and
+smoke evidence above is reused for unchanged corresponding inputs, not
+reported as a newly repeated suite. Fresh exact-head CI remains a separate
+publication/merge gate.
+
+The current installed-browser gates now pass; their older-version failures
+remain recorded with cause unresolved. This evidence does not cover every
+browser/OS version, physical mobile devices, real accounts, actual provider
+credits, production storage or release readiness. `REAL_SECRET_GATE=CLOSED`.
