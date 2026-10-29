@@ -8,6 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { createIdentityCloseObservation, IDENTITY_CLOSE_LIMIT_MS } from "./support/identity-close-observation.mjs";
 import { acquireOwned, withDeadline } from "../tests/mvp-browser/qa-lifecycle.mjs";
 
 const args = process.argv.slice(2), channelArgs = args.filter((arg) => arg.startsWith("--channel="));
@@ -32,6 +33,7 @@ let stage = "DEPENDENCIES", primaryFailure = null, functionalChecksCompleted = f
 let acquisitionTimedOut = false, serverListenTimedOut = false;
 let browser, context, server, origin, browserVersion = null, fixtureEntrySha256 = null, fixtureAssetsSha256 = null;
 let appIndexSha256 = null, appAssetsSha256 = null, builtAppRoute = "NOT_RUN", concurrency = null;
+let browserCloseObserver, browserCloseObservation = null, browserCloseStep = null;
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function failureCode(error) {
   // Only fixed tags escape this process; never serialize the thrown value.
@@ -153,6 +155,7 @@ try {
   origin = `http://127.0.0.1:${address.port}`;
   stage = "BROWSER_LAUNCH";
   browser = await acquire(() => chromium.launch({ channel, headless: true, timeout: 30_000, env: browserEnvironment() }), (value) => value.close());
+  browserCloseObserver = createIdentityCloseObservation(browser);
   const version = browser.version(); assert.match(version, /^\d+(?:\.\d+){1,3}$/); browserVersion = version;
   stage = "CONTEXT_CREATE";
   context = await acquire(() => browser.newContext({ serviceWorkers: "block", acceptDownloads: false,
@@ -364,8 +367,20 @@ try {
 } finally {
   // A failed/deadline cleanup never becomes PASS from later disconnect alone.
   // These calls concern this process's new resources only; no process kill API.
+  browserCloseObserver?.setPhase("CONTEXT_CLOSE");
   if (context) await cleanup("CONTEXT_CLOSE", () => context.close(), 10_000);
-  if (browser) await cleanup("BROWSER_CLOSE", () => browser.close(), 10_000);
+  if (browser) {
+    browserCloseObserver ??= createIdentityCloseObservation(browser);
+    try {
+      const outcome = await browserCloseObserver.close(), boundary = browserCloseObserver.snapshot();
+      browserCloseStep = { name: "BROWSER_CLOSE", outcome: outcome === "DEADLINE" ? "DEADLINE"
+        : outcome === "RESOLVED" && boundary.passed ? "RESOLVED" : "REJECTED", timeoutMs: IDENTITY_CLOSE_LIMIT_MS };
+    } catch {
+      browserCloseStep = { name: "BROWSER_CLOSE", outcome: "REJECTED", timeoutMs: IDENTITY_CLOSE_LIMIT_MS };
+    }
+    cleanupSteps.push(browserCloseStep);
+  }
+  browserCloseObserver?.setPhase("SERVER_CLOSE");
   if (server) await cleanup("SERVER_CLOSE", () => new Promise((resolve, reject) => {
     if (!server.listening) { resolve(); return; }
     server.close((error) => error ? reject(error) : resolve()); server.closeAllConnections();
@@ -374,16 +389,23 @@ try {
   if (sockets.size > 0) await cleanup("SOCKET_CLOSE", () => Promise.all([...sockets].map((socket) => new Promise((resolve) => {
     socket.once("close", resolve); socket.destroy();
   }))), 5_000);
+  if (browserCloseObserver) {
+    browserCloseObserver.setPhase("FINAL");
+    browserCloseObserver.dispose();
+    browserCloseObservation = browserCloseObserver.snapshot();
+    if (!browserCloseObservation.passed && browserCloseStep?.outcome === "RESOLVED") browserCloseStep.outcome = "REJECTED";
+  }
   let browserConnected = null, connectionProbeFailed = false;
   if (browser) { try { browserConnected = browser.isConnected(); } catch { connectionProbeFailed = true; } }
   const confirmed = !acquisitionTimedOut && !serverListenTimedOut && !connectionProbeFailed
-    && (!browser || browserConnected === false) && cleanupSteps.every((step) => step.outcome === "RESOLVED")
+    && (!browser || (browserConnected === false && browserCloseObservation?.passed === true))
+    && cleanupSteps.every((step) => step.outcome === "RESOLVED")
     && (!server || !server.listening) && sockets.size === 0;
   const result = primaryFailure || !functionalChecksCompleted || !confirmed || Object.values(counters).some((count) => count !== 0) ? "FAIL" : "PASS";
   console.log(JSON.stringify({ result, startedAt, finishedAt: new Date().toISOString(), channel, browserVersion,
     groups: groups.length, passedGroups: groups, primaryFailure, counters, concurrency,
     fixtureEntrySha256, fixtureAssetsSha256, builtAppRoute, appIndexSha256, appAssetsSha256,
-    builtAssetsRequested: requestedAssets.size, realSecretGate: "CLOSED",
+    builtAssetsRequested: requestedAssets.size, realSecretGate: "CLOSED", browserCloseObservation,
     cleanup: { confirmed, acquisitionTimedOut, serverListenTimedOut, connectionProbeFailed, browserConnected,
       serverListening: server?.listening ?? false, ownedSocketsRemaining: sockets.size, steps: cleanupSteps },
     limits: ["synthetic current-product in-memory production React fixture; not development StrictMode effect replay",
