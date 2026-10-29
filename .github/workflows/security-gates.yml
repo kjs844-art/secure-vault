@@ -164,6 +164,11 @@ jobs:
         working-directory: .
         run: node --test apps/web/scripts/support/identity-close-observation.test.mjs
 
+      - name: Run backup roundtrip contract tests
+        shell: pwsh
+        working-directory: .
+        run: node --test apps/web/scripts/support/backup-roundtrip-contract.test.mjs
+
       - name: Type-check the web app
         shell: pwsh
         working-directory: apps/web
