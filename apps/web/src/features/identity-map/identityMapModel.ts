@@ -74,7 +74,9 @@ export function recordedLabel(value: string | null): { readonly text: string; re
 }
 
 function accountId(entry: LocalCatalogEntryV1): string {
-  return `${entry.providerName}\0${entry.issuerAccountIdentifier ?? ""}`;
+  // Preserve null versus empty text and escape delimiters inside either value.
+  // This private, in-memory UI identity is not a persistent record reference.
+  return JSON.stringify([entry.providerName, entry.issuerAccountIdentifier]);
 }
 
 function issuerId(entry: LocalCatalogEntryV1): string {

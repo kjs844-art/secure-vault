@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { LocalCatalogEntryV1 } from "../../bridge/catalogProtocol";
 import "../../styles.css";
 import {
@@ -10,7 +10,7 @@ import {
   buildIdentityMap,
   emptyIdentityMapView,
   reduceIdentityMap,
-  type IdentityMapStep,
+  type IdentityMapAction,
   type IdentityMapView,
 } from "./identityMapModel";
 import { SYNTHETIC_IDENTITY_MAP_ENTRIES } from "./syntheticIdentityMapFixture";
@@ -25,33 +25,62 @@ export function IdentityMapPanel({
   readonly sourceLabel?: string;
   readonly embedded?: boolean;
 }) {
-  const graph = useMemo(
-    () => buildIdentityMap(entries ?? SYNTHETIC_IDENTITY_MAP_ENTRIES),
-    [entries],
-  );
-  const [view, setView] = useState<IdentityMapView>(() => emptyIdentityMapView(graph));
-  const shown = view.accounts === graph.accounts ? view : emptyIdentityMapView(graph);
+  const sourceEntries = entries ?? SYNTHETIC_IDENTITY_MAP_ENTRIES;
+  // Render a replacement's empty view without writing replacement state during
+  // render. A suspended render must not seed React's eager updater with B while
+  // the still-committed A controls remain interactive.
+  const context = useMemo(() => {
+    const graph = buildIdentityMap(sourceEntries);
+    return { scope: Symbol("identity-input"), graph, initialView: emptyIdentityMapView(graph) };
+  }, [sourceEntries]);
+  const [state, setState] = useState<{ scope: symbol; view: IdentityMapView }>(() => ({
+    scope: context.scope, view: context.initialView,
+  }));
+  const scope = context.scope;
+  const shown = state.scope === scope ? state.view : context.initialView;
+  // Publish ownership only at commit, never from a render React might discard.
+  const committedScope = useRef<symbol | null>(null);
+  useLayoutEffect(() => {
+    committedScope.current = scope;
+    return () => { if (committedScope.current === scope) committedScope.current = null; };
+  }, [scope]);
+  const selectedStep = useRef<HTMLButtonElement>(null);
+  const pendingFocus = useRef<{ scope: symbol; trigger: Element } | null>(null);
+  useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+    pendingFocus.current = null;
+    if (!pending || pending.scope !== scope || pending.trigger.isConnected) return;
+    const owner = pending.trigger.ownerDocument;
+    const target = selectedStep.current;
+    if (owner.activeElement === owner.body && target?.isConnected && target.ownerDocument === owner) {
+      target.focus({ preventScroll: true });
+    }
+  }, [scope, shown]);
+  const headingId = useId();
   const Root = embedded ? "section" : "main";
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      setView((current) => reduceIdentityMap(graph, current, { type: "back" }));
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [graph]);
-
-  const openStep = (step: IdentityMapStep) => {
-    setView((current) => reduceIdentityMap(graph, current, { type: "open-step", step }));
+  const dispatch = (action: IdentityMapAction, trigger?: Element) => {
+    if (committedScope.current !== scope) return;
+    pendingFocus.current = trigger && trigger.ownerDocument.activeElement === trigger ? { scope, trigger } : null;
+    setState((previous) => committedScope.current === scope
+      ? { scope, view: reduceIdentityMap(context.graph,
+        previous.scope === scope ? previous.view : context.initialView, action) }
+      : previous);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape" || event.defaultPrevented || shown.step === "account"
+      || committedScope.current !== scope) return;
+    event.preventDefault();
+    dispatch({ type: "back" }, event.target as Element);
   };
 
   return (
-    <Root className="identity-map" {...(embedded ? { "aria-labelledby": "identity-map-title" } : {})}>
+    <Root className="identity-map" data-testid="identity-map-root" onKeyDown={onKeyDown}
+      {...(embedded ? { "aria-labelledby": `${headingId}-title` } : {})}>
       <header>
         <p className="eyebrow">KeyAtlas · KA-C02 Identity Map</p>
         {embedded ? (
-          <h2 id="identity-map-title">계정 · 발급처 · 사용처를 세 단계로 보기</h2>
+          <h2 id={`${headingId}-title`}>계정 · 발급처 · 사용처를 세 단계로 보기</h2>
         ) : (
           <h1>계정 · 발급처 · 사용처를 세 단계로 보기</h1>
         )}
@@ -72,8 +101,9 @@ export function IdentityMapPanel({
             <button
               type="button"
               data-testid="identity-map-step-account"
+              ref={shown.step === "account" ? selectedStep : undefined}
               aria-current={shown.step === "account" ? "step" : undefined}
-              onClick={() => openStep("account")}
+              onClick={(event) => dispatch({ type: "open-step", step: "account" }, event.currentTarget)}
             >
               1. 계정
             </button>
@@ -82,9 +112,10 @@ export function IdentityMapPanel({
             <button
               type="button"
               data-testid="identity-map-step-issuer"
+              ref={shown.step === "issuer" ? selectedStep : undefined}
               aria-current={shown.step === "issuer" ? "step" : undefined}
               disabled={shown.selectedAccountId === null}
-              onClick={() => openStep("issuer")}
+              onClick={(event) => dispatch({ type: "open-step", step: "issuer" }, event.currentTarget)}
             >
               2. 발급처
             </button>
@@ -93,9 +124,10 @@ export function IdentityMapPanel({
             <button
               type="button"
               data-testid="identity-map-step-usage"
+              ref={shown.step === "usage" ? selectedStep : undefined}
               aria-current={shown.step === "usage" ? "step" : undefined}
               disabled={shown.selectedIssuerId === null}
-              onClick={() => openStep("usage")}
+              onClick={(event) => dispatch({ type: "open-step", step: "usage" }, event.currentTarget)}
             >
               3. 사용처
             </button>
@@ -111,18 +143,18 @@ export function IdentityMapPanel({
 
       {shown.step !== "account" ? (
         <div className="identity-map-actions">
-          <button type="button" data-testid="identity-map-back" onClick={() => setView((current) => reduceIdentityMap(graph, current, { type: "back" }))}>
+          <button type="button" data-testid="identity-map-back" onClick={(event) => dispatch({ type: "back" }, event.currentTarget)}>
             이전 단계
           </button>
-          <button type="button" data-testid="identity-map-reset" onClick={() => setView(emptyIdentityMapView(graph))}>
+          <button type="button" data-testid="identity-map-reset" onClick={(event) => dispatch({ type: "reset" }, event.currentTarget)}>
             계정 목록으로
           </button>
         </div>
       ) : null}
 
       {shown.step === "account" ? (
-        <section aria-labelledby="identity-account-heading">
-          <h2 id="identity-account-heading">1. 계정</h2>
+        <section aria-labelledby={`${headingId}-account`}>
+          <h2 id={`${headingId}-account`}>1. 계정</h2>
           {shown.accounts.length === 0 ? (
             <p data-testid="identity-map-empty">표시할 합성 계정이 없습니다.</p>
           ) : (
@@ -132,7 +164,7 @@ export function IdentityMapPanel({
                   <button
                     type="button"
                     data-testid="identity-map-account"
-                    onClick={() => setView((current) => reduceIdentityMap(graph, current, { type: "select-account", accountId: account.id }))}
+                    onClick={(event) => dispatch({ type: "select-account", accountId: account.id }, event.currentTarget)}
                   >
                     <strong>{account.serviceName}</strong>
                     <span>{account.accountLabel}</span>
@@ -146,8 +178,8 @@ export function IdentityMapPanel({
       ) : null}
 
       {shown.step === "issuer" ? (
-        <section aria-labelledby="identity-issuer-heading">
-          <h2 id="identity-issuer-heading">2. 발급처</h2>
+        <section aria-labelledby={`${headingId}-issuer`}>
+          <h2 id={`${headingId}-issuer`}>2. 발급처</h2>
           <p>
             {shown.selectedAccount?.serviceName} / {shown.selectedAccount?.accountLabel}
           </p>
@@ -157,7 +189,7 @@ export function IdentityMapPanel({
                 <button
                   type="button"
                   data-testid="identity-map-issuer"
-                  onClick={() => setView((current) => reduceIdentityMap(graph, current, { type: "select-issuer", issuerId: issuer.id }))}
+                  onClick={(event) => dispatch({ type: "select-issuer", issuerId: issuer.id }, event.currentTarget)}
                 >
                   <strong>{issuer.itemName}</strong>
                   <span>{credentialLabels[issuer.credentialType]} · {statusLabels[issuer.status]}</span>
@@ -172,8 +204,8 @@ export function IdentityMapPanel({
       ) : null}
 
       {shown.step === "usage" ? (
-        <section aria-labelledby="identity-usage-heading">
-          <h2 id="identity-usage-heading">3. 사용처</h2>
+        <section aria-labelledby={`${headingId}-usage`}>
+          <h2 id={`${headingId}-usage`}>3. 사용처</h2>
           <p>{shown.selectedIssuer?.itemName}</p>
           {shown.usages.length === 0 ? (
             <p data-testid="identity-map-no-usage">아직 연결 기록이 없는 발급처입니다.</p>
