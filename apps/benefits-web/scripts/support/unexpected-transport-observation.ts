@@ -27,7 +27,7 @@ interface ObservationContext {
   readonly responseStatuses: WeakMap<object, number>;
   readonly requestReadHelpers: WeakMap<object, ReadHelperTrace>;
 }
-const ROUTES = ["/__candidate_completion", "/api/inbox/batch", "/api/catalog/list", "/api/catalog/create", "/api/catalog/update", "/api/catalog/delete",
+const ROUTES = ["/__candidate_completion", "/api/inbox/batch", "/api/inbox/discard", "/api/catalog/list", "/api/catalog/create", "/api/catalog/update", "/api/catalog/delete",
   "/api/review/preview", "/api/review/confirm", "/api/review/reject", "/api/review/delete", "/api/review/get", "/api/review/list"] as const;
 
 export function observeUnexpectedTransport(request: RequestObservation, context: ObservationContext) {

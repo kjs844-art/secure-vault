@@ -94,6 +94,7 @@ for (const file of client) {
     "projectReviewedBenefitPage", "REVIEW_PAGE_PRESENTATION_INVALID", "advanceBenefitCollectionRevision",
     "createReviewHttpHandler", "MAX_REVIEW_REQUEST_BYTES", "REVIEW_HTTP_ACTIONS",
     "createInboxHttpHandler", "MAX_INBOX_REQUEST_BYTES", "resolveBatchReference",
+    "createInboxDiscardHttpHandler", "MAX_INBOX_DISCARD_REQUEST_BYTES",
     "createCandidateBatchReferences", "requireBatchReference", "insertBatchReference",
     "deliverMailAnalysis", "REVIEW_STAGING_CONSENT_REQUIRED",
     "createCatalogHttpHandler", "API_CONFIGURATION_INVALID", "BODY_MEDIA_TYPE", "RequestLifetime",

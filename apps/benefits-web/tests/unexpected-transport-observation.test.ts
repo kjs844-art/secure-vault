@@ -75,7 +75,7 @@ test("unknown route/query, arbitrary method and adapter error text never enter t
 });
 
 test("all known routes are exact fixed labels; only GET/POST and the known abort text are retained", () => {
-  for (const route of ["/__candidate_completion", "/api/inbox/batch", "/api/catalog/list", "/api/catalog/create",
+  for (const route of ["/__candidate_completion", "/api/inbox/batch", "/api/inbox/discard", "/api/catalog/list", "/api/catalog/create",
     "/api/catalog/update", "/api/catalog/delete", "/api/review/preview", "/api/review/confirm", "/api/review/reject", "/api/review/delete",
     "/api/review/get", "/api/review/list"]) {
     for (const method of ["GET", "POST"]) {

@@ -64,6 +64,55 @@ describe("buildIdentityMap", () => {
     expect(graph.usagesByIssuer[issuers[1]!.id]).toEqual([]);
   });
 
+  it("keeps unrecorded and recorded-empty accounts separate regardless of input order", () => {
+    const missing = row({ reference: 0, issuerAccountIdentifier: null, itemName: "Synthetic missing-account item" });
+    const empty = row({ reference: 1, issuerAccountIdentifier: "", itemName: "Synthetic empty-account item" });
+    for (const entries of [[missing, empty], [empty, missing]]) {
+      const graph = buildIdentityMap(entries);
+      expect(graph.accounts).toHaveLength(2);
+      expect(new Set(graph.accounts.map((account) => account.id)).size).toBe(2);
+      expect(graph.accounts.map((account) => ({ label: account.accountLabel, recorded: account.accountRecorded })))
+        .toEqual(entries.map((entry) => ({
+          label: entry.issuerAccountIdentifier === null ? "기록 없음" : "빈 값으로 기록됨",
+          recorded: entry.issuerAccountIdentifier !== null,
+        })));
+      for (const [index, account] of graph.accounts.entries()) {
+        expect(account.issuerCount).toBe(1);
+        expect(account.usageCount).toBe(1);
+        const issuers = graph.issuersByAccount[account.id]!;
+        expect(issuers).toHaveLength(1);
+        expect(issuers[0]!.itemName).toBe(entries[index]!.itemName);
+        expect(issuers[0]!.snapshotReference).toBe(entries[index]!.reference);
+      }
+    }
+  });
+
+  it("keeps delimiter-bearing provider/account tuples and their issuer usages distinct", () => {
+    const entries = [
+      row({ reference: 0, providerName: "Example\0Provider", issuerAccountIdentifier: "demo-owner",
+        itemName: "Synthetic first issuer", connections: [{ label: "Synthetic first MCP", consumerType: "mcp_server" }] }),
+      row({ reference: 1, providerName: "Example", issuerAccountIdentifier: "Provider\0demo-owner",
+        itemName: "Synthetic second issuer", connections: [{ label: "Synthetic second MCP", consumerType: "mcp_server" }] }),
+    ];
+    const graph = buildIdentityMap(entries);
+    expect(graph.accounts).toHaveLength(2);
+    expect(new Set(graph.accounts.map((account) => account.id)).size).toBe(2);
+    expect(graph.accounts.map((account) => [account.serviceName, account.accountLabel]))
+      .toEqual(entries.map((entry) => [entry.providerName, entry.issuerAccountIdentifier]));
+    for (const [index, account] of graph.accounts.entries()) {
+      const selected = reduceIdentityMap(graph, emptyIdentityMapView(graph), { type: "select-account", accountId: account.id });
+      expect(selected.issuers).toHaveLength(1);
+      const issuer = selected.issuers[0]!;
+      expect(issuer.itemName).toBe(entries[index]!.itemName);
+      expect(issuer.accountId).toBe(account.id);
+      const usage = reduceIdentityMap(graph, selected, { type: "select-issuer", issuerId: issuer.id });
+      expect(usage.usages.map((target) => [target.label, target.issuerId]))
+        .toEqual([[entries[index]!.connections[0]!.label, issuer.id]]);
+      expect(account.issuerCount).toBe(1);
+      expect(account.usageCount).toBe(1);
+    }
+  });
+
   it("skips malformed rows instead of inventing nodes", () => {
     const graph = buildIdentityMap([
       row(),

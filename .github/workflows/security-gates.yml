@@ -159,6 +159,11 @@ jobs:
         working-directory: apps/web
         run: node --test tests/mvp-browser/idle-lock-timing.node-test.mjs
 
+      - name: Run identity close observation tests
+        shell: pwsh
+        working-directory: .
+        run: node --test apps/web/scripts/support/identity-close-observation.test.mjs
+
       - name: Type-check the web app
         shell: pwsh
         working-directory: apps/web

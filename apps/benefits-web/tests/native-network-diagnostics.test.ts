@@ -15,6 +15,18 @@ function response(requestId = PRIVATE) {
 function finished(requestId = PRIVATE) { return { requestId, timestamp: 3, encodedDataLength: 120 }; }
 const state: ServerDiagnosticState = { headersSent: true, writableEnded: true, writableFinished: true, destroyed: false, status: 503 };
 
+test("candidate discard participates in bounded native diagnostics without retaining request data", () => {
+  const diagnostics = createNativeNetworkDiagnostics(ORIGIN), session = diagnostics.sessionOpened()!;
+  const url = ORIGIN + "/api/inbox/discard";
+  diagnostics.observePlaywrightRequestStart(url);
+  diagnostics.observe(session, "requestWillBeSent", request(PRIVATE, url));
+  diagnostics.observe(session, "loadingFinished", finished());
+  const snapshot = diagnostics.snapshot();
+  assert.equal(snapshot.status, "COMPLETE"); assert.equal(snapshot.requests.length, 1);
+  assert.equal(snapshot.requests[0]!.route, "/api/inbox/discard");
+  assert.equal(JSON.stringify(snapshot).includes(PRIVATE), false);
+});
+
 test("HTTP 200 followed by native failure stays a failed terminal observation, never a success classification", () => {
   const diagnostics = createNativeNetworkDiagnostics(ORIGIN), session = diagnostics.sessionOpened()!;
   diagnostics.observePlaywrightRequestStart(ORIGIN + "/api/catalog/list");
