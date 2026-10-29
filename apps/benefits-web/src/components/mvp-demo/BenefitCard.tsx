@@ -20,16 +20,24 @@ const meter: CSSProperties = {
   marginTop: "0.5rem",
 };
 
-export function BenefitCard({ benefit, historyReason }: { benefit: DemoBenefit; historyReason?: string | undefined }) {
+export function BenefitCard({ benefit, historyReason, reviewReason }: {
+  benefit: DemoBenefit;
+  historyReason?: string | undefined;
+  reviewReason?: string | undefined;
+}) {
   const ratio = remainingRatio(benefit);
+  // 지난 기록 사유가 있으면 그쪽을 따른다. 두 사유는 같은 행에 함께 생기지 않는다.
+  const checkReason = historyReason ? undefined : reviewReason;
   return (
     <article style={card} aria-labelledby={`${benefit.id}-name`}>
       <h4 id={`${benefit.id}-name`} style={{ margin: 0 }}>
         {benefit.name}
       </h4>
       {historyReason && <p><strong>지난 기록</strong> · {historyReason}</p>}
+      {checkReason && <p><strong>확인 필요</strong> · {checkReason}</p>}
       <p style={{ margin: "0.35rem 0 0" }}>
-        {historyReason ? "기록 당시 잔량 " : "남음 "}{formatAmount(benefit.remaining_amount, benefit.unit)}
+        {historyReason ? "기록 당시 잔량 " : checkReason ? "기록된 잔량 " : "남음 "}
+        {formatAmount(benefit.remaining_amount, benefit.unit)}
         {" · "}
         지급 {formatAmount(benefit.granted_amount, benefit.unit)}
       </p>
@@ -44,7 +52,11 @@ export function BenefitCard({ benefit, historyReason }: { benefit: DemoBenefit; 
       <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
         별도 월 상한 {formatAmount(benefit.monthly_cap, benefit.unit)}
       </p>
-      {historyReason ? null : ratio === null ? (
+      {historyReason ? null : checkReason ? (
+        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
+          확인 전에는 남은 비율을 표시하지 않습니다.
+        </p>
+      ) : ratio === null ? (
         <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
           비율을 계산할 수 없습니다 (모름 값 유지).
         </p>

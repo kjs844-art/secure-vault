@@ -1,6 +1,7 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import {
   benefitsForService,
+  getDemoBenefitReviewReason,
   type DemoDataset,
   type DemoService,
 } from "../../lib/mvp-demo-data";
@@ -133,7 +134,10 @@ function ServiceBlock({
         ) : (
           benefits.map((benefit) => <BenefitCard key={benefit.id} benefit={benefit}
             historyReason={historyView && referenceTime !== undefined
-              ? getDemoBenefitHistoryReason(benefit, service, referenceTime) ?? undefined : undefined} />)
+              ? getDemoBenefitHistoryReason(benefit, service, referenceTime) ?? undefined : undefined}
+            // 기준 시각이 없으면 충돌은 판단하지 않고, 모호한 만료일만 표시한다.
+            reviewReason={historyView ? undefined
+              : getDemoBenefitReviewReason(benefit, service, referenceTime ?? Number.NaN) ?? undefined} />)
         )}
       </div>
     </section>
