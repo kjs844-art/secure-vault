@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   collectAttention,
   formatDay,
+  type DemoDataset,
 } from "../../lib/mvp-demo-data";
 import { buildDemoDataWithHistory, selectDemoHistoryView, type DemoHistoryView } from "../../lib/demo-benefit-history";
 import { AttentionList } from "./AttentionList";
@@ -32,6 +33,8 @@ export function DemoExperience({ referenceTime }: { referenceTime: number }) {
   }
 
   const attention = view === "review" ? collectAttention(visibleDataset, new Date(referenceTime)) : [];
+  const summary = view === "history" ? demoSummaryStats(view, visibleDataset)
+    : demoSummaryStats(view, visibleDataset, attention.length);
   const effectiveSelectedId = visibleDataset.services.some((service) => service.id === selectedId)
     ? selectedId : visibleDataset.services[0]?.id ?? null;
   function changeView(nextView: DemoHistoryView) {
@@ -72,9 +75,7 @@ export function DemoExperience({ referenceTime }: { referenceTime: number }) {
       <p>기록된 만료·체험 종료를 기준으로 분리합니다. 오래된 메일이나 잔량 0만으로 만료를 단정하지 않습니다. 현재 잔액·이용 가능 여부는 실제 조회한 것이 아닙니다.</p>
 
       <section aria-label="요약 숫자" style={{ display: "grid", gap: "0.75rem", marginTop: "1.25rem" }}>
-        <Stat label="샘플 서비스" value={`${visibleDataset.services.length}`} detail="모두 합성 예시" />
-        <Stat label="샘플 혜택" value={`${visibleDataset.benefits.length}`} detail="서로 다른 혜택의 잔량은 합산하지 않음" />
-        <Stat label="살펴볼 항목" value={`${attention.length}`} detail="만료·모름·잔량 0" />
+        {summary.map((stat) => <Stat key={stat.label} {...stat} />)}
       </section>
 
       {view === "review" && <section aria-labelledby="demo-attention-title" style={{ marginTop: "1.75rem" }}>
@@ -94,7 +95,26 @@ export function DemoExperience({ referenceTime }: { referenceTime: number }) {
   );
 }
 
-function Stat({ label, value, detail }: { label: string; value: string; detail: string }) {
+export interface DemoSummaryStat { label: string; value: string; detail: string }
+
+/** 지난 기록 보기에서는 기록을 현재 혜택이나 살펴볼 항목으로 세지 않는다. */
+export function demoSummaryStats(view: "history", dataset: DemoDataset, attentionCount?: number): DemoSummaryStat[];
+export function demoSummaryStats(view: DemoHistoryView, dataset: DemoDataset, attentionCount: number): DemoSummaryStat[];
+export function demoSummaryStats(view: DemoHistoryView, dataset: DemoDataset, attentionCount?: number): DemoSummaryStat[] {
+  if (view === "history") {
+    return [
+      { label: "지난 기록이 있는 서비스", value: `${dataset.services.length}`, detail: "모두 합성 예시 · 현재 계정 상태 미조회" },
+      { label: "지난 기록", value: `${dataset.benefits.length}`, detail: "현재 사용할 수 있는 혜택이 아님" },
+    ];
+  }
+  return [
+    { label: "샘플 서비스", value: `${dataset.services.length}`, detail: "모두 합성 예시" },
+    { label: "샘플 혜택", value: `${dataset.benefits.length}`, detail: "서로 다른 혜택의 잔량은 합산하지 않음" },
+    { label: "살펴볼 항목", value: `${attentionCount}`, detail: "만료·모름·잔량 0" },
+  ];
+}
+
+function Stat({ label, value, detail }: DemoSummaryStat) {
   return (
     <div style={{ border: "1px solid currentColor", borderRadius: "0.85rem", padding: "0.85rem 1rem" }}>
       <p style={{ margin: 0, fontSize: "0.8rem" }}>{label}</p>
