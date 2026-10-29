@@ -113,6 +113,34 @@ Describe 'KeyAtlas security-gates workflow policy' {
             Assert-Condition $rejected "An invalid identity close observation workflow must be rejected: $Reason"
         }
 
+        function Assert-BackupRoundtripVerification {
+            param([string]$Workflow)
+            $steps = @(Get-NamedWorkflowSteps $Workflow)
+            $identity = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run identity close observation tests' })
+            $backup = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run backup roundtrip contract tests' })
+            $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })
+            Assert-Condition ($identity.Count -eq 1 -and $backup.Count -eq 1 -and $typecheck.Count -eq 1) 'Exactly one identity close, backup roundtrip, and web typecheck step are required.'
+            Assert-Condition ($identity[0].Index -lt $backup[0].Index -and $backup[0].Index -lt $typecheck[0].Index) 'Backup roundtrip contracts must run after identity close tests and before web typecheck.'
+            $actualBody = @($backup[0].Groups['body'].Value -split '\r?\n' | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '^\s*#'
+            }) -join "`n"
+            $expectedBody = @(
+                '        shell: pwsh'
+                '        working-directory: .'
+                '        run: node --test apps/web/scripts/support/backup-roundtrip-contract.test.mjs'
+            ) -join "`n"
+            Assert-Condition ([string]::Equals($actualBody, $expectedBody, [StringComparison]::Ordinal)) 'Backup roundtrip contracts require the exact fail-closed command, shell and directory.'
+        }
+
+        function Assert-BackupRoundtripMutationRejected {
+            param([string]$Workflow, [string]$Reason)
+            Assert-Condition (-not [string]::Equals($Workflow, $script:Workflow, [StringComparison]::Ordinal)) "The backup roundtrip mutation did not change the workflow: $Reason"
+            $rejected = $false
+            try { Assert-BackupRoundtripVerification $Workflow }
+            catch { $rejected = $true }
+            Assert-Condition $rejected "An invalid backup roundtrip workflow must be rejected: $Reason"
+        }
+
         function Assert-PSGalleryPreparation {
             param([string]$Workflow)
             $steps = @(Get-NamedWorkflowSteps $Workflow)
@@ -505,6 +533,44 @@ Describe 'KeyAtlas security-gates workflow policy' {
         $withoutIdentity = $script:Workflow.Remove($identity.Index, $identity.Length)
         Assert-IdentityCloseObservationMutationRejected ($withoutIdentity.Insert($idle.Index, $identity.Value)) 'identity close before idle timing tests'
         Assert-IdentityCloseObservationMutationRejected ($withoutIdentity.Insert($typecheck.Index + $typecheck.Length - $identity.Length, $identity.Value)) 'identity close after typecheck'
+    }
+
+    It 'runs backup roundtrip contracts between identity close tests and web typecheck' {
+        Assert-BackupRoundtripVerification $script:Workflow
+    }
+
+    It 'rejects missing or duplicated backup roundtrip steps and ordering boundaries' {
+        foreach ($name in @('Run identity close observation tests', 'Run backup roundtrip contract tests', 'Type-check the web app')) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq $name })[0]
+            Assert-BackupRoundtripMutationRejected ($script:Workflow.Remove($step.Index, $step.Length)) "missing $name"
+            Assert-BackupRoundtripMutationRejected ($script:Workflow.Insert($step.Index, $step.Value)) "duplicated $name"
+        }
+    }
+
+    It 'rejects backup roundtrip command changes, skips or masked failures' {
+        $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq 'Run backup roundtrip contract tests' })[0]
+        foreach ($invalidStep in @(
+            $step.Value.Replace('working-directory: .', 'working-directory: apps/web')
+            $step.Value.Replace('shell: pwsh', 'shell: cmd')
+            $step.Value.Replace('backup-roundtrip-contract.test.mjs', 'other.test.mjs')
+            $step.Value.Replace('node --test', 'node')
+            $step.Value.Replace('        shell: pwsh', "        if: false`n        shell: pwsh")
+            $step.Value.Replace('        shell: pwsh', "        continue-on-error: true`n        shell: pwsh")
+            $step.Value.Replace('backup-roundtrip-contract.test.mjs', 'backup-roundtrip-contract.test.mjs; exit 0')
+            $step.Value.Replace('        run: node', '        # run: node')
+        )) {
+            Assert-BackupRoundtripMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) 'changed backup command or fail-closed context'
+        }
+    }
+
+    It 'rejects backup roundtrip contracts moved before identity close or after typecheck' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        $identity = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run identity close observation tests' })[0]
+        $backup = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run backup roundtrip contract tests' })[0]
+        $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })[0]
+        $withoutBackup = $script:Workflow.Remove($backup.Index, $backup.Length)
+        Assert-BackupRoundtripMutationRejected ($withoutBackup.Insert($identity.Index, $backup.Value)) 'backup before identity close'
+        Assert-BackupRoundtripMutationRejected ($withoutBackup.Insert($typecheck.Index + $typecheck.Length - $backup.Length, $backup.Value)) 'backup after typecheck'
     }
 
     It 'rejects missing or duplicated benefits web gates even when the other web app has the same command' {
