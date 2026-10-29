@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 import { App } from "./App";
 
 describe("AI metadata preview disclosure", () => {
+  it("links to the explicitly synthetic mail review without requesting a live connection", () => {
+    const html = renderToStaticMarkup(createElement(App));
+    expect(html).toContain('href="/?view=signup-mail-discovery"');
+    expect(html).toContain("합성 메일 범위 선택 · 동의 · 후보 검토 →");
+    expect(html).not.toContain("accounts.google.com");
+    expect(html).not.toContain("login.microsoftonline.com");
+  });
+
   it("makes clear that the allowlisted synthetic data stays in this preview", () => {
     const html = renderToStaticMarkup(createElement(App));
 

@@ -6,7 +6,7 @@ import type { DiscoveryInboxItem } from "./discoveryInboxModel";
 
 // These tests exercise the component's callbacks and reducer state, not React's
 // scheduler or a browser DOM. Real rerender/click checks remain a separate gate.
-const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0 }));
+const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock("react", async (original) => ({
   ...await original<typeof import("react")>(),
   useMemo<T,>(factory: () => T, dependencies: readonly unknown[]) {
@@ -17,6 +17,12 @@ vi.mock("react", async (original) => ({
     }
     return (hooks.values[slot] as { value: T }).value;
   },
+  useRef<T,>(initial: T) {
+    const slot = hooks.cursor++;
+    if (slot >= hooks.values.length) hooks.values.push({ current: initial });
+    return hooks.values[slot] as { current: T };
+  },
+  useLayoutEffect(effect: () => void) { hooks.effects.push(effect); },
   useState<T,>(initial: T | (() => T)) {
     const slot = hooks.cursor++;
     if (slot >= hooks.values.length) hooks.values.push(typeof initial === "function" ? (initial as () => T)() : initial);
@@ -41,16 +47,17 @@ function find(node: ReactNode, id: string): ReactElement<Record<string, unknown>
 function click(tree: ReactNode, id: string) {
   const control = find(tree, id);
   if (!control) throw new Error(`Missing synthetic control ${id}`);
-  (control.props.onClick as () => void)();
+  (control.props.onClick as (event: { currentTarget: undefined }) => void)({ currentTarget: undefined });
 }
 function render(items: readonly DiscoveryInboxItem[], sourceLabel = "synthetic only") {
   hooks.cursor = 0;
   const tree = DiscoveryInboxPanel({ items, sourceLabel });
+  for (const effect of hooks.effects.splice(0)) effect();
   return tree;
 }
 const html = (tree: ReactNode) => renderToStaticMarkup(tree);
 
-beforeEach(() => { hooks.values = []; hooks.cursor = 0; });
+beforeEach(() => { hooks.values = []; hooks.cursor = 0; hooks.effects = []; });
 
 describe("DiscoveryInboxPanel refreshed input", () => {
   it("retains filter and confidence actions within the current input", () => {
