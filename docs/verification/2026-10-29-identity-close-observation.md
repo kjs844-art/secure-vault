@@ -152,3 +152,23 @@ blocked binary was not retried to manufacture a pass. Rust sources and locked
 dependencies are unchanged by this UI/diagnostic slice. The separately
 verified main CI `40884978114` passed at 14:18:21Z, but is historical evidence
 for main `b36a279`, not a substitute for fresh exact-head PR CI.
+
+## CI coverage follow-up
+
+Independent review identified that the 16 observer tests were local-only:
+the src-only Vitest suite and existing idle Node step did not execute them.
+The workflow now explicitly runs
+`node --test apps/web/scripts/support/identity-close-observation.test.mjs`
+from the repository root, after idle timing tests and before web typecheck.
+No conditional skip or failure override was added. The workflow policy adds
+four assertions, including 15 rejected mutations for missing/duplicate/reordered
+steps, changed shell/directory/command, conditional skips and masked failures.
+
+The exact new Node command passed 16/16, exit 0. PowerShell parsing, extracted
+static policy assertions (including the existing idle-order/Secret-first
+assertions), Secret scan baseline four/CLOSED, documentation links and diff
+checks also passed. **Pester 5.7.1 was NOT_RUN locally:** only Pester 3.4.0 was
+available and no installation was authorized. Static assertion execution is not
+a replacement for Pester. Fresh exact-head CI must run its existing pinned
+Pester 5.7.1 policy step and the new 16-test step before their remote gates can
+be called passed. Product/browser inputs were unchanged by this CI follow-up.

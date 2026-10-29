@@ -84,6 +84,35 @@ Describe 'KeyAtlas security-gates workflow policy' {
             Assert-Condition $rejected "An invalid vault idle timing workflow must be rejected: $Reason"
         }
 
+        function Assert-IdentityCloseObservationVerification {
+            param([string]$Workflow)
+            $steps = @(Get-NamedWorkflowSteps $Workflow)
+            $idle = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })
+            $identity = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run identity close observation tests' })
+            $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })
+            Assert-Condition ($idle.Count -eq 1 -and $identity.Count -eq 1 -and $typecheck.Count -eq 1) 'Exactly one idle timing, identity close observation, and web typecheck step are required.'
+            Assert-Condition ($idle[0].Index -lt $identity[0].Index -and $identity[0].Index -lt $typecheck[0].Index) 'Identity close observation tests must run after idle timing tests and before web typecheck.'
+
+            $actualBody = @($identity[0].Groups['body'].Value -split '\r?\n' | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '^\s*#'
+            }) -join "`n"
+            $expectedBody = @(
+                '        shell: pwsh'
+                '        working-directory: .'
+                '        run: node --test apps/web/scripts/support/identity-close-observation.test.mjs'
+            ) -join "`n"
+            Assert-Condition ([string]::Equals($actualBody, $expectedBody, [StringComparison]::Ordinal)) 'Identity close observation tests must retain their exact shell, root directory, and fail-closed command without conditional skips or ignored failures.'
+        }
+
+        function Assert-IdentityCloseObservationMutationRejected {
+            param([string]$Workflow, [string]$Reason)
+            Assert-Condition (-not [string]::Equals($Workflow, $script:Workflow, [StringComparison]::Ordinal)) "The identity close policy mutation did not change the workflow: $Reason"
+            $rejected = $false
+            try { Assert-IdentityCloseObservationVerification $Workflow }
+            catch { $rejected = $true }
+            Assert-Condition $rejected "An invalid identity close observation workflow must be rejected: $Reason"
+        }
+
         function Assert-PSGalleryPreparation {
             param([string]$Workflow)
             $steps = @(Get-NamedWorkflowSteps $Workflow)
@@ -439,6 +468,43 @@ Describe 'KeyAtlas security-gates workflow policy' {
         $withoutIdle = $script:Workflow.Remove($idle.Index, $idle.Length)
         Assert-VaultIdleTimingMutationRejected ($withoutIdle.Insert($unit.Index, $idle.Value)) 'idle before unit tests'
         Assert-VaultIdleTimingMutationRejected ($withoutIdle.Insert($typecheck.Index + $typecheck.Length - $idle.Length, $idle.Value)) 'idle after typecheck'
+    }
+
+    It 'runs identity close observation tests between idle timing tests and web typecheck' {
+        Assert-IdentityCloseObservationVerification $script:Workflow
+    }
+
+    It 'rejects missing or duplicated identity close observation steps and ordering boundaries' {
+        foreach ($name in @('Run vault idle timing boundary tests', 'Run identity close observation tests', 'Type-check the web app')) {
+            $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq $name })[0]
+            Assert-IdentityCloseObservationMutationRejected ($script:Workflow.Remove($step.Index, $step.Length)) "missing $name"
+            Assert-IdentityCloseObservationMutationRejected ($script:Workflow.Insert($step.Index, $step.Value)) "duplicated $name"
+        }
+    }
+
+    It 'rejects changed identity close commands, execution context, skips, or masked failures' {
+        $step = @(Get-NamedWorkflowSteps $script:Workflow | Where-Object { $_.Groups['name'].Value -ceq 'Run identity close observation tests' })[0]
+        foreach ($invalidStep in @(
+            $step.Value.Replace('working-directory: .', 'working-directory: apps/web')
+            $step.Value.Replace('shell: pwsh', 'shell: cmd')
+            $step.Value.Replace('identity-close-observation.test.mjs', 'other.test.mjs')
+            $step.Value.Replace('node --test', 'node')
+            $step.Value.Replace('        shell: pwsh', "        if: false`n        shell: pwsh")
+            $step.Value.Replace('        shell: pwsh', "        continue-on-error: true`n        shell: pwsh")
+            $step.Value.Replace('identity-close-observation.test.mjs', 'identity-close-observation.test.mjs; exit 0')
+        )) {
+            Assert-IdentityCloseObservationMutationRejected ($script:Workflow.Replace($step.Value, $invalidStep)) 'changed identity close command or fail-closed context'
+        }
+    }
+
+    It 'rejects identity close observation tests moved before idle timing tests or after typecheck' {
+        $steps = @(Get-NamedWorkflowSteps $script:Workflow)
+        $idle = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run vault idle timing boundary tests' })[0]
+        $identity = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Run identity close observation tests' })[0]
+        $typecheck = @($steps | Where-Object { $_.Groups['name'].Value -ceq 'Type-check the web app' })[0]
+        $withoutIdentity = $script:Workflow.Remove($identity.Index, $identity.Length)
+        Assert-IdentityCloseObservationMutationRejected ($withoutIdentity.Insert($idle.Index, $identity.Value)) 'identity close before idle timing tests'
+        Assert-IdentityCloseObservationMutationRejected ($withoutIdentity.Insert($typecheck.Index + $typecheck.Length - $identity.Length, $identity.Value)) 'identity close after typecheck'
     }
 
     It 'rejects missing or duplicated benefits web gates even when the other web app has the same command' {
