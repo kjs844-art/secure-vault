@@ -2,6 +2,12 @@
 
 Date: 2026-10-27 Korea / 2026-10-26 UTC. `REAL_SECRET_GATE=CLOSED`.
 
+**Latest follow-up:** the installed Edge 156.0.4314.50 full-composition run on
+2026-10-29 passed 123 groups, all seven error counters zero and owned cleanup
+confirmed. See the final section. Earlier Edge .42 and local Windows build
+failures below remain historical failures, not corrected results or a proven
+root cause. Fresh exact-head CI/review is still required before merge.
+
 ## Scope and ownership
 
 Worktree: `agent-staging/keyatlas-pr35-framework-fixes-20261027`.
@@ -152,6 +158,60 @@ sandbox. Prior native EOF/ERR_ABORTED/control and exact idle-transition timing
 limitations remain open independently of this feature.
 
 Git publication and any eventual merge require exact-head CI plus a fresh
-review-state check; local PASS is not CI or production readiness. This slice is
-for a **Draft PR**, not main merge, while full Edge/native transport verification
-and the local Windows Rust build restriction remain unresolved.
+review-state check; local PASS is not CI or production readiness. At the original
+publication this slice was a **Draft PR**, not ready for main merge, because full
+Edge/native transport verification and the local Windows Rust build restriction
+remained unresolved. The following current-environment result is separate.
+
+## 2026-10-29 follow-up: current installed Edge full composition
+
+The branch incorporated main `b36a279c6110af56480cce6bd3956355da32af0e`
+through normal merge `24da17fc0b55fd993c054531cdf445e6a1356cb9`.
+The benefits app, its lock file, Rust crates/Cargo inputs and workspace verifier
+are byte-identical to PR44 head `a6db632cdf60cda59d90a330452f5948e9bf9610`.
+The merge imports already-verified web discovery/focus and CI-gallery changes,
+not a candidate transport workaround. No package or browser was installed.
+
+One new full run, using the already-installed Edge version:
+
+```powershell
+$env:BROWSER_CHANNEL = 'msedge'
+node --import tsx scripts/verify-candidate-review-browser.ts --synthetic-only
+```
+
+Working directory: `apps/benefits-web/`. This is the default
+`ACTUAL_CANDIDATE_REVIEW_COMPOSITION_SYNTHETIC_HTTP` / `FULL_COMPOSITION`
+production fixture, **not** discard-only, bootstrap, native-network-diagnostic,
+cleanup-experiment or development-effects mode.
+
+| Measurement | New result |
+| --- | --- |
+| Browser | Installed Edge 156.0.4314.50; Node 24.19.0 / existing Playwright 1.63.0 |
+| UTC interval | 2026-10-29T15:08:18.233Z to 15:10:42.261Z |
+| Full groups | 123 PASS; process exit 0 |
+| Errors | bridge/page/console/external/websocket/CSP/transport: all 0 |
+| Cleanup | true; cleanupErrors empty; no owned test browser processes after return |
+| Fixture | 429,758 bytes; SHA256 `e985659ea2698a7bae80d182558954192788f8faf20a28841ab017f64ee362fa`, identical to the earlier full Chrome/Edge fixture |
+| Native back/BFCache | All 11 measured paths PASS, same-document trusted persisted events, private content CLOSED, including candidate discard |
+| Narrow viewport | 320/360px observations: no horizontal overflow, focus visible |
+| Original receipt digest | SHA256 `29171a49e200634eeae6165e65d1175d4c181607b110de7d317c0cdfa718fde4` |
+
+The raw synthetic receipt remains ignored at
+`target/reports/candidate-discard-edge-156.0.4314.50-full-20261030.json`.
+The older `candidate-discard-edge-full.json` was preserved unchanged. No timeout,
+error allowlist, expected-abort matching, product cleanup or security gate was
+relaxed. This is evidence for the current measured environment, **not proof of
+the old ERR_ABORTED cause, a universal browser fix, or all-browser coverage**.
+
+The historical 3,473-test/typecheck/build/boundary/SSR/strict results above apply
+to unchanged benefits inputs and were not rerun to fill time. Historical full
+Chrome 123 PASS remains a distinct receipt, not a new Chrome run. The current
+candidate still needs fresh exact-head CI and review; old CI success is not
+relabeled. The local Rust OS-policy restriction remains unresolved; no retry or
+protection bypass is authorized. If the exact remote candidate's complete Rust
+verifier succeeds, report that remote result separately from local NOT_RUN.
+
+The new current-browser PASS removes this environment's full Edge failure from
+the immediate promotion gate; it does not erase historical failures or open
+production routes, real mail, credentials, DB or deployment. The independent
+older native-control and exact idle-time observations remain separate limits.
